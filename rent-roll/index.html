@@ -1,0 +1,647 @@
+<title>Rent Roll</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root {
+    --bg: #F6F3EC;
+    --surface: #FFFFFF;
+    --surface-2: #FBF9F4;
+    --ink: #211D16;
+    --muted: #75705F;
+    --line: rgba(33,29,22,0.12);
+    --line-strong: rgba(33,29,22,0.22);
+    --accent: #2F6844;
+    --accent-soft: rgba(47,104,68,0.12);
+    --expense: #A6432D;
+    --expense-soft: rgba(166,67,45,0.11);
+    --gold: #B8862E;
+    --gold-soft: rgba(184,134,46,0.14);
+    --shadow: 0 1px 2px rgba(33,29,22,0.06), 0 8px 24px -12px rgba(33,29,22,0.18);
+    --radius: 14px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #16140F;
+      --surface: #1F1C15;
+      --surface-2: #241F17;
+      --ink: #EDE8DC;
+      --muted: #A79E88;
+      --line: rgba(237,232,220,0.14);
+      --line-strong: rgba(237,232,220,0.26);
+      --accent: #58A97A;
+      --accent-soft: rgba(88,169,122,0.16);
+      --expense: #E08165;
+      --expense-soft: rgba(224,129,101,0.16);
+      --gold: #D9B156;
+      --gold-soft: rgba(217,177,86,0.18);
+      --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #16140F;
+    --surface: #1F1C15;
+    --surface-2: #241F17;
+    --ink: #EDE8DC;
+    --muted: #A79E88;
+    --line: rgba(237,232,220,0.14);
+    --line-strong: rgba(237,232,220,0.26);
+    --accent: #58A97A;
+    --accent-soft: rgba(88,169,122,0.16);
+    --expense: #E08165;
+    --expense-soft: rgba(224,129,101,0.16);
+    --gold: #D9B156;
+    --gold-soft: rgba(217,177,86,0.18);
+    --shadow: 0 1px 2px rgba(0,0,0,0.3), 0 8px 24px -12px rgba(0,0,0,0.5);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: 'Inter', system-ui, sans-serif;
+    padding: 0 20px 64px;
+    max-width: 1040px;
+    margin: 0 auto;
+  }
+  h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; text-wrap: balance; margin: 0; }
+  .num { font-family: 'IBM Plex Mono', ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+
+  a { color: inherit; }
+  button { font-family: inherit; cursor: pointer; }
+
+  /* ---------- Header ---------- */
+  header.top {
+    display: flex;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+    padding: 36px 0 24px;
+    border-bottom: 1px solid var(--line);
+  }
+  .brand { display: flex; flex-direction: column; gap: 4px; }
+  .brand h1 { font-size: clamp(28px, 4vw, 36px); font-weight: 600; letter-spacing: -0.01em; }
+  .brand .tag { color: var(--muted); font-size: 14px; }
+  .status-pill {
+    font-size: 12px;
+    color: var(--muted);
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    padding: 5px 12px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: var(--surface);
+  }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--accent); flex: none; }
+  .status-dot.offline { background: var(--muted); }
+
+  .banner {
+    margin-top: 18px;
+    background: var(--gold-soft);
+    border: 1px solid var(--gold);
+    color: var(--ink);
+    border-radius: var(--radius);
+    padding: 12px 16px;
+    font-size: 13.5px;
+    display: none;
+  }
+  .banner.show { display: block; }
+  .banner b { color: var(--gold); }
+
+  /* ---------- Summary strip ---------- */
+  .summary {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 14px;
+    margin: 28px 0;
+  }
+  .tile {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+  }
+  .tile .label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 600; }
+  .tile .value { font-size: clamp(22px, 3vw, 30px); margin-top: 8px; font-weight: 500; }
+  .tile.rent .value { color: var(--accent); }
+  .tile.expense .value { color: var(--expense); }
+  .tile.net .value.pos { color: var(--accent); }
+  .tile.net .value.neg { color: var(--expense); }
+  .tile .sub { font-size: 12.5px; color: var(--muted); margin-top: 4px; }
+
+  section.block { margin: 40px 0; }
+  .block-head {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+    margin-bottom: 16px; flex-wrap: wrap;
+  }
+  .block-head h2 { font-size: 20px; font-weight: 600; }
+  .block-head .count { color: var(--muted); font-size: 13px; }
+
+  /* ---------- Property cards ---------- */
+  .properties {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 14px;
+  }
+  .prop-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px;
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  .prop-card .name { font-family: 'Fraunces', serif; font-size: 18px; font-weight: 600; }
+  .prop-card .addr { color: var(--muted); font-size: 13px; margin-top: 2px; }
+  .prop-row { display: flex; justify-content: space-between; font-size: 13.5px; }
+  .prop-row .l { color: var(--muted); }
+  .prop-row .v.pos { color: var(--accent); }
+  .prop-row .v.neg { color: var(--expense); }
+  .bar { height: 8px; border-radius: 5px; background: var(--expense-soft); overflow: hidden; }
+  .bar > span { display: block; height: 100%; background: var(--accent); border-radius: 5px 0 0 5px; }
+  .prop-card .rent-line { font-size: 12px; color: var(--muted); display:flex; justify-content: space-between; }
+  .prop-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 4px; }
+  .prop-actions button { font-size: 12px; }
+
+  .add-card {
+    border: 1.5px dashed var(--line-strong);
+    border-radius: var(--radius);
+    display: flex; align-items: center; justify-content: center;
+    color: var(--muted);
+    font-size: 14px;
+    min-height: 120px;
+    background: transparent;
+    transition: border-color .15s, color .15s;
+  }
+  .add-card:hover { border-color: var(--gold); color: var(--gold); }
+
+  /* ---------- Buttons ---------- */
+  .btn {
+    border-radius: 9px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface);
+    color: var(--ink);
+    padding: 8px 14px;
+    font-size: 13.5px;
+    font-weight: 500;
+  }
+  .btn:hover { border-color: var(--ink); }
+  .btn.primary { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+  .btn.primary:hover { opacity: 0.88; }
+  .btn.ghost { border-color: transparent; background: transparent; color: var(--muted); }
+  .btn.ghost:hover { color: var(--expense); }
+  .btn.small { padding: 5px 10px; font-size: 12px; }
+  .btn[disabled] { opacity: 0.5; cursor: not-allowed; }
+
+  /* ---------- Form ---------- */
+  .form-card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 20px;
+    box-shadow: var(--shadow);
+  }
+  .type-toggle { display: inline-flex; border: 1px solid var(--line-strong); border-radius: 9px; overflow: hidden; margin-bottom: 16px; }
+  .type-toggle button {
+    border: none; background: var(--surface); color: var(--muted);
+    padding: 8px 16px; font-size: 13.5px; font-weight: 600;
+  }
+  .type-toggle button.active[data-type="rent"] { background: var(--accent-soft); color: var(--accent); }
+  .type-toggle button.active[data-type="expense"] { background: var(--expense-soft); color: var(--expense); }
+
+  .field-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field.wide { grid-column: span 2; }
+  .field label { font-size: 12px; color: var(--muted); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field input, .field select {
+    font-family: inherit;
+    font-size: 14px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid var(--line-strong);
+    background: var(--surface-2);
+    color: var(--ink);
+    width: 100%;
+  }
+  .field input:focus, .field select:focus, .field input:focus-visible {
+    outline: 2px solid var(--gold);
+    outline-offset: 1px;
+  }
+  .form-foot { display: flex; justify-content: flex-end; margin-top: 16px; }
+
+  @media (max-width: 640px) {
+    .summary { grid-template-columns: 1fr; }
+    .field-grid { grid-template-columns: 1fr 1fr; }
+    .field.wide { grid-column: span 2; }
+  }
+
+  /* ---------- Ledger table ---------- */
+  .ledger-controls { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .ledger-controls select {
+    font-family: inherit; font-size: 13px; padding: 6px 10px; border-radius: 8px;
+    border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink);
+  }
+  .ledger-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+  table.ledger { width: 100%; border-collapse: collapse; min-width: 560px; }
+  table.ledger th {
+    text-align: left; font-size: 11.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--muted); font-weight: 600; padding: 12px 16px; border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  table.ledger td { padding: 12px 16px; font-size: 13.5px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.ledger tr:last-child td { border-bottom: none; }
+  table.ledger td.amt { text-align: right; white-space: nowrap; }
+  table.ledger td.amt.pos { color: var(--accent); }
+  table.ledger td.amt.neg { color: var(--expense); }
+  .tag { display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
+  .tag.rent { background: var(--accent-soft); color: var(--accent); }
+  .tag.expense { background: var(--expense-soft); color: var(--expense); }
+  .row-del { opacity: 0; transition: opacity .1s; }
+  tr:hover .row-del { opacity: 1; }
+  .empty-state { padding: 40px 20px; text-align: center; color: var(--muted); font-size: 14px; }
+
+  .footnote { color: var(--muted); font-size: 12px; text-align: center; margin-top: 40px; }
+</style>
+
+<header class="top">
+  <div class="brand">
+    <h1>Rent Roll</h1>
+    <div class="tag">Rent collected, repairs paid, and the profit left over — by property.</div>
+  </div>
+  <div class="status-pill"><span class="status-dot offline" id="statusDot"></span><span id="statusText">Connecting…</span></div>
+</header>
+
+<div class="banner" id="demoBanner"><b>Example data.</b> This preview isn't saved — open the published page in claude.ai to keep your own properties and transactions.</div>
+
+<section class="summary" id="summaryTiles"></section>
+
+<section class="block">
+  <div class="block-head">
+    <h2>Properties</h2>
+    <span class="count" id="propCount"></span>
+  </div>
+  <div class="properties" id="propertiesGrid"></div>
+</section>
+
+<section class="block">
+  <div class="block-head"><h2>Record a transaction</h2></div>
+  <div class="form-card">
+    <div class="type-toggle" id="typeToggle">
+      <button type="button" data-type="rent" class="active">Rent payment</button>
+      <button type="button" data-type="expense">Repair / expense</button>
+    </div>
+    <form id="txnForm">
+      <div class="field-grid">
+        <div class="field wide">
+          <label for="f-property">Property</label>
+          <select id="f-property" required></select>
+        </div>
+        <div class="field">
+          <label for="f-date">Date</label>
+          <input type="date" id="f-date" required>
+        </div>
+        <div class="field">
+          <label for="f-amount">Amount ($)</label>
+          <input type="number" id="f-amount" min="0" step="0.01" placeholder="0.00" required>
+        </div>
+        <div class="field wide" id="f-detail-label-wrap">
+          <label for="f-detail" id="f-detail-label">Paid by (tenant)</label>
+          <input type="text" id="f-detail" placeholder="e.g. J. Alvarez">
+        </div>
+        <div class="field" style="grid-column: span 3;">
+          <label for="f-note" id="f-note-label">Note (optional)</label>
+          <input type="text" id="f-note" placeholder="e.g. September rent, paid via check">
+        </div>
+      </div>
+      <div class="form-foot">
+        <button type="submit" class="btn primary" id="submitBtn">Add rent payment</button>
+      </div>
+    </form>
+  </div>
+</section>
+
+<section class="block">
+  <div class="block-head">
+    <h2>Ledger</h2>
+    <div class="ledger-controls">
+      <select id="filterProperty"><option value="">All properties</option></select>
+      <select id="filterType">
+        <option value="">All types</option>
+        <option value="rent">Rent only</option>
+        <option value="expense">Expenses only</option>
+      </select>
+    </div>
+  </div>
+  <div class="ledger-wrap">
+    <table class="ledger">
+      <thead>
+        <tr><th>Date</th><th>Property</th><th>Type</th><th>Details</th><th style="text-align:right">Amount</th><th></th></tr>
+      </thead>
+      <tbody id="ledgerBody"></tbody>
+    </table>
+  </div>
+</section>
+
+<div class="footnote" id="footnote">Rent Roll</div>
+
+<template id="propCardTemplate"></template>
+
+<script>
+(function () {
+  const fmt = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 });
+  const fmtFull = new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' });
+  const fmtDate = (iso) => {
+    const d = new Date(iso + 'T00:00:00');
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  };
+  const todayISO = () => new Date().toISOString().slice(0, 10);
+  const uid = () => Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+
+  // ---------------- Example data (used only when db is unavailable) ----------------
+  const exampleProperties = [
+    { id: 'p1', name: 'Birchwood Ave', address: '142 Birchwood Ave, Unit A', monthlyRent: 1650 },
+    { id: 'p2', name: 'Sumac Court', address: '88 Sumac Court', monthlyRent: 1950 },
+  ];
+  const exampleTxns = [
+    { id: 't1', propertyId: 'p1', type: 'rent', date: '2026-07-01', amount: 1650, detail: 'M. Ortega', note: 'July rent' },
+    { id: 't2', propertyId: 'p1', type: 'expense', date: '2026-07-14', amount: 240, detail: 'Plumbing', note: 'Fixed leaking kitchen faucet' },
+    { id: 't3', propertyId: 'p1', type: 'rent', date: '2026-08-01', amount: 1650, detail: 'M. Ortega', note: 'August rent' },
+    { id: 't4', propertyId: 'p2', type: 'rent', date: '2026-08-01', amount: 1950, detail: 'D. Kessler', note: 'August rent' },
+    { id: 't5', propertyId: 'p2', type: 'expense', date: '2026-08-09', amount: 480, detail: 'HVAC', note: 'AC unit repair, new capacitor' },
+    { id: 't6', propertyId: 'p1', type: 'rent', date: '2026-09-01', amount: 1650, detail: 'M. Ortega', note: 'September rent' },
+    { id: 't7', propertyId: 'p2', type: 'rent', date: '2026-09-01', amount: 1950, detail: 'D. Kessler', note: 'September rent' },
+    { id: 't8', propertyId: 'p2', type: 'expense', date: '2026-09-05', amount: 95, detail: 'Landscaping', note: 'Gutter cleaning' },
+  ];
+
+  // ---------------- State ----------------
+  let db = null;
+  let usingDb = false;
+  let properties = [];
+  let txns = [];
+  let selectedType = 'rent';
+  let unsubProps = null, unsubTxns = null;
+
+  const el = (id) => document.getElementById(id);
+
+  function setStatus(online, demo) {
+    el('statusDot').classList.toggle('offline', !online);
+    el('statusText').textContent = online ? 'Saved automatically' : (demo ? 'Preview mode' : 'Connecting…');
+    el('demoBanner').classList.toggle('show', demo);
+  }
+
+  function propName(id) {
+    const p = properties.find(p => p.id === id);
+    return p ? p.name : '—';
+  }
+
+  function totalsFor(propertyId) {
+    let rent = 0, expense = 0;
+    for (const t of txns) {
+      if (propertyId && t.propertyId !== propertyId) continue;
+      if (t.type === 'rent') rent += t.amount; else expense += t.amount;
+    }
+    return { rent, expense, net: rent - expense };
+  }
+
+  function renderSummary() {
+    const t = totalsFor(null);
+    const net = t.net;
+    el('summaryTiles').innerHTML = `
+      <div class="tile rent">
+        <div class="label">Rent collected</div>
+        <div class="value num">${fmtFull.format(t.rent)}</div>
+        <div class="sub">across ${properties.length} ${properties.length === 1 ? 'property' : 'properties'}</div>
+      </div>
+      <div class="tile expense">
+        <div class="label">Repairs &amp; expenses</div>
+        <div class="value num">${fmtFull.format(t.expense)}</div>
+        <div class="sub">${txns.filter(x=>x.type==='expense').length} logged</div>
+      </div>
+      <div class="tile net">
+        <div class="label">Net profit</div>
+        <div class="value num ${net >= 0 ? 'pos' : 'neg'}">${net >= 0 ? '' : '−'}${fmtFull.format(Math.abs(net))}</div>
+        <div class="sub">${net >= 0 ? 'in the black' : 'in the red'} to date</div>
+      </div>`;
+  }
+
+  function renderProperties() {
+    el('propCount').textContent = properties.length ? `${properties.length} ${properties.length === 1 ? 'property' : 'properties'}` : '';
+    const grid = el('propertiesGrid');
+    grid.innerHTML = '';
+    for (const p of properties) {
+      const t = totalsFor(p.id);
+      const total = t.rent + t.expense;
+      const pct = total > 0 ? Math.round((t.rent / total) * 100) : 100;
+      const card = document.createElement('div');
+      card.className = 'prop-card';
+      card.innerHTML = `
+        <div>
+          <div class="name">${escapeHtml(p.name)}</div>
+          <div class="addr">${escapeHtml(p.address || '')}</div>
+        </div>
+        <div class="rent-line"><span>Monthly rent</span><span class="num">${fmt.format(p.monthlyRent || 0)}</span></div>
+        <div class="bar"><span style="width:${pct}%"></span></div>
+        <div class="prop-row"><span class="l">Collected</span><span class="v pos num">${fmt.format(t.rent)}</span></div>
+        <div class="prop-row"><span class="l">Repairs &amp; expenses</span><span class="v neg num">${fmt.format(t.expense)}</span></div>
+        <div class="prop-row"><span class="l">Net</span><span class="v ${t.net>=0?'pos':'neg'} num">${t.net>=0?'':'−'}${fmt.format(Math.abs(t.net))}</span></div>
+        <div class="prop-actions">
+          <button type="button" class="btn small ghost" data-remove-prop="${p.id}">Remove property</button>
+        </div>`;
+      grid.appendChild(card);
+    }
+    const addCard = document.createElement('button');
+    addCard.type = 'button';
+    addCard.className = 'add-card';
+    addCard.style.cursor = 'pointer';
+    addCard.textContent = '+ Add a property';
+    addCard.addEventListener('click', addProperty);
+    grid.appendChild(addCard);
+  }
+
+  function renderPropertySelects() {
+    const opts = properties.map(p => `<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+    const formSel = el('f-property');
+    const prevForm = formSel.value;
+    formSel.innerHTML = opts || '<option value="">Add a property first</option>';
+    if (properties.some(p => p.id === prevForm)) formSel.value = prevForm;
+
+    const filterSel = el('filterProperty');
+    const prevFilter = filterSel.value;
+    filterSel.innerHTML = '<option value="">All properties</option>' + opts;
+    filterSel.value = properties.some(p => p.id === prevFilter) ? prevFilter : '';
+
+    el('submitBtn').disabled = properties.length === 0;
+  }
+
+  function renderLedger() {
+    const propFilter = el('filterProperty').value;
+    const typeFilter = el('filterType').value;
+    const rows = txns
+      .filter(t => !propFilter || t.propertyId === propFilter)
+      .filter(t => !typeFilter || t.type === typeFilter)
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt||0) - (a.createdAt||0));
+
+    const body = el('ledgerBody');
+    if (!rows.length) {
+      body.innerHTML = `<tr><td colspan="6"><div class="empty-state">No transactions yet — record a rent payment or expense above.</div></td></tr>`;
+      return;
+    }
+    body.innerHTML = rows.map(t => `
+      <tr>
+        <td>${fmtDate(t.date)}</td>
+        <td>${escapeHtml(propName(t.propertyId))}</td>
+        <td><span class="tag ${t.type}">${t.type === 'rent' ? 'Rent' : 'Expense'}</span></td>
+        <td>${escapeHtml(t.detail || '')}${t.note ? `<div style="color:var(--muted);font-size:12px;margin-top:2px;">${escapeHtml(t.note)}</div>` : ''}</td>
+        <td class="amt num ${t.type === 'rent' ? 'pos' : 'neg'}">${t.type === 'rent' ? '+' : '−'}${fmt.format(t.amount)}</td>
+        <td><button type="button" class="btn small ghost row-del" data-remove-txn="${t.id}" aria-label="Delete transaction">Delete</button></td>
+      </tr>`).join('');
+  }
+
+  function renderAll() {
+    renderSummary();
+    renderProperties();
+    renderPropertySelects();
+    renderLedger();
+  }
+
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, c => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+  }
+
+  // ---------------- Type toggle ----------------
+  el('typeToggle').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-type]');
+    if (!btn) return;
+    selectedType = btn.dataset.type;
+    for (const b of el('typeToggle').querySelectorAll('button')) b.classList.toggle('active', b === btn);
+    const isRent = selectedType === 'rent';
+    el('f-detail-label').textContent = isRent ? 'Paid by (tenant)' : 'Category';
+    el('f-detail').placeholder = isRent ? 'e.g. J. Alvarez' : 'e.g. Plumbing, HVAC, roof';
+    el('f-note').placeholder = isRent ? 'e.g. September rent, paid via check' : 'e.g. Fixed leaking kitchen faucet';
+    el('submitBtn').textContent = isRent ? 'Add rent payment' : 'Add expense';
+  });
+
+  el('f-date').value = todayISO();
+
+  // ---------------- Add property ----------------
+  function addProperty() {
+    const name = prompt('Property name (e.g. street name or nickname):');
+    if (!name) return;
+    const address = prompt('Address (optional):') || '';
+    const rentStr = prompt('Monthly rent amount ($):', '0');
+    const monthlyRent = parseFloat(rentStr) || 0;
+    const data = { name: name.trim(), address: address.trim(), monthlyRent, createdAt: Date.now() };
+    if (usingDb) {
+      db.collection('properties').add(data).catch(showError);
+    } else {
+      data.id = uid();
+      properties.push(data);
+      renderAll();
+    }
+  }
+
+  el('propertiesGrid').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-remove-prop]');
+    if (!btn) return;
+    const id = btn.dataset.removeProp;
+    const has = txns.some(t => t.propertyId === id);
+    if (has && !confirm('This property has transactions in the ledger. Remove it anyway? (Its past transactions will stay in the ledger.)')) return;
+    if (usingDb) {
+      db.doc('properties/' + id).delete().catch(showError);
+    } else {
+      properties = properties.filter(p => p.id !== id);
+      renderAll();
+    }
+  });
+
+  el('ledgerBody').addEventListener('click', (e) => {
+    const btn = e.target.closest('button[data-remove-txn]');
+    if (!btn) return;
+    const id = btn.dataset.removeTxn;
+    if (usingDb) {
+      db.doc('transactions/' + id).delete().catch(showError);
+    } else {
+      txns = txns.filter(t => t.id !== id);
+      renderAll();
+    }
+  });
+
+  el('filterProperty').addEventListener('change', renderLedger);
+  el('filterType').addEventListener('change', renderLedger);
+
+  // ---------------- Submit transaction ----------------
+  el('txnForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const propertyId = el('f-property').value;
+    const date = el('f-date').value;
+    const amount = parseFloat(el('f-amount').value);
+    const detail = el('f-detail').value.trim();
+    const note = el('f-note').value.trim();
+    if (!propertyId || !date || !(amount > 0)) return;
+
+    const data = { propertyId, type: selectedType, date, amount, detail, note, createdAt: Date.now() };
+    if (usingDb) {
+      db.collection('transactions').add(data).catch(showError);
+    } else {
+      data.id = uid();
+      txns.push(data);
+      renderAll();
+    }
+    el('f-amount').value = '';
+    el('f-detail').value = '';
+    el('f-note').value = '';
+    el('f-date').value = todayISO();
+  });
+
+  function showError(err) {
+    console.error(err);
+  }
+
+  // ---------------- Boot ----------------
+  function bootDemo() {
+    properties = exampleProperties.slice();
+    txns = exampleTxns.slice();
+    setStatus(false, true);
+    renderAll();
+  }
+
+  async function boot() {
+    if (!window.claude || !window.claude.use) { bootDemo(); return; }
+    try {
+      const resolved = await Promise.race([
+        window.claude.use('db'),
+        new Promise(res => setTimeout(() => res(undefined), 10500)),
+      ]);
+      if (!resolved) { bootDemo(); return; }
+      db = resolved;
+      usingDb = true;
+      setStatus(true, false);
+
+      unsubProps = db.collection('properties').onSnapshot(
+        (snap) => {
+          properties = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a,b) => (a.createdAt||0) - (b.createdAt||0));
+          renderAll();
+        },
+        () => bootDemo()
+      );
+      unsubTxns = db.collection('transactions').onSnapshot(
+        (snap) => {
+          txns = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          renderAll();
+        },
+        () => bootDemo()
+      );
+    } catch (err) {
+      bootDemo();
+    }
+  }
+
+  boot();
+})();
+</script>
