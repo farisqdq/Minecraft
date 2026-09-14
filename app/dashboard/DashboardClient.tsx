@@ -53,6 +53,10 @@ export default function DashboardClient({
   const [addingCompany, setAddingCompany] = useState(false);
   const [companyName, setCompanyName] = useState("");
 
+  const [joining, setJoining] = useState(false);
+  const [joinCode, setJoinCode] = useState("");
+  const [joinBusy, setJoinBusy] = useState(false);
+
   const [addingProperty, setAddingProperty] = useState(false);
   const [propName, setPropName] = useState("");
   const [propAddress, setPropAddress] = useState("");
@@ -88,6 +92,20 @@ export default function DashboardClient({
 
   function propName_(id: string) {
     return properties.find((p) => p.id === id)?.name ?? "—";
+  }
+
+  const thisMonth = (() => {
+    const now = new Date();
+    return {
+      key: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
+      label: now.toLocaleDateString("en-US", { month: "long" }),
+    };
+  })();
+
+  function rentThisMonth(propertyId: string) {
+    return transactions
+      .filter((t) => t.propertyId === propertyId && t.type === "rent" && t.date.startsWith(thisMonth.key))
+      .reduce((sum, t) => sum + t.amount, 0);
   }
 
   function totalsForProperties(ids: Set<string> | null) {
@@ -148,6 +166,28 @@ export default function DashboardClient({
     setSelectedCompany(data.id);
     setCompanyName("");
     setAddingCompany(false);
+  }
+
+  async function joinWithCode(e: React.FormEvent) {
+    e.preventDefault();
+    const code = joinCode.trim();
+    if (!code) return;
+    setError("");
+    setJoinBusy(true);
+
+    const res = await fetch("/api/invites/join", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setJoinBusy(false);
+    if (!res.ok) {
+      setError(data?.error || "Couldn't join with that code.");
+      return;
+    }
+    // Full reload so the newly visible LLC's properties and ledger come with it.
+    window.location.href = "/dashboard";
   }
 
   function openPropertyForm() {
@@ -247,6 +287,9 @@ export default function DashboardClient({
           <Link href="/dashboard/team" className={styles.textLink}>
             Team
           </Link>
+          <Link href="/dashboard/backup" className={styles.textLink}>
+            Backup
+          </Link>
           <button type="button" onClick={() => signOut({ callbackUrl: "/login" })}>
             Sign out
           </button>
@@ -300,6 +343,36 @@ export default function DashboardClient({
         ) : (
           <button type="button" className={`${styles.chip} ${styles.chipAdd}`} onClick={() => setAddingCompany(true)}>
             + Add LLC
+          </button>
+        )}
+
+        {joining ? (
+          <form className={styles.inlineForm} onSubmit={joinWithCode}>
+            <input
+              id="join-code"
+              type="text"
+              autoFocus
+              placeholder="Join code, e.g. K7P2-M9X4"
+              value={joinCode}
+              onChange={(e) => setJoinCode(e.target.value)}
+            />
+            <button type="submit" className={`${styles.btn} ${styles.small} ${styles.primary}`} disabled={joinBusy}>
+              {joinBusy ? "Joining…" : "Join"}
+            </button>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.small}`}
+              onClick={() => {
+                setJoining(false);
+                setJoinCode("");
+              }}
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <button type="button" className={`${styles.chip} ${styles.chipAdd}`} onClick={() => setJoining(true)}>
+            Join with a code
           </button>
         )}
       </nav>
@@ -397,8 +470,10 @@ export default function DashboardClient({
               {visibleProperties.map((p) => {
                 const ids = new Set([p.id]);
                 const t = totalsForProperties(ids);
-                const total = t.rent + t.expense;
-                const pct = total > 0 ? Math.round((t.rent / total) * 100) : 100;
+                const target = p.monthlyRent || 0;
+                const paidThisMonth = rentThisMonth(p.id);
+                const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
+                const paidInFull = target > 0 && paidThisMonth >= target;
                 const owner = companies.find((c) => c.id === p.companyId);
                 return (
                   <div key={p.id} className={styles.propCard}>
@@ -411,11 +486,26 @@ export default function DashboardClient({
                     </div>
                     <div className={styles.rentLine}>
                       <span>Monthly rent</span>
-                      <span className="num">{fmt.format(p.monthlyRent || 0)}</span>
+                      <span className="num">{fmt.format(target)}</span>
                     </div>
-                    <div className={styles.bar}>
-                      <span style={{ width: `${pct}%` }} />
-                    </div>
+                    {target > 0 && (
+                      <div>
+                        <div className={styles.bar}>
+                          <span
+                            className={paidInFull ? styles.barFull : undefined}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <div className={styles.barCaption}>
+                          <span>{thisMonth.label} rent</span>
+                          <span className={`num ${paidInFull ? styles.pos : ""}`}>
+                            {paidInFull
+                              ? "Paid in full"
+                              : `${fmt.format(paidThisMonth)} of ${fmt.format(target)}`}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                     <div className={styles.propRow}>
                       <span className={styles.l}>Collected</span>
                       <span className={`${styles.v} ${styles.pos} num`}>{fmt.format(t.rent)}</span>

@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireCompany } from "@/lib/access";
+import { formatJoinCode, generateJoinCode } from "@/lib/codes";
 
 const INVITE_DAYS = 7;
+
+function present(invite: { id: string; role: string; token: string; expiresAt: Date }) {
+  return {
+    id: invite.id,
+    role: invite.role,
+    code: formatJoinCode(invite.token),
+    expiresAt: invite.expiresAt.toISOString(),
+  };
+}
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -20,15 +29,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     orderBy: { createdAt: "desc" },
   });
 
-  return NextResponse.json(
-    invites.map((i) => ({
-      id: i.id,
-      email: i.email,
-      role: i.role,
-      token: i.token,
-      expiresAt: i.expiresAt.toISOString(),
-    }))
-  );
+  return NextResponse.json(invites.map(present));
 }
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -37,45 +38,24 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   const { id } = await params;
   if (!(await requireCompany(userId, id, "owner"))) {
-    return NextResponse.json({ error: "Only an owner can invite teammates." }, { status: 403 });
+    return NextResponse.json({ error: "Only an owner can create join codes." }, { status: 403 });
   }
 
   const body = await req.json().catch(() => null);
-  const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
   const role = body?.role === "owner" ? "owner" : "member";
-
-  if (!email || !email.includes("@")) {
-    return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
-  }
-
-  const existingUser = await prisma.user.findUnique({ where: { email } });
-  if (existingUser) {
-    const alreadyMember = await prisma.companyMember.findUnique({
-      where: { companyId_userId: { companyId: id, userId: existingUser.id } },
-    });
-    if (alreadyMember) {
-      return NextResponse.json({ error: "They're already on this team." }, { status: 409 });
-    }
-  }
-
   const expiresAt = new Date(Date.now() + INVITE_DAYS * 24 * 60 * 60 * 1000);
-  const token = randomBytes(24).toString("base64url");
 
-  // Replace any outstanding invite for the same address rather than stacking them.
-  await prisma.invite.deleteMany({ where: { companyId: id, email, acceptedAt: null } });
+  // Codes are unique; on the rare collision just draw another.
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const token = generateJoinCode();
+    const clash = await prisma.invite.findUnique({ where: { token } });
+    if (clash) continue;
 
-  const invite = await prisma.invite.create({
-    data: { companyId: id, email, role, token, invitedById: userId, expiresAt },
-  });
+    const invite = await prisma.invite.create({
+      data: { companyId: id, role, token, invitedById: userId, expiresAt },
+    });
+    return NextResponse.json(present(invite), { status: 201 });
+  }
 
-  return NextResponse.json(
-    {
-      id: invite.id,
-      email: invite.email,
-      role: invite.role,
-      token: invite.token,
-      expiresAt: invite.expiresAt.toISOString(),
-    },
-    { status: 201 }
-  );
+  return NextResponse.json({ error: "Couldn't generate a code. Try again." }, { status: 500 });
 }

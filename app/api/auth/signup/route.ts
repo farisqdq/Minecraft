@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import { normalizeJoinCode } from "@/lib/codes";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
@@ -8,21 +9,18 @@ export async function POST(req: Request) {
   const password = typeof body?.password === "string" ? body.password : "";
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const code = typeof body?.code === "string" ? body.code : "";
-  const inviteToken = typeof body?.inviteToken === "string" ? body.inviteToken : "";
 
-  // A live invite addressed to this person stands in for the signup code,
-  // otherwise gating signups would also block the people you invited.
-  let invited = false;
-  if (inviteToken) {
-    const invite = await prisma.invite.findUnique({ where: { token: inviteToken } });
-    invited = Boolean(
-      invite && !invite.acceptedAt && invite.expiresAt > new Date() && invite.email === email
-    );
-  }
-
+  // A live LLC join code also gets you through the signup gate, otherwise
+  // gating signups would block the very people you handed a code to.
   const requiredCode = process.env.SIGNUP_CODE;
-  if (requiredCode && !invited && code !== requiredCode) {
-    return NextResponse.json({ error: "Invalid signup code." }, { status: 403 });
+  if (requiredCode && code !== requiredCode) {
+    const invite = await prisma.invite.findUnique({
+      where: { token: normalizeJoinCode(code) },
+    });
+    const validJoinCode = Boolean(invite && !invite.acceptedAt && invite.expiresAt > new Date());
+    if (!validJoinCode) {
+      return NextResponse.json({ error: "Invalid signup code." }, { status: 403 });
+    }
   }
 
   if (!email || !email.includes("@")) {

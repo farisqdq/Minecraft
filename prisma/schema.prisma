@@ -47,7 +47,7 @@ model Invite {
   id          String    @id @default(cuid())
   companyId   String
   company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  email       String
+  email       String?
   role        String    @default("member")
   token       String    @unique
   invitedById String?

@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { formatJoinCode } from "@/lib/codes";
 import TeamClient from "./TeamClient";
 
 export default async function TeamPage() {
@@ -31,6 +32,19 @@ export default async function TeamPage() {
     orderBy: { createdAt: "asc" },
   });
 
+  // What a delete would take with it, so the confirmation can be specific.
+  const properties = await prisma.property.findMany({
+    where: { companyId: { in: memberships.map((m) => m.companyId) } },
+    select: { companyId: true, _count: { select: { transactions: true } } },
+  });
+  const impact = new Map<string, { properties: number; transactions: number }>();
+  for (const p of properties) {
+    const entry = impact.get(p.companyId) ?? { properties: 0, transactions: 0 };
+    entry.properties += 1;
+    entry.transactions += p._count.transactions;
+    impact.set(p.companyId, entry);
+  }
+
   return (
     <TeamClient
       currentUserId={userId}
@@ -38,6 +52,8 @@ export default async function TeamPage() {
         id: m.company.id,
         name: m.company.name,
         role: m.role as "owner" | "member",
+        propertyCount: impact.get(m.companyId)?.properties ?? 0,
+        transactionCount: impact.get(m.companyId)?.transactions ?? 0,
         members: m.company.members.map((x) => ({
           userId: x.user.id,
           email: x.user.email,
@@ -46,9 +62,8 @@ export default async function TeamPage() {
         })),
         invites: m.company.invites.map((i) => ({
           id: i.id,
-          email: i.email,
           role: i.role as "owner" | "member",
-          token: i.token,
+          code: formatJoinCode(i.token),
           expiresAt: i.expiresAt.toISOString(),
         })),
       }))}

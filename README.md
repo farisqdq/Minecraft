@@ -58,14 +58,52 @@ houses, ledger, and profit — nothing from your other LLCs.
 
 - The dashboard has a chip for each LLC you're on, plus an **All LLCs** view
   with a per-LLC profit rollup.
-- **Owners** can rename or delete the LLC and invite/remove teammates.
-  **Members** can record rent and expenses but can't manage the team.
-- Invites are created on the **Team** page and produce a link you send
-  yourself — the app doesn't send email. The invite is tied to the address
-  you typed, so the recipient has to sign in as that address to accept, and
-  it expires after 7 days.
-- A valid invite also satisfies `SIGNUP_CODE`, so gating public signups
-  doesn't lock out the people you invited.
+- **Owners** can delete the LLC, create join codes, and change teammates'
+  roles. **Members** can record rent and expenses but can't manage the team.
+- Joining works by **code**: an owner creates one on the Team page (e.g.
+  `K7P2-M9X4`) and sends it however they like. The other person signs in,
+  enters it under "Join with a code" on the dashboard, and lands on that LLC.
+  Each code works once and expires after 7 days.
+- A valid join code also satisfies `SIGNUP_CODE`, so gating public signups
+  doesn't lock out someone you just handed a code to.
+- The last owner can't leave an LLC (that would strand it with nobody able to
+  manage it) — either make someone else an owner first, or delete the LLC.
+
+## Deleting an LLC
+
+On the Team page, an owner can delete an LLC. This also deletes its
+properties and every ledger entry under it, for everyone on the team, so the
+confirmation asks you to type the LLC's name and tells you exactly how much
+history would go. Download a backup first if you might want those records.
+
+## Backups
+
+The **Backup** page downloads a single JSON file with every LLC, property,
+and ledger entry you can see, and restores one back into the app.
+
+Restoring only ever **adds**. Each LLC in the file comes back as a new LLC you
+own; if the name is already taken, the restored copy is renamed (e.g.
+`Birchwood Holdings LLC (imported)`) so you can compare the two before
+removing either. Nothing is ever overwritten or deleted by an import.
+
+## Your data and app updates
+
+Schema changes ship as versioned migration files in `prisma/migrations`, and
+deploys run `prisma migrate deploy` — which only applies those files and never
+drops data to force the schema into shape. (An earlier version used
+`prisma db push --accept-data-loss`, which could silently destroy records on a
+schema change; that's gone.)
+
+`prisma/baseline.js` runs first and handles one specific case: a database
+created before migrations existed has no migration history, so it marks the
+initial migration as already applied and lets later ones run normally on top.
+It no-ops once history exists.
+
+When changing the schema, generate a migration rather than pushing:
+
+```
+npx prisma migrate dev --name describe_the_change
+```
 
 ## Legacy artifact version
 
