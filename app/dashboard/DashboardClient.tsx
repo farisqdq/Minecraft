@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
+import { shrinkImage } from "@/lib/shrinkImage";
 import styles from "./dashboard.module.css";
 
 type Company = { id: string; name: string; role: "owner" | "member" };
@@ -15,6 +16,14 @@ type Property = {
   monthlyRent: number;
 };
 
+type Attachment = {
+  id: string;
+  transactionId: string;
+  url: string;
+  filename: string;
+  contentType: string;
+};
+
 type Transaction = {
   id: string;
   propertyId: string;
@@ -23,6 +32,7 @@ type Transaction = {
   amount: number;
   detail: string;
   note: string;
+  attachments: Attachment[];
 };
 
 const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -30,6 +40,21 @@ const fmtFull = new Intl.NumberFormat("en-US", { style: "currency", currency: "U
 const fmtDate = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const ALL_TIME = "all";
+
+function currentMonthKey() {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function monthName(key: string, withYear = true) {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", {
+    month: "long",
+    ...(withYear ? { year: "numeric" } : {}),
+  });
+}
 
 export default function DashboardClient({
   userLabel,
@@ -72,8 +97,13 @@ export default function DashboardClient({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [filterProperty, setFilterProperty] = useState("");
   const [filterType, setFilterType] = useState("");
+
+  const [pendingProof, setPendingProof] = useState<File[]>([]);
+  const proofInput = useRef<HTMLInputElement>(null);
+  const [uploadingFor, setUploadingFor] = useState("");
 
   const visibleProperties = useMemo(
     () =>
@@ -94,24 +124,43 @@ export default function DashboardClient({
     return properties.find((p) => p.id === id)?.name ?? "—";
   }
 
-  const thisMonth = (() => {
+  // Every month from the first recorded entry through the current one, so you
+  // can page back through the year even where a month has nothing in it.
+  const months = useMemo(() => {
+    const earliest = transactions.reduce(
+      (min, t) => (t.date < min ? t.date : min),
+      currentMonthKey() + "-01"
+    );
+    const [startY, startM] = earliest.slice(0, 7).split("-").map(Number);
     const now = new Date();
-    return {
-      key: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`,
-      label: now.toLocaleDateString("en-US", { month: "long" }),
-    };
-  })();
+    const list: string[] = [];
+    let y = startY;
+    let m = startM;
+    while (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)) {
+      list.push(`${y}-${String(m).padStart(2, "0")}`);
+      m += 1;
+      if (m > 12) {
+        m = 1;
+        y += 1;
+      }
+    }
+    return list;
+  }, [transactions]);
 
-  function rentThisMonth(propertyId: string) {
-    return transactions
-      .filter((t) => t.propertyId === propertyId && t.type === "rent" && t.date.startsWith(thisMonth.key))
-      .reduce((sum, t) => sum + t.amount, 0);
-  }
+  const monthIndex = months.indexOf(selectedMonth);
+  const allTime = selectedMonth === ALL_TIME;
 
-  function totalsForProperties(ids: Set<string> | null) {
+  const inScope = (t: Transaction) => allTime || t.date.startsWith(selectedMonth);
+
+  const scopedTransactions = useMemo(
+    () => visibleTransactions.filter(inScope),
+    [visibleTransactions, selectedMonth]
+  );
+
+  function totalsFor(ids: Set<string> | null, txns: Transaction[]) {
     let rent = 0;
     let expense = 0;
-    for (const t of transactions) {
+    for (const t of txns) {
       if (ids && !ids.has(t.propertyId)) continue;
       if (t.type === "rent") rent += t.amount;
       else expense += t.amount;
@@ -119,25 +168,36 @@ export default function DashboardClient({
     return { rent, expense, net: rent - expense };
   }
 
-  const overall = totalsForProperties(visibleIds);
+  const inScopeTransactions = useMemo(() => transactions.filter(inScope), [transactions, selectedMonth]);
+
+  const overall = totalsFor(visibleIds, scopedTransactions);
 
   const perCompany = useMemo(
     () =>
       companies.map((c) => {
         const ids = new Set(properties.filter((p) => p.companyId === c.id).map((p) => p.id));
-        return { company: c, count: ids.size, ...totalsForProperties(ids) };
+        return { company: c, count: ids.size, ...totalsFor(ids, inScopeTransactions) };
       }),
-    [companies, properties, transactions]
+    [companies, properties, inScopeTransactions]
   );
+
+  // The rent bar always measures one month; on All time that's the current one.
+  const barMonth = allTime ? currentMonthKey() : selectedMonth;
+
+  function rentInBarMonth(propertyId: string) {
+    return transactions
+      .filter((t) => t.propertyId === propertyId && t.type === "rent" && t.date.startsWith(barMonth))
+      .reduce((sum, t) => sum + t.amount, 0);
+  }
 
   const rows = useMemo(
     () =>
-      visibleTransactions
+      scopedTransactions
         .filter((t) => !filterProperty || t.propertyId === filterProperty)
         .filter((t) => !filterType || t.type === filterType)
         .slice()
         .sort((a, b) => b.date.localeCompare(a.date)),
-    [visibleTransactions, filterProperty, filterType]
+    [scopedTransactions, filterProperty, filterType]
   );
 
   const activeCompany = companies.find((c) => c.id === selectedCompany) ?? null;
@@ -246,6 +306,47 @@ export default function DashboardClient({
     setTransactions((prev) => prev.filter((t) => t.id !== id));
   }
 
+  /** Uploads one file and files the returned attachment onto its transaction. */
+  async function uploadProof(transactionId: string, file: File) {
+    const prepared = await shrinkImage(file);
+    const form = new FormData();
+    form.append("file", prepared);
+
+    const res = await fetch(`/api/transactions/${transactionId}/attachments`, {
+      method: "POST",
+      body: form,
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setError(data?.error || "Couldn't upload that file.");
+      return false;
+    }
+
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === transactionId ? { ...t, attachments: [...t.attachments, data] } : t))
+    );
+    return true;
+  }
+
+  async function addProofToRow(transactionId: string, files: FileList | null) {
+    if (!files || files.length === 0) return;
+    setError("");
+    setUploadingFor(transactionId);
+    for (const file of Array.from(files)) {
+      const uploaded = await uploadProof(transactionId, file);
+      if (!uploaded) break;
+    }
+    setUploadingFor("");
+  }
+
+  async function removeAttachment(attachmentId: string) {
+    const res = await fetch(`/api/attachments/${attachmentId}`, { method: "DELETE" });
+    if (!res.ok) return;
+    setTransactions((prev) =>
+      prev.map((t) => ({ ...t, attachments: t.attachments.filter((a) => a.id !== attachmentId) }))
+    );
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amt = parseFloat(amount);
@@ -268,11 +369,23 @@ export default function DashboardClient({
       return;
     }
 
-    setTransactions((prev) => [...prev, data]);
+    const created: Transaction = { ...data, attachments: [] };
+    setTransactions((prev) => [...prev, created]);
     setAmount("");
     setDetail("");
     setNote("");
     setDate(todayISO());
+
+    if (pendingProof.length > 0) {
+      setUploadingFor(created.id);
+      for (const file of pendingProof) {
+        const uploaded = await uploadProof(created.id, file);
+        if (!uploaded) break;
+      }
+      setUploadingFor("");
+      setPendingProof([]);
+      if (proofInput.current) proofInput.current.value = "";
+    }
   }
 
   return (
@@ -389,19 +502,51 @@ export default function DashboardClient({
         </div>
       ) : (
         <>
+          <nav className={styles.monthBar} aria-label="Period">
+            <button
+              type="button"
+              className={styles.monthArrow}
+              aria-label="Previous month"
+              disabled={allTime || monthIndex <= 0}
+              onClick={() => setSelectedMonth(months[monthIndex - 1])}
+            >
+              ‹
+            </button>
+            <span className={styles.monthLabel}>
+              {allTime ? "All time" : monthName(selectedMonth)}
+            </span>
+            <button
+              type="button"
+              className={styles.monthArrow}
+              aria-label="Next month"
+              disabled={allTime || monthIndex < 0 || monthIndex >= months.length - 1}
+              onClick={() => setSelectedMonth(months[monthIndex + 1])}
+            >
+              ›
+            </button>
+            <button
+              type="button"
+              className={`${styles.chip} ${allTime ? styles.active : ""}`}
+              onClick={() => setSelectedMonth(allTime ? currentMonthKey() : ALL_TIME)}
+            >
+              {allTime ? "Back to this month" : "All time"}
+            </button>
+          </nav>
+
           <section className={styles.summary}>
             <div className={`${styles.tile} ${styles.rent}`}>
               <div className={styles.label}>Rent collected</div>
               <div className={`${styles.value} num`}>{fmtFull.format(overall.rent)}</div>
               <div className={styles.sub}>
-                {activeCompany ? activeCompany.name : `across ${companies.length} LLCs`}
+                {allTime ? "all time" : monthName(selectedMonth)}
+                {activeCompany ? ` · ${activeCompany.name}` : ""}
               </div>
             </div>
             <div className={`${styles.tile} ${styles.expense}`}>
               <div className={styles.label}>Repairs &amp; expenses</div>
               <div className={`${styles.value} num`}>{fmtFull.format(overall.expense)}</div>
               <div className={styles.sub}>
-                {visibleTransactions.filter((t) => t.type === "expense").length} logged
+                {scopedTransactions.filter((t) => t.type === "expense").length} logged
               </div>
             </div>
             <div className={styles.tile}>
@@ -410,7 +555,10 @@ export default function DashboardClient({
                 {overall.net >= 0 ? "" : "−"}
                 {fmtFull.format(Math.abs(overall.net))}
               </div>
-              <div className={styles.sub}>{overall.net >= 0 ? "in the black" : "in the red"} to date</div>
+              <div className={styles.sub}>
+                {overall.net >= 0 ? "in the black" : "in the red"}
+                {allTime ? " to date" : ` in ${monthName(selectedMonth, false)}`}
+              </div>
             </div>
           </section>
 
@@ -469,9 +617,9 @@ export default function DashboardClient({
             <div className={styles.properties}>
               {visibleProperties.map((p) => {
                 const ids = new Set([p.id]);
-                const t = totalsForProperties(ids);
+                const t = totalsFor(ids, inScopeTransactions);
                 const target = p.monthlyRent || 0;
-                const paidThisMonth = rentThisMonth(p.id);
+                const paidThisMonth = rentInBarMonth(p.id);
                 const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
                 const paidInFull = target > 0 && paidThisMonth >= target;
                 const owner = companies.find((c) => c.id === p.companyId);
@@ -497,7 +645,7 @@ export default function DashboardClient({
                           />
                         </div>
                         <div className={styles.barCaption}>
-                          <span>{thisMonth.label} rent</span>
+                          <span>{monthName(barMonth, false)} rent</span>
                           <span className={`num ${paidInFull ? styles.pos : ""}`}>
                             {paidInFull
                               ? "Paid in full"
@@ -682,6 +830,25 @@ export default function DashboardClient({
                       onChange={(e) => setNote(e.target.value)}
                     />
                   </div>
+                  <div className={styles.field} style={{ gridColumn: "span 4" }}>
+                    <label htmlFor="f-proof">
+                      {isRent ? "Proof of payment (optional)" : "Receipt or photo (optional)"}
+                    </label>
+                    <input
+                      id="f-proof"
+                      ref={proofInput}
+                      type="file"
+                      multiple
+                      accept="image/*,application/pdf"
+                      className={styles.fileInput}
+                      onChange={(e) => setPendingProof(Array.from(e.target.files ?? []))}
+                    />
+                    {pendingProof.length > 0 && (
+                      <span className={styles.note}>
+                        {pendingProof.length} file{pendingProof.length === 1 ? "" : "s"} will be attached
+                      </span>
+                    )}
+                  </div>
                 </div>
                 <div className={styles.formFoot}>
                   <button
@@ -698,7 +865,7 @@ export default function DashboardClient({
 
           <section className={styles.block}>
             <div className={styles.blockHead}>
-              <h2>Ledger</h2>
+              <h2>Ledger · {allTime ? "all time" : monthName(selectedMonth)}</h2>
               <div className={styles.ledgerControls}>
                 <select value={filterProperty} onChange={(e) => setFilterProperty(e.target.value)}>
                   <option value="">All properties</option>
@@ -732,7 +899,9 @@ export default function DashboardClient({
                     <tr>
                       <td colSpan={6}>
                         <div className={styles.emptyState}>
-                          No transactions yet — record a rent payment or expense above.
+                          {allTime
+                            ? "No transactions yet — record a rent payment or expense above."
+                            : `Nothing recorded in ${monthName(selectedMonth)} yet.`}
                         </div>
                       </td>
                     </tr>
@@ -749,6 +918,48 @@ export default function DashboardClient({
                       <td>
                         {t.detail}
                         {t.note && <div className={styles.note}>{t.note}</div>}
+                        {t.attachments.length > 0 && (
+                          <div className={styles.proofRow}>
+                            {t.attachments.map((a) => (
+                              <span key={a.id} className={styles.proofItem}>
+                                <a href={a.url} target="_blank" rel="noopener noreferrer" title={a.filename}>
+                                  {a.contentType.startsWith("image/") ? (
+                                    // eslint-disable-next-line @next/next/no-img-element
+                                    <img src={a.url} alt={a.filename} className={styles.proofThumb} />
+                                  ) : (
+                                    <span className={styles.proofFile}>PDF</span>
+                                  )}
+                                </a>
+                                <button
+                                  type="button"
+                                  className={styles.proofRemove}
+                                  aria-label={`Remove ${a.filename}`}
+                                  onClick={() => removeAttachment(a.id)}
+                                >
+                                  ×
+                                </button>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        <label className={styles.proofAdd}>
+                          {uploadingFor === t.id
+                            ? "Uploading…"
+                            : t.attachments.length > 0
+                              ? "+ Add another"
+                              : "+ Attach proof"}
+                          <input
+                            type="file"
+                            multiple
+                            accept="image/*,application/pdf"
+                            hidden
+                            disabled={uploadingFor === t.id}
+                            onChange={(e) => {
+                              addProofToRow(t.id, e.target.files);
+                              e.target.value = "";
+                            }}
+                          />
+                        </label>
                       </td>
                       <td className={`${styles.amt} num ${t.type === "rent" ? styles.pos : styles.neg}`}>
                         {t.type === "rent" ? "+" : "−"}

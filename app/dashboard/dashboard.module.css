@@ -126,6 +126,54 @@
   outline-offset: 1px;
 }
 
+/* ---------- Month navigator ---------- */
+.monthBar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 26px;
+}
+
+.monthArrow {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 17px;
+  line-height: 1;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.monthArrow:hover:not([disabled]) {
+  border-color: var(--ink);
+}
+
+.monthArrow[disabled] {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.monthLabel {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 19px;
+  font-weight: 600;
+  min-width: 190px;
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .monthLabel {
+    min-width: 0;
+    flex: 1;
+  }
+}
+
 .errorBar {
   margin-top: 18px;
   background: var(--expense-soft);
@@ -180,6 +228,85 @@
 .linkCell:hover {
   color: var(--gold);
   text-decoration: underline;
+}
+
+/* ---------- Proof attachments ---------- */
+.proofRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.proofItem {
+  position: relative;
+  display: inline-flex;
+}
+
+.proofThumb {
+  width: 46px;
+  height: 46px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  display: block;
+  background: var(--surface-2);
+}
+
+.proofFile {
+  width: 46px;
+  height: 46px;
+  border-radius: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.proofRemove {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.1s;
+}
+
+.proofItem:hover .proofRemove,
+.proofRemove:focus-visible {
+  opacity: 1;
+}
+
+.proofRemove:hover {
+  color: var(--expense);
+  border-color: var(--expense);
+}
+
+.proofAdd {
+  display: block;
+  width: fit-content;
+  margin-top: 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.proofAdd:hover {
+  color: var(--gold);
 }
 
 .joinCode {

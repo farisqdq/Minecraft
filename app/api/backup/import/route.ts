@@ -7,12 +7,19 @@ const MAX_COMPANIES = 100;
 const MAX_PROPERTIES = 2000;
 const MAX_TRANSACTIONS = 50000;
 
+type CleanAttachment = {
+  url: string;
+  filename: string;
+  contentType: string;
+  size: number;
+};
 type CleanTransaction = {
   type: string;
   date: Date;
   amount: number;
   detail: string | null;
   note: string | null;
+  attachments: CleanAttachment[];
 };
 type CleanProperty = {
   name: string;
@@ -62,12 +69,28 @@ function parseBackup(raw: unknown) {
         if (!date || isNaN(date.getTime()) || amount <= 0) continue;
         if (++transactionTotal > MAX_TRANSACTIONS) throw new Error("That backup is too large to import.");
 
+        const attachments: CleanAttachment[] = [];
+        for (const rawAttachment of Array.isArray(t.attachments) ? t.attachments : []) {
+          const a = (rawAttachment ?? {}) as Record<string, unknown>;
+          const url = str(a.url, 1000);
+          // Only re-link files still served over https; anything else in the
+          // file would just render as a broken thumbnail.
+          if (!/^https:\/\//i.test(url)) continue;
+          attachments.push({
+            url,
+            filename: str(a.filename, 200) || "proof",
+            contentType: str(a.contentType, 100) || "application/octet-stream",
+            size: Math.round(num(a.size)),
+          });
+        }
+
         transactions.push({
           type: t.type === "expense" ? "expense" : "rent",
           date,
           amount,
           detail: str(t.detail, 200) || null,
           note: str(t.note, 500) || null,
+          attachments,
         });
       }
 
@@ -119,7 +142,7 @@ export async function POST(req: Request) {
     return candidate;
   }
 
-  const created = { companies: 0, properties: 0, transactions: 0 };
+  const created = { companies: 0, properties: 0, transactions: 0, attachments: 0 };
 
   await prisma.$transaction(async (tx) => {
     for (const company of parsed.companies) {
@@ -140,9 +163,9 @@ export async function POST(req: Request) {
         });
         created.properties += 1;
 
-        if (property.transactions.length > 0) {
-          await tx.transaction.createMany({
-            data: property.transactions.map((t) => ({
+        for (const t of property.transactions) {
+          const txn = await tx.transaction.create({
+            data: {
               propertyId: prop.id,
               createdById: userId,
               type: t.type,
@@ -150,9 +173,24 @@ export async function POST(req: Request) {
               amount: t.amount,
               detail: t.detail,
               note: t.note,
-            })),
+            },
           });
-          created.transactions += property.transactions.length;
+          created.transactions += 1;
+
+          if (t.attachments.length > 0) {
+            await tx.attachment.createMany({
+              data: t.attachments.map((a) => ({
+                transactionId: txn.id,
+                url: a.url,
+                pathname: new URL(a.url).pathname.replace(/^\//, ""),
+                filename: a.filename,
+                contentType: a.contentType,
+                size: a.size,
+                uploadedById: userId,
+              })),
+            });
+            created.attachments += t.attachments.length;
+          }
         }
       }
     }

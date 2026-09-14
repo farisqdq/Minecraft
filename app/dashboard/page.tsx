@@ -27,6 +27,7 @@ export default async function DashboardPage() {
     prisma.transaction.findMany({
       where: { property: { companyId: { in: companyIds } } },
       orderBy: { date: "desc" },
+      include: { attachments: { orderBy: { createdAt: "asc" } } },
     }),
   ]);
 
@@ -53,6 +54,13 @@ export default async function DashboardPage() {
         amount: t.amount,
         detail: t.detail ?? "",
         note: t.note ?? "",
+        attachments: t.attachments.map((a) => ({
+          id: a.id,
+          transactionId: a.transactionId,
+          url: a.url,
+          filename: a.filename,
+          contentType: a.contentType,
+        })),
       }))}
     />
   );

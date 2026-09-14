@@ -16,7 +16,12 @@ export async function GET() {
     include: {
       properties: {
         orderBy: { createdAt: "asc" },
-        include: { transactions: { orderBy: { date: "asc" } } },
+        include: {
+          transactions: {
+            orderBy: { date: "asc" },
+            include: { attachments: { orderBy: { createdAt: "asc" } } },
+          },
+        },
       },
     },
     orderBy: { createdAt: "asc" },
@@ -38,6 +43,14 @@ export async function GET() {
           amount: t.amount,
           detail: t.detail ?? "",
           note: t.note ?? "",
+          // Links to the stored files, not the files themselves — they stay
+          // in blob storage and keep working as long as the app does.
+          attachments: t.attachments.map((a) => ({
+            url: a.url,
+            filename: a.filename,
+            contentType: a.contentType,
+            size: a.size,
+          })),
         })),
       })),
     })),

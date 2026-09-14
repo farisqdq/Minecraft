@@ -26,9 +26,9 @@ data — safe to deploy publicly on Vercel.
    - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
    - `NEXTAUTH_URL` — leave as `http://localhost:3000` for local dev
    - `SIGNUP_CODE` (optional) — set this to require an invite code for new accounts, so random visitors to your deployed URL can't sign themselves up. Leave unset for open signup.
-4. Push the database schema:
+4. Create the database tables:
    ```
-   npx prisma db push
+   npx prisma migrate deploy
    ```
 5. Run the dev server:
    ```
@@ -40,15 +40,17 @@ data — safe to deploy publicly on Vercel.
 
 1. Import this repository into Vercel.
 2. Add a Postgres database from the project's **Storage** tab (or connect an external one like Neon/Supabase) — this sets `DATABASE_URL` automatically, or you can set it yourself under **Settings → Environment Variables**.
-3. Add the other environment variables:
+3. Add **Blob** from the same Storage tab if you want proof photos and receipts
+   (see below) — this sets `BLOB_READ_WRITE_TOKEN` automatically.
+4. Add the other environment variables:
    - `NEXTAUTH_SECRET` — same as above
    - `NEXTAUTH_URL` — your deployment URL, e.g. `https://your-app.vercel.app`
    - `SIGNUP_CODE` (optional)
-4. Deploy. The build step (`prisma generate && prisma db push && next build`) creates the database tables automatically on first deploy — no separate migration step needed.
 
-Note: `prisma db push` keeps the schema in sync on every deploy, which is
-simple and fine for a personal project. If this ever grows into a
-multi-developer project, switch to versioned `prisma migrate` files instead.
+   Leave a variable out entirely rather than saving it blank — an empty value
+   is not the same as unset and can break the build.
+5. Deploy. The build runs migrations (`prisma migrate deploy`) before building,
+   so the tables are created or updated automatically without destroying data.
 
 ## LLCs and teams
 
@@ -111,3 +113,34 @@ npx prisma migrate dev --name describe_the_change
 for Claude Artifacts (no login, no separate backend — data is stored by the
 Artifacts platform). It's kept for reference; the Next.js app above is the
 one meant for a real deployment.
+
+## Proof photos and receipts
+
+Every rent payment and repair can carry proof — a photo of a check or Venmo
+screenshot, a contractor's invoice, a receipt PDF. Attach files when recording
+the entry, or add them to any existing row later with "+ Attach proof".
+Thumbnails appear in the ledger and open the full file in a new tab.
+
+Photos are shrunk in the browser before upload (long edge 1600px, JPEG), so a
+phone photo uploads quickly and stays well under the 4 MB per-file limit. PDFs
+upload as-is.
+
+This needs **Vercel Blob** storage:
+
+1. In Vercel, open the project's **Storage** tab.
+2. Add **Blob**, connect it to this project, and redeploy.
+
+That sets `BLOB_READ_WRITE_TOKEN` automatically. Until it's connected, the app
+works normally and uploads fail with a message saying to set this up —
+transactions still save either way.
+
+Backups include links to the proof files rather than the files themselves. The
+files live in blob storage, so a restored backup re-links to the same images as
+long as that storage still exists.
+
+## Viewing by month
+
+The dashboard opens on the current month: the totals, the per-property figures,
+and the ledger all cover that month, and the arrows page back through earlier
+months (as far back as your first entry). **All time** switches to lifetime
+totals. The rent bar always tracks whichever month you're viewing.

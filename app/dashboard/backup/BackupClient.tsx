@@ -35,8 +35,9 @@ export default function BackupClient({ counts }: { counts: Counts }) {
       }
       setResult(
         `Restored ${data.companies} ${data.companies === 1 ? "LLC" : "LLCs"}, ` +
-          `${data.properties} ${data.properties === 1 ? "property" : "properties"}, and ` +
-          `${data.transactions} ledger ${data.transactions === 1 ? "entry" : "entries"}.`
+          `${data.properties} ${data.properties === 1 ? "property" : "properties"}, ` +
+          `${data.transactions} ledger ${data.transactions === 1 ? "entry" : "entries"}, and ` +
+          `${data.attachments} ${data.attachments === 1 ? "proof" : "proofs"}.`
       );
       router.refresh();
     } catch {
