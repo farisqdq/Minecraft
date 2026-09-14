@@ -172,6 +172,24 @@ button {
   cursor: not-allowed;
 }
 
+.authNote {
+  color: var(--muted);
+  font-size: 13.5px;
+  line-height: 1.6;
+  margin: 0;
+  text-align: center;
+}
+
+.authNote strong {
+  color: var(--ink);
+}
+
+.btnLink {
+  display: block;
+  text-align: center;
+  text-decoration: none;
+}
+
 .authError {
   background: var(--expense-soft);
   border: 1px solid var(--expense);

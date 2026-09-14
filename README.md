@@ -50,12 +50,22 @@ Note: `prisma db push` keeps the schema in sync on every deploy, which is
 simple and fine for a personal project. If this ever grows into a
 multi-developer project, switch to versioned `prisma migrate` files instead.
 
-## How data is scoped
+## LLCs and teams
 
-Every property and transaction belongs to the account that created it —
-accounts can't see or edit each other's data. There's no admin/shared view;
-if you want a partner to see the same properties, share one login rather
-than creating a second account.
+Properties belong to the **LLC** that owns them, not directly to a person.
+Each LLC has its own team, so a partner in one LLC sees only that LLC's
+houses, ledger, and profit — nothing from your other LLCs.
+
+- The dashboard has a chip for each LLC you're on, plus an **All LLCs** view
+  with a per-LLC profit rollup.
+- **Owners** can rename or delete the LLC and invite/remove teammates.
+  **Members** can record rent and expenses but can't manage the team.
+- Invites are created on the **Team** page and produce a link you send
+  yourself — the app doesn't send email. The invite is tied to the address
+  you typed, so the recipient has to sign in as that address to accept, and
+  it expires after 7 days.
+- A valid invite also satisfies `SIGNUP_CODE`, so gating public signups
+  doesn't lock out the people you invited.
 
 ## Legacy artifact version
 

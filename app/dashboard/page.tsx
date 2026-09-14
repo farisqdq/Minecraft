@@ -12,16 +12,35 @@ export default async function DashboardPage() {
 
   const userId = session.user.id as string;
 
+  const memberships = await prisma.companyMember.findMany({
+    where: { userId },
+    include: { company: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const companyIds = memberships.map((m) => m.companyId);
+
   const [properties, transactions] = await Promise.all([
-    prisma.property.findMany({ where: { userId }, orderBy: { createdAt: "asc" } }),
-    prisma.transaction.findMany({ where: { userId }, orderBy: { date: "desc" } }),
+    prisma.property.findMany({
+      where: { companyId: { in: companyIds } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.transaction.findMany({
+      where: { property: { companyId: { in: companyIds } } },
+      orderBy: { date: "desc" },
+    }),
   ]);
 
   return (
     <DashboardClient
       userLabel={session.user.name || session.user.email || "you"}
+      initialCompanies={memberships.map((m) => ({
+        id: m.company.id,
+        name: m.company.name,
+        role: m.role as "owner" | "member",
+      }))}
       initialProperties={properties.map((p) => ({
         id: p.id,
+        companyId: p.companyId,
         name: p.name,
         address: p.address ?? "",
         monthlyRent: p.monthlyRent,

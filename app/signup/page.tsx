@@ -1,14 +1,19 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { Suspense, useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 
-export default function SignupPage() {
+function SignupForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  const inviteToken = searchParams.get("invite") || "";
+  const invitedEmail = searchParams.get("email") || "";
+
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [email, setEmail] = useState(invitedEmail);
   const [password, setPassword] = useState("");
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
@@ -22,7 +27,7 @@ export default function SignupPage() {
     const res = await fetch("/api/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, code }),
+      body: JSON.stringify({ name, email, password, code, inviteToken }),
     });
     const data = await res.json().catch(() => ({}));
 
@@ -35,10 +40,10 @@ export default function SignupPage() {
     const result = await signIn("credentials", { email, password, redirect: false });
     setLoading(false);
     if (result?.error) {
-      router.push("/login");
+      router.push(`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`);
       return;
     }
-    router.push("/dashboard");
+    router.push(callbackUrl);
     router.refresh();
   }
 
@@ -83,23 +88,34 @@ export default function SignupPage() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        <div className="field">
-          <label htmlFor="code">Invite code (if required)</label>
-          <input
-            id="code"
-            type="text"
-            autoComplete="off"
-            value={code}
-            onChange={(e) => setCode(e.target.value)}
-          />
-        </div>
+        {!inviteToken && (
+          <div className="field">
+            <label htmlFor="code">Invite code (if required)</label>
+            <input
+              id="code"
+              type="text"
+              autoComplete="off"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+          </div>
+        )}
         <button type="submit" className="btn primary" disabled={loading}>
           {loading ? "Creating account…" : "Create account"}
         </button>
       </form>
       <div className="authFoot">
-        Already have an account? <Link href="/login">Sign in</Link>
+        Already have an account?{" "}
+        <Link href={`/login?callbackUrl=${encodeURIComponent(callbackUrl)}`}>Sign in</Link>
       </div>
     </div>
+  );
+}
+
+export default function SignupPage() {
+  return (
+    <Suspense>
+      <SignupForm />
+    </Suspense>
   );
 }

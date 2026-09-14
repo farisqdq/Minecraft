@@ -14,14 +14,58 @@ model User {
   name         String?
   createdAt    DateTime @default(now())
 
-  properties   Property[]
-  transactions Transaction[]
+  memberships         CompanyMember[]
+  invitesSent         Invite[]        @relation("InviteSender")
+  createdProperties   Property[]
+  createdTransactions Transaction[]
+}
+
+model Company {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+
+  members    CompanyMember[]
+  properties Property[]
+  invites    Invite[]
+}
+
+model CompanyMember {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   @default("member")
+  createdAt DateTime @default(now())
+
+  @@unique([companyId, userId])
+  @@index([userId])
+}
+
+model Invite {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email       String
+  role        String    @default("member")
+  token       String    @unique
+  invitedById String?
+  invitedBy   User?     @relation("InviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+
+  @@index([companyId])
+  @@index([email])
 }
 
 model Property {
   id          String   @id @default(cuid())
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   name        String
   address     String?
   monthlyRent Float    @default(0)
@@ -29,22 +73,21 @@ model Property {
 
   transactions Transaction[]
 
-  @@index([userId])
+  @@index([companyId])
 }
 
 model Transaction {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  propertyId String
-  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  type       String
-  date       DateTime
-  amount     Float
-  detail     String?
-  note       String?
-  createdAt  DateTime @default(now())
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  type        String
+  date        DateTime
+  amount      Float
+  detail      String?
+  note        String?
+  createdAt   DateTime @default(now())
 
-  @@index([userId])
   @@index([propertyId])
 }

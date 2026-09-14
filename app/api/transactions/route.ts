@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
+import { companyIdsForUser, requireProperty } from "@/lib/access";
 
 function serialize<T extends { date: Date; detail: string | null; note: string | null }>(t: T) {
   return { ...t, date: t.date.toISOString().slice(0, 10), detail: t.detail ?? "", note: t.note ?? "" };
@@ -10,8 +11,9 @@ export async function GET() {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const companyIds = await companyIdsForUser(userId);
   const transactions = await prisma.transaction.findMany({
-    where: { userId },
+    where: { property: { companyId: { in: companyIds } } },
     orderBy: { date: "desc" },
   });
   return NextResponse.json(transactions.map(serialize));
@@ -33,13 +35,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Missing or invalid fields." }, { status: 400 });
   }
 
-  const property = await prisma.property.findUnique({ where: { id: propertyId } });
-  if (!property || property.userId !== userId) {
+  if (!(await requireProperty(userId, propertyId))) {
     return NextResponse.json({ error: "Property not found." }, { status: 404 });
   }
 
   const transaction = await prisma.transaction.create({
-    data: { userId, propertyId, type, date, amount, detail: detail || null, note: note || null },
+    data: {
+      propertyId,
+      createdById: userId,
+      type,
+      date,
+      amount,
+      detail: detail || null,
+      note: note || null,
+    },
   });
   return NextResponse.json(serialize(transaction), { status: 201 });
 }
