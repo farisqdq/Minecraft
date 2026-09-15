@@ -206,6 +206,11 @@ export default function PropertyManageClient({
           each unit gets its own rent target and tenant. Leave it with no units for a single-tenant house.
         </p>
 
+        {units.length === 0 ? (
+          <div className={styles.ledgerWrap}>
+            <div className={styles.emptyState}>No units yet — this property is tracked as a whole.</div>
+          </div>
+        ) : (
         <div className={styles.ledgerWrap}>
           <table className={styles.ledger}>
             <thead>
@@ -217,13 +222,6 @@ export default function PropertyManageClient({
               </tr>
             </thead>
             <tbody>
-              {units.length === 0 && (
-                <tr>
-                  <td colSpan={4}>
-                    <div className={styles.emptyState}>No units yet — this property is tracked as a whole.</div>
-                  </td>
-                </tr>
-              )}
               {units.map((u) =>
                 editingUnitId === u.id ? (
                   <tr key={u.id}>
@@ -298,6 +296,7 @@ export default function PropertyManageClient({
             </tbody>
           </table>
         </div>
+        )}
 
         {addingUnit ? (
           <form className={styles.inlineForm} onSubmit={addUnit} style={{ marginTop: 14, flexWrap: "wrap" }}>
@@ -342,6 +341,11 @@ export default function PropertyManageClient({
           due, it shows up on the dashboard for that month with a one-click &ldquo;Log it&rdquo; button.
         </p>
 
+        {recurring.length === 0 ? (
+          <div className={styles.ledgerWrap}>
+            <div className={styles.emptyState}>No recurring expenses set up yet.</div>
+          </div>
+        ) : (
         <div className={styles.ledgerWrap}>
           <table className={styles.ledger}>
             <thead>
@@ -355,13 +359,6 @@ export default function PropertyManageClient({
               </tr>
             </thead>
             <tbody>
-              {recurring.length === 0 && (
-                <tr>
-                  <td colSpan={6}>
-                    <div className={styles.emptyState}>No recurring expenses set up yet.</div>
-                  </td>
-                </tr>
-              )}
               {recurring.map((r) => (
                 <tr key={r.id} style={{ opacity: r.active ? 1 : 0.5 }}>
                   <td>
@@ -394,6 +391,7 @@ export default function PropertyManageClient({
             </tbody>
           </table>
         </div>
+        )}
 
         {addingRecurring ? (
           <form className={styles.formCard} onSubmit={addRecurring} style={{ marginTop: 14 }}>

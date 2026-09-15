@@ -35,6 +35,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  flex-wrap: wrap;
   font-size: 13px;
   color: var(--muted);
 }
@@ -679,6 +680,7 @@
 .propActions {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   margin-top: auto;
   padding-top: 4px;
 }
@@ -783,6 +785,12 @@
 .field.wide {
   grid-column: span 2;
 }
+.span3 {
+  grid-column: span 3;
+}
+.span4 {
+  grid-column: span 4;
+}
 .field label {
   font-size: 12px;
   color: var(--muted);
@@ -813,15 +821,31 @@
   margin-top: 16px;
 }
 
+.twoCol {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+@media (max-width: 480px) {
+  .twoCol {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 640px) {
   .summary {
     grid-template-columns: 1fr;
   }
+  /* One column, and every field takes it regardless of its desktop span —
+     mixing an explicit narrow template with span-3/span-4 children forces
+     the grid to grow implicit columns to fit them, which starves the other
+     tracks down toward zero width. Full-width children sidestep that. */
   .fieldGrid {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr;
   }
-  .field.wide {
-    grid-column: span 2;
+  .fieldGrid > div {
+    grid-column: 1 / -1;
   }
 }
 

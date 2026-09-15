@@ -48,7 +48,7 @@ export default function ExportClient({
               plus a summary block totaling rental income and each expense category. Hand it straight to an
               accountant or open it in a spreadsheet.
             </p>
-            <div className={styles.fieldGrid} style={{ gridTemplateColumns: "1fr 1fr" }}>
+            <div className={styles.twoCol}>
               <div className={styles.field}>
                 <label htmlFor="export-company">LLC</label>
                 <select id="export-company" value={companyId} onChange={(e) => setCompanyId(e.target.value)}>

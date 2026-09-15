@@ -1252,7 +1252,7 @@ export default function DashboardClient({
                       onChange={(e) => setDetail(e.target.value)}
                     />
                   </div>
-                  <div className={styles.field} style={{ gridColumn: "span 3" }}>
+                  <div className={`${styles.field} ${styles.span3}`}>
                     <label htmlFor="f-note">Note (optional)</label>
                     <input
                       id="f-note"
@@ -1262,7 +1262,7 @@ export default function DashboardClient({
                       onChange={(e) => setNote(e.target.value)}
                     />
                   </div>
-                  <div className={styles.field} style={{ gridColumn: "span 4" }}>
+                  <div className={`${styles.field} ${styles.span4}`}>
                     <label htmlFor="f-proof">
                       {isRent ? "Proof of payment (optional)" : "Receipt or photo (optional)"}
                     </label>
@@ -1319,6 +1319,15 @@ export default function DashboardClient({
                 </select>
               </div>
             </div>
+            {rows.length === 0 ? (
+              <div className={styles.ledgerWrap}>
+                <div className={styles.emptyState}>
+                  {allTime
+                    ? "No transactions yet — record a rent payment or expense above."
+                    : `Nothing recorded in ${monthName(selectedMonth)} yet.`}
+                </div>
+              </div>
+            ) : (
             <div className={styles.ledgerWrap}>
               <table className={styles.ledger}>
                 <thead>
@@ -1332,17 +1341,6 @@ export default function DashboardClient({
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.length === 0 && (
-                    <tr>
-                      <td colSpan={6}>
-                        <div className={styles.emptyState}>
-                          {allTime
-                            ? "No transactions yet — record a rent payment or expense above."
-                            : `Nothing recorded in ${monthName(selectedMonth)} yet.`}
-                        </div>
-                      </td>
-                    </tr>
-                  )}
                   {rows.map((t) => (
                     <tr key={t.id}>
                       <td>{fmtDate(t.date)}</td>
@@ -1422,6 +1420,7 @@ export default function DashboardClient({
                 </tbody>
               </table>
             </div>
+            )}
           </section>
         </>
       )}
