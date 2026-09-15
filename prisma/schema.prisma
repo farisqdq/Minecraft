@@ -14,11 +14,12 @@ model User {
   name         String?
   createdAt    DateTime @default(now())
 
-  memberships         CompanyMember[]
-  invitesSent         Invite[]        @relation("InviteSender")
-  createdProperties   Property[]
-  createdTransactions Transaction[]
-  uploadedAttachments Attachment[]
+  memberships          CompanyMember[]
+  invitesSent          Invite[]           @relation("InviteSender")
+  createdProperties    Property[]
+  createdTransactions  Transaction[]
+  uploadedAttachments  Attachment[]
+  createdRecurring     RecurringExpense[]
 }
 
 model Company {
@@ -70,17 +71,40 @@ model Property {
   name        String
   address     String?
   monthlyRent Float    @default(0)
+  vacant      Boolean  @default(false)
   createdAt   DateTime @default(now())
 
-  transactions Transaction[]
+  units             Unit[]
+  transactions      Transaction[]
+  recurringExpenses RecurringExpense[]
 
   @@index([companyId])
+}
+
+// A single rental unit inside a property. Optional: most properties have
+// none and are tracked directly, this only kicks in for a duplex/triplex/
+// building where each unit needs its own rent target and tenant.
+model Unit {
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  name        String
+  monthlyRent Float    @default(0)
+  vacant      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  transactions      Transaction[]
+  recurringExpenses RecurringExpense[]
+
+  @@index([propertyId])
 }
 
 model Transaction {
   id          String   @id @default(cuid())
   propertyId  String
   property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unitId      String?
+  unit        Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   type        String
@@ -88,11 +112,44 @@ model Transaction {
   amount      Float
   detail      String?
   note        String?
+  category    String?
   createdAt   DateTime @default(now())
 
-  attachments Attachment[]
+  attachments        Attachment[]
+  recurringExpenseId String?
+  recurringExpense   RecurringExpense? @relation(fields: [recurringExpenseId], references: [id], onDelete: SetNull)
 
   @@index([propertyId])
+  @@index([unitId])
+  @@index([recurringExpenseId])
+}
+
+// A template for a bill that repeats (mortgage, insurance, HOA). It never
+// posts anything on its own — the dashboard surfaces it as due, and logging
+// it is a one-click action that creates a normal Transaction tagged back to
+// this template, so nothing lands in the ledger without a person seeing it.
+model RecurringExpense {
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unitId      String?
+  unit        Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  category    String
+  detail      String?
+  note        String?
+  amount      Float
+  frequency   String // "monthly" | "yearly"
+  day         Int // day of month, 1-31 (clamped to the month's last day)
+  month       Int? // 1-12, only used when frequency = "yearly"
+  active      Boolean  @default(true)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  transactions Transaction[]
+
+  @@index([propertyId])
+  @@index([unitId])
 }
 
 model Attachment {

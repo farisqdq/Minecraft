@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
+import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import styles from "./dashboard.module.css";
 
 type Company = { id: string; name: string; role: "owner" | "member" };
@@ -14,6 +15,29 @@ type Property = {
   name: string;
   address: string;
   monthlyRent: number;
+  vacant: boolean;
+};
+
+type Unit = {
+  id: string;
+  propertyId: string;
+  name: string;
+  monthlyRent: number;
+  vacant: boolean;
+};
+
+type RecurringExpense = {
+  id: string;
+  propertyId: string;
+  unitId: string | null;
+  category: string;
+  detail: string;
+  note: string;
+  amount: number;
+  frequency: "monthly" | "yearly";
+  day: number;
+  month: number | null;
+  active: boolean;
 };
 
 type Attachment = {
@@ -27,12 +51,27 @@ type Attachment = {
 type Transaction = {
   id: string;
   propertyId: string;
+  unitId: string | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
   detail: string;
   note: string;
+  category: string;
+  recurringExpenseId: string | null;
   attachments: Attachment[];
+};
+
+// A place money can be logged against: a property with no units, or one
+// specific unit inside a property that has them, or the property itself
+// as a "whole building" option alongside its units.
+type Target = {
+  key: string;
+  propertyId: string;
+  unitId: string | null;
+  label: string;
+  monthlyRent: number;
+  vacant: boolean;
 };
 
 const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
@@ -64,16 +103,22 @@ export default function DashboardClient({
   storageReady,
   initialCompanies,
   initialProperties,
+  initialUnits,
+  initialRecurring,
   initialTransactions,
 }: {
   userLabel: string;
   storageReady: boolean;
   initialCompanies: Company[];
   initialProperties: Property[];
+  initialUnits: Unit[];
+  initialRecurring: RecurringExpense[];
   initialTransactions: Transaction[];
 }) {
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [properties, setProperties] = useState<Property[]>(initialProperties);
+  const [units, setUnits] = useState<Unit[]>(initialUnits);
+  const [recurring, setRecurring] = useState<RecurringExpense[]>(initialRecurring);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
 
   const [selectedCompany, setSelectedCompany] = useState<string>(
@@ -97,16 +142,20 @@ export default function DashboardClient({
   const [editName, setEditName] = useState("");
   const [editAddress, setEditAddress] = useState("");
   const [editRent, setEditRent] = useState("");
+  const [editVacant, setEditVacant] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
 
   const [type, setType] = useState<"rent" | "expense">("rent");
-  const [propertyId, setPropertyId] = useState("");
+  const [targetKey, setTargetKey] = useState("");
   const [date, setDate] = useState(todayISO());
   const [amount, setAmount] = useState("");
   const [detail, setDetail] = useState("");
   const [note, setNote] = useState("");
+  const [category, setCategory] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+
+  const [recurringBusyId, setRecurringBusyId] = useState("");
 
   const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
   const [filterProperty, setFilterProperty] = useState("");
@@ -134,9 +183,50 @@ export default function DashboardClient({
     [transactions, visibleIds]
   );
 
+  function unitsForProperty(propertyId: string) {
+    return units.filter((u) => u.propertyId === propertyId);
+  }
+
   function propName_(id: string) {
     return properties.find((p) => p.id === id)?.name ?? "—";
   }
+
+  function targetLabel(t: { propertyId: string; unitId: string | null }) {
+    const property = propName_(t.propertyId);
+    if (!t.unitId) return property;
+    const unit = units.find((u) => u.id === t.unitId);
+    return unit ? `${property} — ${unit.name}` : property;
+  }
+
+  // Everything the transaction form and "who hasn't paid" can point at.
+  const visibleTargets = useMemo<Target[]>(() => {
+    return visibleProperties.flatMap((p): Target[] => {
+      const propUnits = unitsForProperty(p.id);
+      if (propUnits.length === 0) {
+        return [
+          { key: p.id, propertyId: p.id, unitId: null, label: p.name, monthlyRent: p.monthlyRent, vacant: p.vacant },
+        ];
+      }
+      return [
+        ...propUnits.map((u) => ({
+          key: `${p.id}:${u.id}`,
+          propertyId: p.id,
+          unitId: u.id,
+          label: `${p.name} — ${u.name}`,
+          monthlyRent: u.monthlyRent,
+          vacant: u.vacant,
+        })),
+        {
+          key: `${p.id}:whole`,
+          propertyId: p.id,
+          unitId: null,
+          label: `${p.name} — (whole building)`,
+          monthlyRent: 0,
+          vacant: false,
+        },
+      ];
+    });
+  }, [visibleProperties, units]);
 
   // Every month from the first recorded entry through the current one, so you
   // can page back through the year even where a month has nothing in it.
@@ -198,11 +288,42 @@ export default function DashboardClient({
   // The rent bar always measures one month; on All time that's the current one.
   const barMonth = allTime ? currentMonthKey() : selectedMonth;
 
-  function rentInBarMonth(propertyId: string) {
+  function rentInMonth(propertyId: string, unitId: string | null, month: string) {
     return transactions
-      .filter((t) => t.propertyId === propertyId && t.type === "rent" && t.date.startsWith(barMonth))
+      .filter(
+        (t) => t.propertyId === propertyId && t.unitId === unitId && t.type === "rent" && t.date.startsWith(month)
+      )
       .reduce((sum, t) => sum + t.amount, 0);
   }
+
+  function rentInBarMonth(propertyId: string) {
+    // Whole-property figure used on the card when it has no units.
+    return rentInMonth(propertyId, null, barMonth);
+  }
+
+  // Rent targets with an amount due, not fully paid, and not vacant — the
+  // reason to check this every month instead of clicking through each card.
+  const unpaidThisMonth = useMemo(() => {
+    if (allTime) return [];
+    return visibleTargets
+      .filter((t) => !t.vacant && t.monthlyRent > 0)
+      .map((t) => ({ target: t, paid: rentInMonth(t.propertyId, t.unitId, barMonth) }))
+      .filter(({ target, paid }) => paid < target.monthlyRent)
+      .sort((a, b) => b.target.monthlyRent - b.paid - (a.target.monthlyRent - a.paid));
+  }, [visibleTargets, transactions, barMonth, allTime]);
+
+  // Recurring templates due this billing period that haven't been logged yet.
+  const dueRecurring = useMemo(() => {
+    if (allTime) return [];
+    const [, monthNum] = barMonth.split("-").map(Number);
+    return recurring
+      .filter((r) => r.active && visibleIds.has(r.propertyId))
+      .filter((r) => r.frequency === "monthly" || r.month === monthNum)
+      .filter(
+        (r) =>
+          !transactions.some((t) => t.recurringExpenseId === r.id && t.date.startsWith(barMonth))
+      );
+  }, [recurring, transactions, barMonth, allTime, visibleIds]);
 
   const rows = useMemo(
     () =>
@@ -217,8 +338,8 @@ export default function DashboardClient({
   const activeCompany = companies.find((c) => c.id === selectedCompany) ?? null;
 
   const isRent = type === "rent";
-  const formPropertyId =
-    propertyId && visibleIds.has(propertyId) ? propertyId : visibleProperties[0]?.id ?? "";
+  const formTarget =
+    visibleTargets.find((t) => t.key === targetKey) ?? visibleTargets[0] ?? null;
 
   async function addCompany(e: React.FormEvent) {
     e.preventDefault();
@@ -291,7 +412,7 @@ export default function DashboardClient({
       return;
     }
     setProperties((prev) => [...prev, data]);
-    if (!propertyId) setPropertyId(data.id);
+    if (!targetKey) setTargetKey(data.id);
     setPropName("");
     setPropAddress("");
     setPropRent("");
@@ -303,6 +424,7 @@ export default function DashboardClient({
     setEditName(p.name);
     setEditAddress(p.address);
     setEditRent(p.monthlyRent ? String(p.monthlyRent) : "");
+    setEditVacant(p.vacant);
     setError("");
   }
 
@@ -324,6 +446,7 @@ export default function DashboardClient({
         name,
         address: editAddress.trim(),
         monthlyRent: parseFloat(editRent) || 0,
+        vacant: editVacant,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -351,6 +474,8 @@ export default function DashboardClient({
     if (!res.ok) return;
     setProperties((prev) => prev.filter((p) => p.id !== id));
     setTransactions((prev) => prev.filter((t) => t.propertyId !== id));
+    setUnits((prev) => prev.filter((u) => u.propertyId !== id));
+    setRecurring((prev) => prev.filter((r) => r.propertyId !== id));
   }
 
   async function removeTransaction(id: string) {
@@ -408,20 +533,47 @@ export default function DashboardClient({
     );
   }
 
+  async function logRecurring(templateId: string) {
+    setRecurringBusyId(templateId);
+    setError("");
+    const res = await fetch(`/api/recurring/${templateId}/log`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: barMonth }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setRecurringBusyId("");
+    if (!res.ok) {
+      setError(data?.error || "Couldn't log that expense.");
+      return;
+    }
+    setTransactions((prev) => [...prev, { ...data, attachments: [] }]);
+  }
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     const amt = parseFloat(amount);
     // Must match what the select shows: a stale selection from another LLC
-    // would otherwise book the money against the wrong house.
-    const target = formPropertyId;
-    if (!target || !date || !(amt > 0)) return;
+    // (or from a property that has since grown units) would otherwise book
+    // the money against the wrong house.
+    if (!formTarget || !date || !(amt > 0)) return;
+    if (type === "expense" && !category) return;
     setError("");
 
     setSubmitting(true);
     const res = await fetch("/api/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ propertyId: target, type, date, amount: amt, detail, note }),
+      body: JSON.stringify({
+        propertyId: formTarget.propertyId,
+        unitId: formTarget.unitId,
+        type,
+        date,
+        amount: amt,
+        detail,
+        note,
+        category: type === "expense" ? category : undefined,
+      }),
     });
     setSubmitting(false);
     const data = await res.json().catch(() => ({}));
@@ -435,6 +587,7 @@ export default function DashboardClient({
     setAmount("");
     setDetail("");
     setNote("");
+    setCategory("");
     setDate(todayISO());
 
     if (pendingProof.length > 0) {
@@ -471,6 +624,9 @@ export default function DashboardClient({
           </Link>
           <Link href="/dashboard/backup" className={styles.textLink}>
             Backup
+          </Link>
+          <Link href="/dashboard/export" className={styles.textLink}>
+            Export
           </Link>
           <button type="button" onClick={() => signOut({ callbackUrl: "/login" })}>
             Sign out
@@ -674,6 +830,83 @@ export default function DashboardClient({
             </section>
           )}
 
+          {!allTime && unpaidThisMonth.length > 0 && (
+            <section className={styles.block}>
+              <div className={styles.blockHead}>
+                <h2>Who hasn&apos;t paid — {monthName(barMonth, false)}</h2>
+                <span className={styles.count}>
+                  {unpaidThisMonth.length} {unpaidThisMonth.length === 1 ? "unit" : "units"}
+                </span>
+              </div>
+              <div className={styles.ledgerWrap}>
+                <table className={styles.ledger}>
+                  <thead>
+                    <tr>
+                      <th>Property</th>
+                      <th style={{ textAlign: "right" }}>Paid</th>
+                      <th style={{ textAlign: "right" }}>Owed</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unpaidThisMonth.map(({ target, paid }) => (
+                      <tr key={target.key}>
+                        <td>{target.label}</td>
+                        <td className="num" style={{ textAlign: "right" }}>
+                          {fmt.format(paid)} of {fmt.format(target.monthlyRent)}
+                        </td>
+                        <td className={`${styles.amt} num ${styles.neg}`}>
+                          {fmt.format(target.monthlyRent - paid)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {!allTime && dueRecurring.length > 0 && (
+            <section className={styles.block}>
+              <div className={styles.blockHead}>
+                <h2>Recurring expenses due — {monthName(barMonth, false)}</h2>
+              </div>
+              <div className={styles.ledgerWrap}>
+                <table className={styles.ledger}>
+                  <thead>
+                    <tr>
+                      <th>Property</th>
+                      <th>Category</th>
+                      <th style={{ textAlign: "right" }}>Amount</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {dueRecurring.map((r) => (
+                      <tr key={r.id}>
+                        <td>
+                          {targetLabel(r)}
+                          {r.detail && <div className={styles.note}>{r.detail}</div>}
+                        </td>
+                        <td>{r.category}</td>
+                        <td className={`${styles.amt} num ${styles.neg}`}>{fmt.format(r.amount)}</td>
+                        <td style={{ textAlign: "right" }}>
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                            disabled={recurringBusyId === r.id}
+                            onClick={() => logRecurring(r.id)}
+                          >
+                            {recurringBusyId === r.id ? "Logging…" : "Log it"}
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
           <section className={styles.block}>
             <div className={styles.blockHead}>
               <h2>Properties</h2>
@@ -687,6 +920,7 @@ export default function DashboardClient({
               {visibleProperties.map((p) => {
                 const ids = new Set([p.id]);
                 const t = totalsFor(ids, inScopeTransactions);
+                const propUnits = unitsForProperty(p.id);
                 const target = p.monthlyRent || 0;
                 const paidThisMonth = rentInBarMonth(p.id);
                 const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
@@ -732,6 +966,14 @@ export default function DashboardClient({
                           onChange={(e) => setEditRent(e.target.value)}
                         />
                       </div>
+                      <label className={styles.checkboxField}>
+                        <input
+                          type="checkbox"
+                          checked={editVacant}
+                          onChange={(e) => setEditVacant(e.target.checked)}
+                        />
+                        Vacant
+                      </label>
                       <div className={styles.propActions}>
                         <button
                           type="submit"
@@ -755,34 +997,67 @@ export default function DashboardClient({
                 return (
                   <div key={p.id} className={styles.propCard}>
                     <div>
-                      <div className={styles.name}>{p.name}</div>
+                      <div className={styles.name}>
+                        {p.name}
+                        {propUnits.length === 0 && p.vacant && (
+                          <span className={styles.vacantTag}>Vacant</span>
+                        )}
+                      </div>
                       <div className={styles.addr}>{p.address}</div>
                       {selectedCompany === "all" && owner && (
                         <div className={styles.ownerTag}>{owner.name}</div>
                       )}
                     </div>
-                    <div className={styles.rentLine}>
-                      <span>Monthly rent</span>
-                      <span className="num">{fmt.format(target)}</span>
-                    </div>
-                    {target > 0 && (
-                      <div>
-                        <div className={styles.bar}>
-                          <span
-                            className={paidInFull ? styles.barFull : undefined}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <div className={styles.barCaption}>
-                          <span>{monthName(barMonth, false)} rent</span>
-                          <span className={`num ${paidInFull ? styles.pos : ""}`}>
-                            {paidInFull
-                              ? "Paid in full"
-                              : `${fmt.format(paidThisMonth)} of ${fmt.format(target)}`}
-                          </span>
-                        </div>
+
+                    {propUnits.length > 0 ? (
+                      <div className={styles.unitList}>
+                        {propUnits.map((u) => {
+                          const uPaid = rentInMonth(p.id, u.id, barMonth);
+                          const uTarget = u.monthlyRent || 0;
+                          const uFull = uTarget > 0 && uPaid >= uTarget;
+                          return (
+                            <div key={u.id} className={styles.unitRow}>
+                              <span className={styles.unitName}>{u.name}</span>
+                              {u.vacant ? (
+                                <span className={styles.vacantTag}>Vacant</span>
+                              ) : uTarget > 0 ? (
+                                <span className={`num ${uFull ? styles.pos : styles.unitDue}`}>
+                                  {uFull ? "Paid in full" : `${fmt.format(uPaid)} of ${fmt.format(uTarget)}`}
+                                </span>
+                              ) : (
+                                <span className={styles.note}>No rent set</span>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
+                    ) : (
+                      <>
+                        <div className={styles.rentLine}>
+                          <span>Monthly rent</span>
+                          <span className="num">{fmt.format(target)}</span>
+                        </div>
+                        {!p.vacant && target > 0 && (
+                          <div>
+                            <div className={styles.bar}>
+                              <span
+                                className={paidInFull ? styles.barFull : undefined}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <div className={styles.barCaption}>
+                              <span>{monthName(barMonth, false)} rent</span>
+                              <span className={`num ${paidInFull ? styles.pos : ""}`}>
+                                {paidInFull
+                                  ? "Paid in full"
+                                  : `${fmt.format(paidThisMonth)} of ${fmt.format(target)}`}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </>
                     )}
+
                     <div className={styles.propRow}>
                       <span className={styles.l}>Collected</span>
                       <span className={`${styles.v} ${styles.pos} num`}>{fmt.format(t.rent)}</span>
@@ -806,6 +1081,9 @@ export default function DashboardClient({
                       >
                         Edit
                       </button>
+                      <Link href={`/dashboard/properties/${p.id}`} className={`${styles.btn} ${styles.small}`}>
+                        Manage
+                      </Link>
                       <button
                         type="button"
                         className={`${styles.btn} ${styles.small} ${styles.ghost}`}
@@ -918,13 +1196,13 @@ export default function DashboardClient({
                     <select
                       id="f-property"
                       required
-                      value={formPropertyId}
-                      onChange={(e) => setPropertyId(e.target.value)}
+                      value={formTarget?.key ?? ""}
+                      onChange={(e) => setTargetKey(e.target.value)}
                     >
-                      {visibleProperties.length === 0 && <option value="">Add a property first</option>}
-                      {visibleProperties.map((p) => (
-                        <option key={p.id} value={p.id}>
-                          {p.name}
+                      {visibleTargets.length === 0 && <option value="">Add a property first</option>}
+                      {visibleTargets.map((t) => (
+                        <option key={t.key} value={t.key}>
+                          {t.label}
                         </option>
                       ))}
                     </select>
@@ -946,12 +1224,30 @@ export default function DashboardClient({
                       onChange={(e) => setAmount(e.target.value)}
                     />
                   </div>
+                  {!isRent && (
+                    <div className={styles.field}>
+                      <label htmlFor="f-category">Category</label>
+                      <select
+                        id="f-category"
+                        required
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                      >
+                        <option value="">Choose one</option>
+                        {EXPENSE_CATEGORIES.map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                   <div className={`${styles.field} ${styles.wide}`}>
-                    <label htmlFor="f-detail">{isRent ? "Paid by (tenant)" : "Category"}</label>
+                    <label htmlFor="f-detail">{isRent ? "Paid by (tenant)" : "Description (optional)"}</label>
                     <input
                       id="f-detail"
                       type="text"
-                      placeholder={isRent ? "e.g. J. Alvarez" : "e.g. Plumbing, HVAC, roof"}
+                      placeholder={isRent ? "e.g. J. Alvarez" : "e.g. Fixed leaking kitchen faucet"}
                       value={detail}
                       onChange={(e) => setDetail(e.target.value)}
                     />
@@ -961,7 +1257,7 @@ export default function DashboardClient({
                     <input
                       id="f-note"
                       type="text"
-                      placeholder={isRent ? "e.g. September rent, paid via check" : "e.g. Fixed leaking kitchen faucet"}
+                      placeholder={isRent ? "e.g. September rent, paid via check" : "e.g. Paid to Smith Plumbing, invoice #123"}
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
                     />
@@ -995,7 +1291,7 @@ export default function DashboardClient({
                   <button
                     type="submit"
                     className={`${styles.btn} ${styles.primary}`}
-                    disabled={submitting || visibleProperties.length === 0}
+                    disabled={submitting || visibleTargets.length === 0}
                   >
                     {isRent ? "Add rent payment" : "Add expense"}
                   </button>
@@ -1050,13 +1346,14 @@ export default function DashboardClient({
                   {rows.map((t) => (
                     <tr key={t.id}>
                       <td>{fmtDate(t.date)}</td>
-                      <td>{propName_(t.propertyId)}</td>
+                      <td>{targetLabel(t)}</td>
                       <td>
                         <span className={`${styles.tag} ${t.type === "rent" ? styles.rent : styles.expense}`}>
                           {t.type === "rent" ? "Rent" : "Expense"}
                         </span>
                       </td>
                       <td>
+                        {t.category && <div className={styles.categoryTag}>{t.category}</div>}
                         {t.detail}
                         {t.note && <div className={styles.note}>{t.note}</div>}
                         {t.attachments.length > 0 && (

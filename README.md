@@ -144,3 +144,33 @@ The dashboard opens on the current month: the totals, the per-property figures,
 and the ledger all cover that month, and the arrows page back through earlier
 months (as far back as your first entry). **All time** switches to lifetime
 totals. The rent bar always tracks whichever month you're viewing.
+
+## Units, categories, recurring expenses, exports
+
+**Units.** A property can be split into units on its **Manage** page — a
+duplex, triplex, or any building with more than one tenant. Each unit gets
+its own rent target and its own progress bar. Leave a property with no units
+and it's tracked as a single house, exactly as before.
+
+**Expense categories.** Every expense now picks a category (Repairs,
+Insurance, Property Tax, Mortgage Interest, HOA, Utilities, Management Fees,
+Supplies, Legal & Professional, Other) — the same buckets a Schedule E uses.
+
+**Who hasn't paid.** The dashboard lists any property or unit that's short
+on rent for the month you're viewing, with how much is owed. Mark a
+property or unit **vacant** (on its edit form) to leave it out of that list
+and hide its rent bar.
+
+**Recurring expenses.** Set up a mortgage, insurance, or HOA payment once on
+a property's Manage page — amount, category, and a monthly or yearly
+schedule. Nothing posts itself: when one is due, it shows up on the
+dashboard for that month with a one-click **Log it** button that creates
+the transaction and marks it done for that period.
+
+**Tax-year export.** The **Export** page downloads a CSV for one LLC and
+one year — every transaction plus a summary block totaling rental income
+and each expense category. Hand it to an accountant or open it in a
+spreadsheet.
+
+Backups now include units, per-unit and per-property recurring expenses,
+expense categories, and vacancy status — restoring one recreates all of it.

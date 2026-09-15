@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import styles from "../dashboard.module.css";
 
-type Counts = { companies: number; properties: number; transactions: number };
+type Counts = { companies: number; properties: number; units: number; recurring: number; transactions: number };
 
 export default function BackupClient({ counts }: { counts: Counts }) {
   const router = useRouter();
@@ -33,12 +33,17 @@ export default function BackupClient({ counts }: { counts: Counts }) {
         setError(data?.error || "Couldn't import that file.");
         return;
       }
-      setResult(
-        `Restored ${data.companies} ${data.companies === 1 ? "LLC" : "LLCs"}, ` +
-          `${data.properties} ${data.properties === 1 ? "property" : "properties"}, ` +
-          `${data.transactions} ledger ${data.transactions === 1 ? "entry" : "entries"}, and ` +
-          `${data.attachments} ${data.attachments === 1 ? "proof" : "proofs"}.`
-      );
+      const parts = [
+        `${data.companies} ${data.companies === 1 ? "LLC" : "LLCs"}`,
+        `${data.properties} ${data.properties === 1 ? "property" : "properties"}`,
+      ];
+      if (data.units) parts.push(`${data.units} ${data.units === 1 ? "unit" : "units"}`);
+      parts.push(`${data.transactions} ledger ${data.transactions === 1 ? "entry" : "entries"}`);
+      if (data.recurring) {
+        parts.push(`${data.recurring} recurring ${data.recurring === 1 ? "expense" : "expenses"}`);
+      }
+      parts.push(`${data.attachments} ${data.attachments === 1 ? "proof" : "proofs"}`);
+      setResult(`Restored ${parts.join(", ")}.`);
       router.refresh();
     } catch {
       setError("That file isn't valid JSON — pick a backup file you downloaded from here.");

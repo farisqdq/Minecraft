@@ -20,9 +20,17 @@ export default async function DashboardPage() {
   });
   const companyIds = memberships.map((m) => m.companyId);
 
-  const [properties, transactions] = await Promise.all([
+  const [properties, units, recurring, transactions] = await Promise.all([
     prisma.property.findMany({
       where: { companyId: { in: companyIds } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.unit.findMany({
+      where: { property: { companyId: { in: companyIds } } },
+      orderBy: { createdAt: "asc" },
+    }),
+    prisma.recurringExpense.findMany({
+      where: { property: { companyId: { in: companyIds } } },
       orderBy: { createdAt: "asc" },
     }),
     prisma.transaction.findMany({
@@ -47,15 +55,39 @@ export default async function DashboardPage() {
         name: p.name,
         address: p.address ?? "",
         monthlyRent: p.monthlyRent,
+        vacant: p.vacant,
+      }))}
+      initialUnits={units.map((u) => ({
+        id: u.id,
+        propertyId: u.propertyId,
+        name: u.name,
+        monthlyRent: u.monthlyRent,
+        vacant: u.vacant,
+      }))}
+      initialRecurring={recurring.map((r) => ({
+        id: r.id,
+        propertyId: r.propertyId,
+        unitId: r.unitId,
+        category: r.category,
+        detail: r.detail ?? "",
+        note: r.note ?? "",
+        amount: r.amount,
+        frequency: r.frequency as "monthly" | "yearly",
+        day: r.day,
+        month: r.month,
+        active: r.active,
       }))}
       initialTransactions={transactions.map((t) => ({
         id: t.id,
         propertyId: t.propertyId,
+        unitId: t.unitId,
         type: t.type as "rent" | "expense",
         date: t.date.toISOString().slice(0, 10),
         amount: t.amount,
         detail: t.detail ?? "",
         note: t.note ?? "",
+        category: t.category ?? "",
+        recurringExpenseId: t.recurringExpenseId,
         attachments: t.attachments.map((a) => ({
           id: a.id,
           transactionId: a.transactionId,

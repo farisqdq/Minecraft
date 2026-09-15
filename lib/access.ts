@@ -24,6 +24,25 @@ export async function requireProperty(userId: string, propertyId: string) {
   return membership ? property : null;
 }
 
+/** A unit the user can reach through one of their company teams. */
+export async function requireUnit(userId: string, unitId: string) {
+  const unit = await prisma.unit.findUnique({ where: { id: unitId }, include: { property: true } });
+  if (!unit) return null;
+  const membership = await getMembership(userId, unit.property.companyId);
+  return membership ? unit : null;
+}
+
+/** A recurring expense template the user can reach through one of their company teams. */
+export async function requireRecurring(userId: string, recurringId: string) {
+  const template = await prisma.recurringExpense.findUnique({
+    where: { id: recurringId },
+    include: { property: true },
+  });
+  if (!template) return null;
+  const membership = await getMembership(userId, template.property.companyId);
+  return membership ? template : null;
+}
+
 export async function companyIdsForUser(userId: string) {
   const memberships = await prisma.companyMember.findMany({
     where: { userId },

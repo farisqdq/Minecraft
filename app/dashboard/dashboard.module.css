@@ -215,6 +215,70 @@
   color: var(--gold);
 }
 
+.vacantTag {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--gold-soft);
+  color: var(--gold);
+  vertical-align: middle;
+}
+
+.unitList {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unitRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+  padding: 4px 0;
+  border-bottom: 1px dashed var(--line);
+}
+
+.unitRow:last-child {
+  border-bottom: none;
+}
+
+.unitName {
+  font-weight: 600;
+}
+
+.unitDue {
+  color: var(--gold);
+}
+
+.categoryTag {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+
+.checkboxField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13.5px;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.checkboxField input {
+  width: 16px;
+  height: 16px;
+}
+
 .linkCell {
   border: none;
   background: none;

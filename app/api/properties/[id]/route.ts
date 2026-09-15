@@ -24,10 +24,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "Enter a valid monthly rent." }, { status: 400 });
   }
 
-  const property = await prisma.property.update({
-    where: { id },
-    data: { name, address: address || null, monthlyRent },
-  });
+  const data: { name: string; address: string | null; monthlyRent: number; vacant?: boolean } = {
+    name,
+    address: address || null,
+    monthlyRent,
+  };
+  if (body?.vacant !== undefined) data.vacant = Boolean(body.vacant);
+
+  const property = await prisma.property.update({ where: { id }, data });
   return NextResponse.json({ ...property, address: property.address ?? "" });
 }
 
