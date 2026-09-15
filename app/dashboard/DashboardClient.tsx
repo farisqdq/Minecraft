@@ -93,6 +93,12 @@ export default function DashboardClient({
   const [propRent, setPropRent] = useState("");
   const [propCompany, setPropCompany] = useState("");
 
+  const [editingPropertyId, setEditingPropertyId] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editAddress, setEditAddress] = useState("");
+  const [editRent, setEditRent] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+
   const [type, setType] = useState<"rent" | "expense">("rent");
   const [propertyId, setPropertyId] = useState("");
   const [date, setDate] = useState(todayISO());
@@ -290,6 +296,45 @@ export default function DashboardClient({
     setPropAddress("");
     setPropRent("");
     setAddingProperty(false);
+  }
+
+  function startEditProperty(p: Property) {
+    setEditingPropertyId(p.id);
+    setEditName(p.name);
+    setEditAddress(p.address);
+    setEditRent(p.monthlyRent ? String(p.monthlyRent) : "");
+    setError("");
+  }
+
+  function cancelEditProperty() {
+    setEditingPropertyId("");
+  }
+
+  async function saveEditProperty(e: React.FormEvent) {
+    e.preventDefault();
+    const name = editName.trim();
+    if (!name) return;
+    setError("");
+    setEditSaving(true);
+
+    const res = await fetch(`/api/properties/${editingPropertyId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        address: editAddress.trim(),
+        monthlyRent: parseFloat(editRent) || 0,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setEditSaving(false);
+    if (!res.ok) {
+      setError(data?.error || "Couldn't save those changes.");
+      return;
+    }
+
+    setProperties((prev) => prev.map((p) => (p.id === editingPropertyId ? { ...p, ...data } : p)));
+    setEditingPropertyId("");
   }
 
   async function removeProperty(id: string) {
@@ -647,6 +692,66 @@ export default function DashboardClient({
                 const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
                 const paidInFull = target > 0 && paidThisMonth >= target;
                 const owner = companies.find((c) => c.id === p.companyId);
+
+                if (editingPropertyId === p.id) {
+                  return (
+                    <form
+                      key={p.id}
+                      className={`${styles.propCard} ${styles.propForm}`}
+                      onSubmit={saveEditProperty}
+                    >
+                      <div className={styles.field}>
+                        <label htmlFor={`edit-prop-name-${p.id}`}>Property name</label>
+                        <input
+                          id={`edit-prop-name-${p.id}`}
+                          type="text"
+                          autoFocus
+                          required
+                          value={editName}
+                          onChange={(e) => setEditName(e.target.value)}
+                        />
+                      </div>
+                      <div className={styles.field}>
+                        <label htmlFor={`edit-prop-address-${p.id}`}>Address</label>
+                        <input
+                          id={`edit-prop-address-${p.id}`}
+                          type="text"
+                          value={editAddress}
+                          onChange={(e) => setEditAddress(e.target.value)}
+                        />
+                      </div>
+                      <div className={styles.field}>
+                        <label htmlFor={`edit-prop-rent-${p.id}`}>Monthly rent ($)</label>
+                        <input
+                          id={`edit-prop-rent-${p.id}`}
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="0.00"
+                          value={editRent}
+                          onChange={(e) => setEditRent(e.target.value)}
+                        />
+                      </div>
+                      <div className={styles.propActions}>
+                        <button
+                          type="submit"
+                          className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                          disabled={editSaving}
+                        >
+                          {editSaving ? "Saving…" : "Save"}
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small}`}
+                          onClick={cancelEditProperty}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </form>
+                  );
+                }
+
                 return (
                   <div key={p.id} className={styles.propCard}>
                     <div>
@@ -694,6 +799,13 @@ export default function DashboardClient({
                       </span>
                     </div>
                     <div className={styles.propActions}>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.small}`}
+                        onClick={() => startEditProperty(p)}
+                      >
+                        Edit
+                      </button>
                       <button
                         type="button"
                         className={`${styles.btn} ${styles.small} ${styles.ghost}`}
