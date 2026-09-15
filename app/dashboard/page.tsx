@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { blobConfigured } from "@/lib/blob";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
@@ -34,6 +35,7 @@ export default async function DashboardPage() {
   return (
     <DashboardClient
       userLabel={session.user.name || session.user.email || "you"}
+      storageReady={blobConfigured()}
       initialCompanies={memberships.map((m) => ({
         id: m.company.id,
         name: m.company.name,

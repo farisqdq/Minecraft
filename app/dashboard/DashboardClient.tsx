@@ -43,6 +43,9 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 
 const ALL_TIME = "all";
 
+const STORAGE_HINT =
+  "Proof uploads need file storage. In Vercel, open this project's Storage tab, add Blob, then redeploy.";
+
 function currentMonthKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -58,11 +61,13 @@ function monthName(key: string, withYear = true) {
 
 export default function DashboardClient({
   userLabel,
+  storageReady,
   initialCompanies,
   initialProperties,
   initialTransactions,
 }: {
   userLabel: string;
+  storageReady: boolean;
   initialCompanies: Company[];
   initialProperties: Property[];
   initialTransactions: Transaction[];
@@ -104,6 +109,9 @@ export default function DashboardClient({
   const [pendingProof, setPendingProof] = useState<File[]>([]);
   const proofInput = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState("");
+  // Upload problems belong next to the control that was used, not in the page
+  // banner — the attach controls sit far below it.
+  const [proofError, setProofError] = useState<{ scope: string; message: string } | null>(null);
 
   const visibleProperties = useMemo(
     () =>
@@ -307,33 +315,41 @@ export default function DashboardClient({
   }
 
   /** Uploads one file and files the returned attachment onto its transaction. */
-  async function uploadProof(transactionId: string, file: File) {
-    const prepared = await shrinkImage(file);
-    const form = new FormData();
-    form.append("file", prepared);
+  async function uploadProof(transactionId: string, file: File, scope: string) {
+    let res: Response;
+    try {
+      const prepared = await shrinkImage(file);
+      const form = new FormData();
+      form.append("file", prepared);
+      res = await fetch(`/api/transactions/${transactionId}/attachments`, {
+        method: "POST",
+        body: form,
+      });
+    } catch {
+      setProofError({ scope, message: `Couldn't upload ${file.name} — check your connection.` });
+      return false;
+    }
 
-    const res = await fetch(`/api/transactions/${transactionId}/attachments`, {
-      method: "POST",
-      body: form,
-    });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      setError(data?.error || "Couldn't upload that file.");
+      setProofError({ scope, message: data?.error || `Couldn't upload ${file.name}.` });
       return false;
     }
 
     setTransactions((prev) =>
-      prev.map((t) => (t.id === transactionId ? { ...t, attachments: [...t.attachments, data] } : t))
+      prev.map((t) =>
+        t.id === transactionId ? { ...t, attachments: [...(t.attachments ?? []), data] } : t
+      )
     );
     return true;
   }
 
   async function addProofToRow(transactionId: string, files: FileList | null) {
     if (!files || files.length === 0) return;
-    setError("");
+    setProofError(null);
     setUploadingFor(transactionId);
     for (const file of Array.from(files)) {
-      const uploaded = await uploadProof(transactionId, file);
+      const uploaded = await uploadProof(transactionId, file, transactionId);
       if (!uploaded) break;
     }
     setUploadingFor("");
@@ -377,14 +393,22 @@ export default function DashboardClient({
     setDate(todayISO());
 
     if (pendingProof.length > 0) {
+      setProofError(null);
       setUploadingFor(created.id);
+      let allUploaded = true;
       for (const file of pendingProof) {
-        const uploaded = await uploadProof(created.id, file);
-        if (!uploaded) break;
+        if (!(await uploadProof(created.id, file, "form"))) {
+          allUploaded = false;
+          break;
+        }
       }
       setUploadingFor("");
-      setPendingProof([]);
-      if (proofInput.current) proofInput.current.value = "";
+      // Keep the selection on failure so it can be retried from the new row
+      // rather than vanishing with no explanation.
+      if (allUploaded) {
+        setPendingProof([]);
+        if (proofInput.current) proofInput.current.value = "";
+      }
     }
   }
 
@@ -841,12 +865,17 @@ export default function DashboardClient({
                       multiple
                       accept="image/*,application/pdf"
                       className={styles.fileInput}
+                      disabled={!storageReady}
                       onChange={(e) => setPendingProof(Array.from(e.target.files ?? []))}
                     />
-                    {pendingProof.length > 0 && (
+                    {!storageReady && <span className={styles.proofWarn}>{STORAGE_HINT}</span>}
+                    {storageReady && pendingProof.length > 0 && (
                       <span className={styles.note}>
                         {pendingProof.length} file{pendingProof.length === 1 ? "" : "s"} will be attached
                       </span>
+                    )}
+                    {proofError?.scope === "form" && (
+                      <span className={styles.proofWarn}>{proofError.message}</span>
                     )}
                   </div>
                 </div>
@@ -942,24 +971,29 @@ export default function DashboardClient({
                             ))}
                           </div>
                         )}
-                        <label className={styles.proofAdd}>
-                          {uploadingFor === t.id
-                            ? "Uploading…"
-                            : t.attachments.length > 0
-                              ? "+ Add another"
-                              : "+ Attach proof"}
-                          <input
-                            type="file"
-                            multiple
-                            accept="image/*,application/pdf"
-                            hidden
-                            disabled={uploadingFor === t.id}
-                            onChange={(e) => {
-                              addProofToRow(t.id, e.target.files);
-                              e.target.value = "";
-                            }}
-                          />
-                        </label>
+                        {storageReady && (
+                          <label className={styles.proofAdd}>
+                            {uploadingFor === t.id
+                              ? "Uploading…"
+                              : t.attachments.length > 0
+                                ? "+ Add another"
+                                : "+ Attach proof"}
+                            <input
+                              type="file"
+                              multiple
+                              accept="image/*,application/pdf"
+                              hidden
+                              disabled={uploadingFor === t.id}
+                              onChange={(e) => {
+                                addProofToRow(t.id, e.target.files);
+                                e.target.value = "";
+                              }}
+                            />
+                          </label>
+                        )}
+                        {proofError?.scope === t.id && (
+                          <div className={styles.proofWarn}>{proofError.message}</div>
+                        )}
                       </td>
                       <td className={`${styles.amt} num ${t.type === "rent" ? styles.pos : styles.neg}`}>
                         {t.type === "rent" ? "+" : "−"}

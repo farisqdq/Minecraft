@@ -295,6 +295,15 @@
   border-color: var(--expense);
 }
 
+.proofWarn {
+  display: block;
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--expense);
+  max-width: 520px;
+}
+
 .proofAdd {
   display: block;
   width: fit-content;

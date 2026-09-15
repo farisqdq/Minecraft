@@ -3,7 +3,7 @@ import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
-import { ALLOWED_TYPES, BLOB_SETUP_MESSAGE, MAX_UPLOAD_BYTES, blobConfigured } from "@/lib/blob";
+import { BLOB_SETUP_MESSAGE, MAX_UPLOAD_BYTES, blobConfigured, resolveContentType } from "@/lib/blob";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -24,7 +24,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No file was uploaded." }, { status: 400 });
   }
-  if (!ALLOWED_TYPES.includes(file.type)) {
+  const contentType = resolveContentType(file.type, file.name || "");
+  if (!contentType) {
     return NextResponse.json(
       { error: "Attach a photo (JPG, PNG, HEIC, WebP) or a PDF receipt." },
       { status: 400 }
@@ -40,7 +41,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     blob = await put(`transactions/${id}/${Date.now()}-${safeName}`, file, {
       access: "public",
-      contentType: file.type,
+      contentType,
     });
   } catch (err) {
     console.error("Blob upload failed", err);
@@ -56,7 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       url: blob.url,
       pathname: blob.pathname,
       filename: file.name || safeName,
-      contentType: file.type,
+      contentType,
       size: file.size,
       uploadedById: userId,
     },
