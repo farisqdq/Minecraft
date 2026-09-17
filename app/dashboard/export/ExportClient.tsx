@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import AppShell from "../../components/AppShell";
 import styles from "../dashboard.module.css";
 
 type Company = { id: string; name: string };
@@ -22,19 +23,10 @@ export default function ExportClient({
   if (years.length === 0) years.push(currentYear);
 
   return (
-    <div className={styles.page}>
-      <header className={styles.top}>
-        <div className={styles.brand}>
-          <h1>Export</h1>
-          <div className={styles.tagline}>Download a year of one LLC&apos;s ledger, ready for taxes.</div>
-        </div>
-        <div className={styles.userBar}>
-          <a href="/dashboard" className={styles.textLink}>
-            Back to dashboard
-          </a>
-        </div>
-      </header>
-
+    <AppShell
+      title="Export"
+      tagline="Download a year of one LLC's ledger, ready for taxes."
+    >
       {companies.length === 0 ? (
         <div className={styles.firstRun}>
           <h2>No LLCs yet</h2>
@@ -82,6 +74,6 @@ export default function ExportClient({
           </div>
         </section>
       )}
-    </div>
+    </AppShell>
   );
 }

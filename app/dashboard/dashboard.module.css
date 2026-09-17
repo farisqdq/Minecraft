@@ -1,91 +1,51 @@
-.page {
-  padding: 0 20px 64px;
-  max-width: 1040px;
-  margin: 0 auto;
-}
-
-.top {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
-  padding: 36px 0 24px;
-  border-bottom: 1px solid var(--line);
-}
-
-.brand {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.brand h1 {
-  font-size: clamp(28px, 4vw, 36px);
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-
-.brand .tagline {
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.userBar {
+/* ---------- Context bar: which LLC, which month ----------
+   These two choices scope every number on the page, so they travel together
+   in one strip directly under the page title. On a phone the LLC chips scroll
+   sideways rather than wrapping into a wall of pills. */
+.contextBar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  justify-content: space-between;
+  gap: 12px 18px;
   flex-wrap: wrap;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.userBar button {
-  border: 1px solid var(--line-strong);
+  padding: 10px 14px;
   background: var(--surface);
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12.5px;
-  font-weight: 500;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 
-.userBar button:hover {
-  border-color: var(--ink);
-}
-
-.textLink {
-  color: var(--gold);
-  font-weight: 600;
-  text-decoration: none;
-  font-size: 12.5px;
-}
-
-.textLink:hover {
-  text-decoration: underline;
-}
-
-/* ---------- LLC switcher ---------- */
 .companyBar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-top: 24px;
+  gap: 7px;
+  flex: 1 1 320px;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 1px;
+}
+
+.companyBar::-webkit-scrollbar {
+  display: none;
 }
 
 .chip {
   border-radius: 999px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  color: var(--ink);
-  padding: 7px 15px;
-  font-size: 13.5px;
+  color: var(--ink-2);
+  padding: 6px 13px;
+  font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
+  flex: none;
+  transition: border-color var(--fast), color var(--fast), background var(--fast);
 }
 
 .chip:hover {
   border-color: var(--ink);
+  color: var(--ink);
 }
 
 .chip.active {
@@ -119,7 +79,7 @@
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink);
-  min-width: 220px;
+  min-width: 200px;
 }
 
 .inlineForm input:focus {
@@ -131,9 +91,8 @@
 .monthBar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-top: 26px;
+  gap: 6px;
+  flex: none;
 }
 
 .monthArrow {
@@ -149,6 +108,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  flex: none;
+  transition: border-color var(--fast);
 }
 
 .monthArrow:hover:not([disabled]) {
@@ -156,22 +117,30 @@
 }
 
 .monthArrow[disabled] {
-  opacity: 0.35;
+  opacity: 0.32;
   cursor: not-allowed;
 }
 
 .monthLabel {
   font-family: "Fraunces", Georgia, serif;
-  font-size: 19px;
+  font-size: 16px;
   font-weight: 600;
-  min-width: 190px;
+  min-width: 132px;
   text-align: center;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 720px) {
+  .contextBar {
+    padding: 10px 12px;
+  }
+  .monthBar {
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
   .monthLabel {
     min-width: 0;
     flex: 1;
+    text-align: center;
   }
 }
 
@@ -257,7 +226,7 @@
 }
 
 .categoryTag {
-  display: inline-block;
+  display: block;
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
@@ -510,7 +479,7 @@
 .btn.danger {
   background: var(--expense);
   border-color: var(--expense);
-  color: #fff;
+  color: var(--on-expense);
 }
 
 .btn.danger:hover {
@@ -522,56 +491,8 @@
   cursor: not-allowed;
 }
 
-.summary {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 14px;
-  margin: 28px 0;
-}
-
-.tile {
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 18px 20px;
-  box-shadow: var(--shadow);
-}
-
-.tile .label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--muted);
-  font-weight: 600;
-}
-
-.tile .value {
-  font-size: clamp(22px, 3vw, 30px);
-  margin-top: 8px;
-  font-weight: 500;
-}
-
-.tile.rent .value {
-  color: var(--accent);
-}
-.tile.expense .value {
-  color: var(--expense);
-}
-.tile .value.pos {
-  color: var(--accent);
-}
-.tile .value.neg {
-  color: var(--expense);
-}
-
-.tile .sub {
-  font-size: 12.5px;
-  color: var(--muted);
-  margin-top: 4px;
-}
-
 .block {
-  margin: 40px 0;
+  margin: 30px 0 0;
 }
 
 .blockHead {
@@ -584,8 +505,9 @@
 }
 
 .blockHead h2 {
-  font-size: 20px;
+  font-size: 19px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .blockHead .count {
@@ -595,25 +517,32 @@
 
 .properties {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 14px;
+  grid-template-columns: repeat(auto-fill, minmax(276px, 1fr));
+  gap: 12px;
 }
 
 .propCard {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  padding: 18px;
+  padding: 16px;
   box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 11px;
+  transition: box-shadow var(--fast), border-color var(--fast);
+}
+
+.propCard:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-lg);
 }
 
 .propCard .name {
-  font-family: "Fraunces", serif;
-  font-size: 18px;
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 17px;
   font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 .propCard .addr {
@@ -641,7 +570,7 @@
 .bar {
   height: 8px;
   border-radius: 5px;
-  background: var(--line);
+  background: var(--surface-3);
   overflow: hidden;
 }
 .bar > span {
@@ -693,26 +622,37 @@
   justify-content: center;
   color: var(--muted);
   font-size: 14px;
-  min-height: 120px;
+  min-height: 132px;
   background: transparent;
-  transition: border-color 0.15s, color 0.15s;
+  transition: border-color var(--fast), color var(--fast), background var(--fast);
 }
 .addCard:hover {
   border-color: var(--gold);
   color: var(--gold);
+  background: var(--gold-soft);
 }
 
 .btn {
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
   padding: 8px 14px;
   font-size: 13.5px;
   font-weight: 500;
+  transition: border-color var(--fast), background var(--fast), opacity var(--fast);
 }
 .btn:hover {
   border-color: var(--ink);
+}
+.btn.accent {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.btn.accent:hover {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 .btn.primary {
   background: var(--ink);
@@ -747,20 +687,33 @@
   box-shadow: var(--shadow);
 }
 
+/* Inside a modal the card chrome is the modal's own. */
+.formBare {
+  background: none;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+}
+
 .typeToggle {
-  display: inline-flex;
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
   border: 1px solid var(--line-strong);
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   margin-bottom: 16px;
+  width: 100%;
+  max-width: 340px;
 }
 .typeToggle button {
   border: none;
   background: var(--surface);
   color: var(--muted);
-  padding: 8px 16px;
+  padding: 9px 16px;
   font-size: 13.5px;
   font-weight: 600;
+  transition: background var(--fast), color var(--fast);
 }
 .typeToggle button.active.rent {
   background: var(--accent-soft);
@@ -818,7 +771,15 @@
 .formFoot {
   display: flex;
   justify-content: flex-end;
-  margin-top: 16px;
+  gap: 8px;
+  margin-top: 18px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .formFoot button {
+    flex: 1 1 140px;
+  }
 }
 
 .twoCol {
@@ -875,6 +836,12 @@
   width: 100%;
   border-collapse: collapse;
   min-width: 560px;
+}
+.ledger tbody tr {
+  transition: background var(--fast);
+}
+.ledger tbody tr:hover {
+  background: var(--surface-2);
 }
 .ledger th {
   text-align: left;
@@ -939,4 +906,525 @@ tr:hover .rowDel {
   color: var(--muted);
   font-size: 12px;
   margin-top: 2px;
+}
+
+/* ================= Overview layout ================= */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 18px;
+}
+
+/* ---------- KPI row ---------- */
+.kpis {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.kpi {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 15px 16px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* A hairline of the series colour along the top edge ties the card to its
+   colour in the chart below without tinting the numbers themselves. */
+.kpi::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--line-strong);
+}
+
+.kpi.rentKpi::before {
+  background: var(--accent);
+}
+
+.kpi.expenseKpi::before {
+  background: var(--expense);
+}
+
+.kpi.netKpi::before {
+  background: var(--gold);
+}
+
+.kpiLabel {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.kpiValue {
+  font-size: clamp(23px, 2.6vw, 30px);
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
+  margin-top: 6px;
+  color: var(--ink);
+}
+
+.kpiValue.pos {
+  color: var(--accent);
+}
+
+.kpiValue.neg {
+  color: var(--expense);
+}
+
+.kpiFoot {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.delta.good {
+  color: var(--accent);
+}
+
+.delta.bad {
+  color: var(--expense);
+}
+
+.deltaNote {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.kpiSpark {
+  flex: none;
+  opacity: 0.9;
+}
+
+/* ---------- Collection meter ---------- */
+.collect {
+  margin-top: 12px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px 18px;
+}
+
+.collectTop {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.collectTitle {
+  font-size: 11.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.collectFigure {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.collectFigure .of {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.bigBar {
+  height: 14px;
+  border-radius: 7px;
+  background: var(--surface-3);
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.bigBar > span {
+  display: block;
+  height: 100%;
+  background: var(--gold);
+  border-radius: 7px;
+  transition: width var(--med);
+}
+
+.bigBar > span.barFull {
+  background: var(--accent);
+}
+
+.collectMeta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+/* ---------- Charts ---------- */
+.chartGrid {
+  display: grid;
+  grid-template-columns: 1.45fr 1fr;
+  gap: 12px;
+  margin-top: 12px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .chartGrid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- Needs attention ---------- */
+.attnList {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.attnRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.attnRow:last-child {
+  border-bottom: none;
+}
+
+.attnMain {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.attnLabel {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.attnSub {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.attnAmt {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.attnAmt.neg {
+  color: var(--expense);
+}
+
+.attnAmt.due {
+  color: var(--gold);
+}
+
+.pill {
+  display: inline-block;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  border-radius: 999px;
+  vertical-align: middle;
+}
+
+.pill.owed {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+
+.pill.bill {
+  background: var(--expense-soft);
+  color: var(--expense);
+}
+
+.pill.paid {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.pill.vacant {
+  background: var(--surface-3);
+  color: var(--muted);
+}
+
+.allClear {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  border-radius: var(--radius);
+  background: var(--accent-soft);
+  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  font-size: 13.5px;
+  color: var(--ink);
+}
+
+.allClearMark {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  flex: none;
+}
+
+/* ---------- Property cards ---------- */
+.propHead {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.propFigures {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 10px 0 2px;
+  border-top: 1px solid var(--line);
+}
+
+.figure {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.figureLabel {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.figureValue {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.figureValue.pos {
+  color: var(--accent);
+}
+
+.figureValue.neg {
+  color: var(--expense);
+}
+
+/* ---------- Floating record button (phones) ---------- */
+.fab,
+.fabSpace {
+  display: none;
+}
+
+@media (max-width: 720px) {
+  .kpis {
+    grid-template-columns: 1fr;
+  }
+
+  .kpi {
+    padding: 13px 15px 11px;
+  }
+
+  .kpiValue {
+    margin-top: 2px;
+  }
+
+  .fab {
+    position: fixed;
+    right: 16px;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    z-index: 50;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    height: 48px;
+    padding: 0 20px;
+    border: none;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--on-accent);
+    font-size: 14.5px;
+    font-weight: 600;
+    box-shadow: var(--shadow-lg);
+  }
+
+  .fab:active {
+    transform: scale(0.97);
+  }
+
+  /* Keeps the floating button from sitting on top of the last ledger row. */
+  .fabSpace {
+    display: block;
+    height: 64px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bigBar > span {
+    transition: none;
+  }
+}
+
+/* The record form lives in a modal, which is narrower than the page: two
+   columns instead of four. Scoped above the phone breakpoint so the
+   single-column mobile rules further up still win where they matter. */
+@media (min-width: 641px) {
+  .modalGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .modalGrid > div {
+    grid-column: span 1;
+  }
+  .modalGrid > .wide,
+  .modalGrid > .span3,
+  .modalGrid > .span4 {
+    grid-column: 1 / -1;
+  }
+}
+
+
+/* ---------- The ledger on a phone ----------
+   Six columns can't be read at 390px, and the amount — the column that
+   matters most — ends up furthest off-screen. Below the breakpoint each row
+   becomes a small card instead: property and type on top, date and amount
+   underneath, details below that. Same markup, no duplicate DOM. */
+@media (max-width: 640px) {
+  .txnTable {
+    min-width: 0;
+  }
+
+  .txnTable thead {
+    display: none;
+  }
+
+  .txnTable,
+  .txnTable tbody {
+    display: block;
+  }
+
+  .txnTable tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 3px 10px;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .txnTable tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .txnTable td {
+    display: block;
+    border: none;
+    padding: 0;
+    min-width: 0;
+  }
+
+  /* Property name */
+  .txnTable td:nth-child(2) {
+    grid-column: 1;
+    order: 1;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  /* Rent / Expense tag */
+  .txnTable td:nth-child(3) {
+    grid-column: 2;
+    order: 1;
+    text-align: right;
+  }
+  /* Date */
+  .txnTable td:nth-child(1) {
+    grid-column: 1;
+    order: 2;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  /* Amount */
+  .txnTable td:nth-child(5) {
+    grid-column: 2;
+    order: 2;
+    text-align: right;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  /* Details, proofs and the attach control */
+  .txnTable td:nth-child(4) {
+    grid-column: 1 / -1;
+    order: 3;
+    font-size: 13px;
+  }
+  .txnTable td:nth-child(4):empty {
+    display: none;
+  }
+  /* Delete — pushed to the edge so it never reads as the row's main action */
+  .txnTable td:nth-child(6) {
+    grid-column: 1 / -1;
+    order: 4;
+    margin-top: 2px;
+    text-align: right;
+  }
+}
+
+/* Without hover there is nothing to reveal a hidden delete button, so on
+   touch it is simply always there. */
+@media (hover: none) {
+  .rowDel {
+    opacity: 1;
+  }
 }

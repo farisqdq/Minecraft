@@ -35,6 +35,9 @@ function LoginForm() {
   return (
     <div className="authPage">
       <div className="authBrand">
+        <span className="authMark" aria-hidden="true">
+          R
+        </span>
         <h1>Rent Roll</h1>
         <p>Rent collected, repairs paid, and the profit left over.</p>
       </div>

@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import AppShell from "../../components/AppShell";
+import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
+import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
 
 type Member = { userId: string; email: string; name: string; role: "owner" | "member" };
@@ -31,6 +34,8 @@ export default function TeamClient({
   const [confirmingDelete, setConfirmingDelete] = useState("");
   const [deleteText, setDeleteText] = useState("");
   const [deleting, setDeleting] = useState(false);
+  const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
+  const { toasts, push, dismiss } = useToasts();
 
   function draftFor(companyId: string) {
     return drafts[companyId] ?? { role: "member" as const };
@@ -99,13 +104,22 @@ export default function TeamClient({
     );
   }
 
-  async function removeMember(companyId: string, userId: string) {
+  function removeMember(companyId: string, userId: string) {
     const leaving = userId === currentUserId;
-    const message = leaving
-      ? "Leave this LLC? You'll lose access to its properties and ledger."
-      : "Remove this teammate from the LLC?";
-    if (!window.confirm(message)) return;
+    const company = companies.find((c) => c.id === companyId);
+    const who = company?.members.find((m) => m.userId === userId);
+    setConfirming({
+      title: leaving ? `Leave ${company?.name ?? "this LLC"}?` : `Remove ${who?.name || who?.email || "this teammate"}?`,
+      body: leaving
+        ? "You'll lose access to its properties and ledger straight away. An owner would have to invite you back."
+        : "They lose access to this LLC's properties and ledger. Nothing they recorded is deleted.",
+      confirmLabel: leaving ? "Leave LLC" : "Remove them",
+      danger: true,
+      onConfirm: () => doRemoveMember(companyId, userId, leaving),
+    });
+  }
 
+  async function doRemoveMember(companyId: string, userId: string, leaving: boolean) {
     const res = await fetch(`/api/companies/${companyId}/members/${userId}`, { method: "DELETE" });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -115,8 +129,10 @@ export default function TeamClient({
 
     if (leaving) {
       setCompanies((prev) => prev.filter((c) => c.id !== companyId));
+      push("You've left that LLC.");
       return;
     }
+    push("Teammate removed.");
     setCompanies((prev) =>
       prev.map((c) =>
         c.id === companyId ? { ...c, members: c.members.filter((m) => m.userId !== userId) } : c
@@ -146,18 +162,10 @@ export default function TeamClient({
   }
 
   return (
-    <div className={styles.page}>
-      <header className={styles.top}>
-        <div className={styles.brand}>
-          <h1>Team</h1>
-          <div className={styles.tagline}>Each LLC has its own team — invite partners to one without giving access to the others.</div>
-        </div>
-        <div className={styles.userBar}>
-          <a href="/dashboard" className={styles.textLink}>
-            Back to dashboard
-          </a>
-        </div>
-      </header>
+    <AppShell
+      title="Team"
+      tagline="Each LLC has its own team — invite partners to one without giving access to the others."
+    >
 
       {companies.length === 0 && (
         <div className={styles.firstRun}>
@@ -354,6 +362,8 @@ export default function TeamClient({
           </section>
         );
       })}
-    </div>
+      <ConfirmDialog request={confirming} onCancel={() => setConfirming(null)} />
+      <Toasts toasts={toasts} onDismiss={dismiss} />
+    </AppShell>
   );
 }

@@ -1,38 +1,93 @@
 :root {
-  --bg: #f6f3ec;
+  --bg: #f4f1e9;
   --surface: #ffffff;
-  --surface-2: #fbf9f4;
-  --ink: #211d16;
-  --muted: #75705f;
-  --line: rgba(33, 29, 22, 0.12);
-  --line-strong: rgba(33, 29, 22, 0.22);
+  --surface-2: #faf8f3;
+  --surface-3: #f1ede4;
+  --ink: #1e1a14;
+  --ink-2: #4a443a;
+  --muted: #736e5e;
+  --line: rgba(33, 29, 22, 0.1);
+  --line-strong: rgba(33, 29, 22, 0.2);
   --accent: #2f6844;
-  --accent-soft: rgba(47, 104, 68, 0.12);
+  --accent-strong: #245236;
+  --accent-soft: rgba(47, 104, 68, 0.1);
   --expense: #a6432d;
-  --expense-soft: rgba(166, 67, 45, 0.11);
+  --expense-strong: #8a3524;
+  /* Text and icons that sit ON a filled accent/expense surface. The dark-mode
+     hues are light, so white on them would fail contrast — these flip. */
+  --on-accent: #ffffff;
+  --on-expense: #ffffff;
+  --expense-soft: rgba(166, 67, 45, 0.09);
   --gold: #b8862e;
-  --gold-soft: rgba(184, 134, 46, 0.14);
-  --shadow: 0 1px 2px rgba(33, 29, 22, 0.06), 0 8px 24px -12px rgba(33, 29, 22, 0.18);
+  --gold-soft: rgba(184, 134, 46, 0.13);
+
+  /* Chart chrome sits one step off the surface so data stays the loud thing. */
+  --chart-grid: rgba(33, 29, 22, 0.08);
+  --chart-axis: rgba(33, 29, 22, 0.16);
+  --chart-ghost: rgba(33, 29, 22, 0.14);
+
+  /* Elevation: flat cards, lifted panels, floating overlays. */
+  --shadow-sm: 0 1px 2px rgba(33, 29, 22, 0.05);
+  --shadow: 0 1px 2px rgba(33, 29, 22, 0.05), 0 6px 16px -10px rgba(33, 29, 22, 0.16);
+  --shadow-lg: 0 2px 4px rgba(33, 29, 22, 0.06), 0 18px 40px -16px rgba(33, 29, 22, 0.28);
+  --shadow-overlay: 0 24px 64px -20px rgba(33, 29, 22, 0.45);
+
+  --radius-sm: 8px;
   --radius: 14px;
+  --radius-lg: 20px;
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --fast: 120ms var(--ease);
+  --med: 220ms var(--ease);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #16140f;
-    --surface: #1f1c15;
-    --surface-2: #241f17;
-    --ink: #ede8dc;
-    --muted: #a79e88;
-    --line: rgba(237, 232, 220, 0.14);
-    --line-strong: rgba(237, 232, 220, 0.26);
-    --accent: #58a97a;
-    --accent-soft: rgba(88, 169, 122, 0.16);
-    --expense: #e08165;
-    --expense-soft: rgba(224, 129, 101, 0.16);
-    --gold: #d9b156;
-    --gold-soft: rgba(217, 177, 86, 0.18);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 8px 24px -12px rgba(0, 0, 0, 0.5);
+    --bg: #131109;
+    --surface: #1d1a13;
+    --surface-2: #252118;
+    --surface-3: #2c2719;
+    --ink: #f0ebdf;
+    --ink-2: #c8c1b0;
+    --muted: #a49b85;
+    --line: rgba(237, 232, 220, 0.12);
+    --line-strong: rgba(237, 232, 220, 0.24);
+    --accent: #5fb383;
+    --accent-strong: #7cc79a;
+    --accent-soft: rgba(95, 179, 131, 0.14);
+    --expense: #e58868;
+    --expense-strong: #f0a389;
+    --on-accent: #0d1f16;
+    --on-expense: #2a0f07;
+    --expense-soft: rgba(229, 136, 104, 0.14);
+    --gold: #dcb45c;
+    --gold-soft: rgba(220, 180, 92, 0.16);
+
+    --chart-grid: rgba(237, 232, 220, 0.08);
+    --chart-axis: rgba(237, 232, 220, 0.18);
+    --chart-ghost: rgba(237, 232, 220, 0.16);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px -10px rgba(0, 0, 0, 0.6);
+    --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+    --shadow-overlay: 0 24px 64px -20px rgba(0, 0, 0, 0.8);
   }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+  border-radius: 4px;
 }
 
 * {
@@ -76,40 +131,76 @@ button {
 /* ---------- Shared auth page styles ---------- */
 .authPage {
   min-height: 100vh;
+  min-height: 100dvh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  gap: 28px;
+  padding: 32px 20px;
+  gap: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* A soft wash behind the card so the sign-in screen isn't a flat slab. */
+.authPage::before {
+  content: "";
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 60vh;
+  background: radial-gradient(60% 70% at 50% 0%, var(--accent-soft), transparent 70%);
+  pointer-events: none;
 }
 
 .authBrand {
   text-align: center;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.authMark {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+  background: var(--accent);
+  color: var(--on-accent);
+  display: grid;
+  place-items: center;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 21px;
+  font-weight: 600;
+  box-shadow: var(--shadow);
 }
 
 .authBrand h1 {
-  font-size: 32px;
+  font-size: 30px;
   font-weight: 600;
+  letter-spacing: -0.02em;
 }
 
 .authBrand p {
   color: var(--muted);
   font-size: 14px;
-  margin-top: 6px;
+  margin: 4px 0 0;
+  max-width: 34ch;
+  line-height: 1.55;
 }
 
 .authCard {
   width: 100%;
-  max-width: 380px;
+  max-width: 392px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  padding: 28px;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 26px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 15px;
+  position: relative;
 }
 
 .field {
@@ -129,28 +220,35 @@ button {
 .field input {
   font-family: inherit;
   font-size: 14px;
-  padding: 10px 12px;
-  border-radius: 8px;
+  padding: 11px 12px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink);
   width: 100%;
+  transition: border-color var(--fast), background var(--fast);
+}
+
+.field input:hover {
+  border-color: var(--ink-2);
 }
 
 .field input:focus,
 .field input:focus-visible {
   outline: 2px solid var(--gold);
   outline-offset: 1px;
+  background: var(--surface);
 }
 
 .btn {
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  padding: 10px 16px;
+  padding: 11px 16px;
   font-size: 14px;
   font-weight: 500;
+  transition: border-color var(--fast), background var(--fast), opacity var(--fast);
 }
 
 .btn:hover {
@@ -158,13 +256,15 @@ button {
 }
 
 .btn.primary {
-  background: var(--ink);
-  color: var(--bg);
-  border-color: var(--ink);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-color: var(--accent);
+  font-weight: 600;
 }
 
 .btn.primary:hover {
-  opacity: 0.88;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .btn.primary[disabled] {
@@ -194,8 +294,8 @@ button {
   background: var(--expense-soft);
   border: 1px solid var(--expense);
   color: var(--ink);
-  border-radius: 9px;
-  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
   font-size: 13px;
 }
 
@@ -203,6 +303,7 @@ button {
   text-align: center;
   font-size: 13.5px;
   color: var(--muted);
+  position: relative;
 }
 
 .authFoot a {

@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import AppShell from "../../../components/AppShell";
+import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
+import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 
@@ -40,6 +43,8 @@ export default function PropertyManageClient({
   const [units, setUnits] = useState<Unit[]>(initialUnits);
   const [recurring, setRecurring] = useState<RecurringExpense[]>(initialRecurring);
   const [error, setError] = useState("");
+  const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
+  const { toasts, push, dismiss } = useToasts();
 
   const [addingUnit, setAddingUnit] = useState(false);
   const [unitName, setUnitName] = useState("");
@@ -108,12 +113,23 @@ export default function PropertyManageClient({
     setEditingUnitId("");
   }
 
-  async function removeUnit(id: string) {
-    if (!window.confirm("Remove this unit? Its past ledger entries stay, but stop being tied to a unit.")) return;
-    const res = await fetch(`/api/units/${id}`, { method: "DELETE" });
-    if (!res.ok) return;
-    setUnits((prev) => prev.filter((u) => u.id !== id));
-    router.refresh();
+  function removeUnit(unit: Unit) {
+    setConfirming({
+      title: `Remove ${unit.name}?`,
+      body: "Past ledger entries stay in the books — they just stop being tied to a unit. Rent tracking for this unit stops.",
+      confirmLabel: "Remove unit",
+      danger: true,
+      onConfirm: async () => {
+        const res = await fetch(`/api/units/${unit.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          push("Couldn't remove that unit.", "bad");
+          return;
+        }
+        setUnits((prev) => prev.filter((u) => u.id !== unit.id));
+        push(`${unit.name} removed.`);
+        router.refresh();
+      },
+    });
   }
 
   async function addRecurring(e: React.FormEvent) {
@@ -161,11 +177,22 @@ export default function PropertyManageClient({
     setRecurring((prev) => prev.map((x) => (x.id === r.id ? data : x)));
   }
 
-  async function removeRecurring(id: string) {
-    if (!window.confirm("Delete this recurring expense? Past logged entries stay in the ledger.")) return;
-    const res = await fetch(`/api/recurring/${id}`, { method: "DELETE" });
-    if (!res.ok) return;
-    setRecurring((prev) => prev.filter((r) => r.id !== id));
+  function removeRecurring(r: RecurringExpense) {
+    setConfirming({
+      title: `Delete this ${r.category.toLowerCase()} bill?`,
+      body: "Entries already logged from it stay in the ledger. It just stops showing up as due each period.",
+      confirmLabel: "Delete bill",
+      danger: true,
+      onConfirm: async () => {
+        const res = await fetch(`/api/recurring/${r.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          push("Couldn't delete that recurring expense.", "bad");
+          return;
+        }
+        setRecurring((prev) => prev.filter((x) => x.id !== r.id));
+        push("Recurring expense deleted.");
+      },
+    });
   }
 
   function unitLabel(unitId: string | null) {
@@ -179,18 +206,11 @@ export default function PropertyManageClient({
   }
 
   return (
-    <div className={styles.page}>
-      <header className={styles.top}>
-        <div className={styles.brand}>
-          <h1>{property.name}</h1>
-          <div className={styles.tagline}>{property.address || "Manage units and recurring expenses"}</div>
-        </div>
-        <div className={styles.userBar}>
-          <a href="/dashboard" className={styles.textLink}>
-            Back to dashboard
-          </a>
-        </div>
-      </header>
+    <AppShell
+      title={property.name}
+      tagline={property.address || "Manage units and recurring expenses"}
+      back={{ href: "/dashboard", label: "All properties" }}
+    >
 
       {error && <div className={styles.errorBar}>{error}</div>}
 
@@ -285,7 +305,7 @@ export default function PropertyManageClient({
                       <button
                         type="button"
                         className={`${styles.btn} ${styles.small} ${styles.ghost}`}
-                        onClick={() => removeUnit(u.id)}
+                        onClick={() => removeUnit(u)}
                       >
                         Remove
                       </button>
@@ -381,7 +401,7 @@ export default function PropertyManageClient({
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.small} ${styles.ghost}`}
-                      onClick={() => removeRecurring(r.id)}
+                      onClick={() => removeRecurring(r)}
                     >
                       Delete
                     </button>
@@ -503,6 +523,8 @@ export default function PropertyManageClient({
           </div>
         )}
       </section>
-    </div>
+      <ConfirmDialog request={confirming} onCancel={() => setConfirming(null)} />
+      <Toasts toasts={toasts} onDismiss={dismiss} />
+    </AppShell>
   );
 }

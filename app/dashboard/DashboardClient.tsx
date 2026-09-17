@@ -1,10 +1,16 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { signOut } from "next-auth/react";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
+import AppShell from "../components/AppShell";
+import CashFlowChart from "../components/CashFlowChart";
+import CategoryBars from "../components/CategoryBars";
+import Sparkline from "../components/Sparkline";
+import Modal from "../components/Modal";
+import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
+import { Toasts, useToasts } from "../components/Toasts";
 import styles from "./dashboard.module.css";
 
 type Company = { id: string; name: string; role: "owner" | "member" };
@@ -98,6 +104,24 @@ function monthName(key: string, withYear = true) {
   });
 }
 
+function shortMonth(key: string) {
+  const [y, m] = key.split("-").map(Number);
+  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short" });
+}
+
+/** Steps a YYYY-MM key by whole months, rolling the year over as needed. */
+function shiftMonth(key: string, delta: number) {
+  const [y, m] = key.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
+
+/** Today if we're looking at the current month, otherwise the 1st of the one on screen. */
+function defaultDateFor(month: string) {
+  const today = todayISO();
+  return today.startsWith(month) ? today : `${month}-01`;
+}
+
 export default function DashboardClient({
   userLabel,
   storageReady,
@@ -145,6 +169,7 @@ export default function DashboardClient({
   const [editVacant, setEditVacant] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
 
+  const [recording, setRecording] = useState(false);
   const [type, setType] = useState<"rent" | "expense">("rent");
   const [targetKey, setTargetKey] = useState("");
   const [date, setDate] = useState(todayISO());
@@ -167,6 +192,9 @@ export default function DashboardClient({
   // Upload problems belong next to the control that was used, not in the page
   // banner — the attach controls sit far below it.
   const [proofError, setProofError] = useState<{ scope: string; message: string } | null>(null);
+
+  const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
+  const { toasts, push, dismiss } = useToasts();
 
   const visibleProperties = useMemo(
     () =>
@@ -288,6 +316,39 @@ export default function DashboardClient({
   // The rent bar always measures one month; on All time that's the current one.
   const barMonth = allTime ? currentMonthKey() : selectedMonth;
 
+  // Twelve months ending at the month on screen. Feeds both the cash-flow
+  // chart and the sparkline on each stat card, so they can never disagree.
+  const series = useMemo(() => {
+    const keys = Array.from({ length: 12 }, (_, i) => shiftMonth(barMonth, i - 11));
+    const buckets = new Map(keys.map((k) => [k, { month: k, rent: 0, expense: 0 }]));
+    for (const t of visibleTransactions) {
+      const bucket = buckets.get(t.date.slice(0, 7));
+      if (!bucket) continue;
+      if (t.type === "rent") bucket.rent += t.amount;
+      else bucket.expense += t.amount;
+    }
+    return keys.map((k) => buckets.get(k)!);
+  }, [visibleTransactions, barMonth]);
+
+  const byCategory = useMemo(() => {
+    const totals = new Map<string, number>();
+    for (const t of scopedTransactions) {
+      if (t.type !== "expense") continue;
+      const key = t.category || "Other";
+      totals.set(key, (totals.get(key) ?? 0) + t.amount);
+    }
+    return Array.from(totals, ([label, value]) => ({ label, value }));
+  }, [scopedTransactions]);
+
+  // Month-over-month movement for the stat cards. Meaningless on All time,
+  // where there is no previous period to compare against.
+  const previous = useMemo(() => {
+    if (allTime) return null;
+    const key = shiftMonth(selectedMonth, -1);
+    const prior = visibleTransactions.filter((t) => t.date.startsWith(key));
+    return { key, ...totalsFor(null, prior) };
+  }, [visibleTransactions, selectedMonth, allTime]);
+
   function rentInMonth(propertyId: string, unitId: string | null, month: string) {
     return transactions
       .filter(
@@ -311,6 +372,25 @@ export default function DashboardClient({
       .filter(({ target, paid }) => paid < target.monthlyRent)
       .sort((a, b) => b.target.monthlyRent - b.paid - (a.target.monthlyRent - a.paid));
   }, [visibleTargets, transactions, barMonth, allTime]);
+
+  // How far through the month's rent roll we are. Each unit's contribution is
+  // capped at what it owes, so one tenant paying double can't hide another
+  // who hasn't paid at all.
+  const collection = useMemo(() => {
+    let expected = 0;
+    let collected = 0;
+    let paidCount = 0;
+    let dueCount = 0;
+    for (const t of visibleTargets) {
+      if (t.vacant || t.monthlyRent <= 0) continue;
+      const paid = rentInMonth(t.propertyId, t.unitId, barMonth);
+      expected += t.monthlyRent;
+      collected += Math.min(paid, t.monthlyRent);
+      dueCount += 1;
+      if (paid >= t.monthlyRent) paidCount += 1;
+    }
+    return { expected, collected, paidCount, dueCount };
+  }, [visibleTargets, transactions, barMonth]);
 
   // Recurring templates due this billing period that haven't been logged yet.
   const dueRecurring = useMemo(() => {
@@ -341,6 +421,20 @@ export default function DashboardClient({
   const formTarget =
     visibleTargets.find((t) => t.key === targetKey) ?? visibleTargets[0] ?? null;
 
+  /** Opens the record sheet, optionally pre-filled from a row that needs action. */
+  function openRecord(prefill?: { type: "rent" | "expense"; targetKey: string; amount?: number }) {
+    setProofError(null);
+    setError("");
+    setDate(defaultDateFor(barMonth));
+    if (prefill) {
+      setType(prefill.type);
+      setTargetKey(prefill.targetKey);
+      setAmount(prefill.amount ? String(prefill.amount) : "");
+      if (prefill.type === "rent") setCategory("");
+    }
+    setRecording(true);
+  }
+
   async function addCompany(e: React.FormEvent) {
     e.preventDefault();
     const name = companyName.trim();
@@ -361,6 +455,7 @@ export default function DashboardClient({
     setSelectedCompany(data.id);
     setCompanyName("");
     setAddingCompany(false);
+    push(`${data.name} added.`);
   }
 
   async function joinWithCode(e: React.FormEvent) {
@@ -417,6 +512,7 @@ export default function DashboardClient({
     setPropAddress("");
     setPropRent("");
     setAddingProperty(false);
+    push(`${data.name} added.`);
   }
 
   function startEditProperty(p: Property) {
@@ -458,30 +554,51 @@ export default function DashboardClient({
 
     setProperties((prev) => prev.map((p) => (p.id === editingPropertyId ? { ...p, ...data } : p)));
     setEditingPropertyId("");
+    push("Changes saved.");
   }
 
-  async function removeProperty(id: string) {
-    const hasTxns = transactions.some((t) => t.propertyId === id);
-    if (
-      hasTxns &&
-      !window.confirm(
-        "This property has transactions in the ledger. Remove it anyway? Its transactions will be removed too."
-      )
-    ) {
-      return;
-    }
-    const res = await fetch(`/api/properties/${id}`, { method: "DELETE" });
-    if (!res.ok) return;
-    setProperties((prev) => prev.filter((p) => p.id !== id));
-    setTransactions((prev) => prev.filter((t) => t.propertyId !== id));
-    setUnits((prev) => prev.filter((u) => u.propertyId !== id));
-    setRecurring((prev) => prev.filter((r) => r.propertyId !== id));
+  function removeProperty(p: Property) {
+    const count = transactions.filter((t) => t.propertyId === p.id).length;
+    setConfirming({
+      title: `Remove ${p.name}?`,
+      body: count
+        ? `This property has ${count} ledger ${count === 1 ? "entry" : "entries"}. Removing it deletes those entries, its units and its recurring expenses too. This can't be undone.`
+        : "Its units and recurring expenses go with it. This can't be undone.",
+      confirmLabel: "Remove property",
+      danger: true,
+      onConfirm: async () => {
+        const res = await fetch(`/api/properties/${p.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          push("Couldn't remove that property.", "bad");
+          return;
+        }
+        setProperties((prev) => prev.filter((x) => x.id !== p.id));
+        setTransactions((prev) => prev.filter((t) => t.propertyId !== p.id));
+        setUnits((prev) => prev.filter((u) => u.propertyId !== p.id));
+        setRecurring((prev) => prev.filter((r) => r.propertyId !== p.id));
+        push(`${p.name} removed.`);
+      },
+    });
   }
 
-  async function removeTransaction(id: string) {
-    const res = await fetch(`/api/transactions/${id}`, { method: "DELETE" });
-    if (!res.ok) return;
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+  function removeTransaction(t: Transaction) {
+    setConfirming({
+      title: "Delete this entry?",
+      body: `${t.type === "rent" ? "Rent" : "Expense"} of ${fmtFull.format(t.amount)} on ${fmtDate(
+        t.date
+      )} for ${targetLabel(t)}. Any proof attached to it is deleted too.`,
+      confirmLabel: "Delete entry",
+      danger: true,
+      onConfirm: async () => {
+        const res = await fetch(`/api/transactions/${t.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          push("Couldn't delete that entry.", "bad");
+          return;
+        }
+        setTransactions((prev) => prev.filter((x) => x.id !== t.id));
+        push("Entry deleted.");
+      },
+    });
   }
 
   /** Uploads one file and files the returned attachment onto its transaction. */
@@ -518,11 +635,13 @@ export default function DashboardClient({
     if (!files || files.length === 0) return;
     setProofError(null);
     setUploadingFor(transactionId);
+    let attached = 0;
     for (const file of Array.from(files)) {
-      const uploaded = await uploadProof(transactionId, file, transactionId);
-      if (!uploaded) break;
+      if (!(await uploadProof(transactionId, file, transactionId))) break;
+      attached += 1;
     }
     setUploadingFor("");
+    if (attached > 0) push(`${attached} ${attached === 1 ? "proof" : "proofs"} attached.`);
   }
 
   async function removeAttachment(attachmentId: string) {
@@ -548,6 +667,7 @@ export default function DashboardClient({
       return;
     }
     setTransactions((prev) => [...prev, { ...data, attachments: [] }]);
+    push("Logged to the ledger.");
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -588,131 +708,186 @@ export default function DashboardClient({
     setDetail("");
     setNote("");
     setCategory("");
-    setDate(todayISO());
+    setDate(defaultDateFor(barMonth));
 
+    let uploadFailed = false;
     if (pendingProof.length > 0) {
       setProofError(null);
       setUploadingFor(created.id);
-      let allUploaded = true;
       for (const file of pendingProof) {
         if (!(await uploadProof(created.id, file, "form"))) {
-          allUploaded = false;
+          uploadFailed = true;
           break;
         }
       }
       setUploadingFor("");
       // Keep the selection on failure so it can be retried from the new row
       // rather than vanishing with no explanation.
-      if (allUploaded) {
+      if (!uploadFailed) {
         setPendingProof([]);
         if (proofInput.current) proofInput.current.value = "";
       }
     }
+
+    if (!uploadFailed) {
+      setRecording(false);
+      push(
+        `${type === "rent" ? "Rent" : "Expense"} of ${fmtFull.format(amt)} recorded for ${formTarget.label}.`
+      );
+    }
   }
 
+  const deltaFor = (current: number, prior: number | undefined, upIsGood: boolean) => {
+    if (prior === undefined || previous === null) return null;
+    const change = current - prior;
+    if (Math.abs(change) < 0.005) {
+      return (
+        <span className={styles.delta}>
+          No change <span className={styles.deltaNote}>vs {shortMonth(previous.key)}</span>
+        </span>
+      );
+    }
+    const up = change > 0;
+    const good = up === upIsGood;
+    return (
+      <span className={`${styles.delta} ${good ? styles.good : styles.bad}`}>
+        {up ? "↑" : "↓"} {fmt.format(Math.abs(change))}{" "}
+        <span className={styles.deltaNote}>vs {shortMonth(previous.key)}</span>
+      </span>
+    );
+  };
+
+  const collectPct =
+    collection.expected > 0
+      ? Math.min(100, Math.round((collection.collected / collection.expected) * 100))
+      : 0;
+  const collectDone = collection.expected > 0 && collection.collected >= collection.expected;
+
+  const attentionCount = unpaidThisMonth.length + dueRecurring.length;
+
   return (
-    <div className={styles.page}>
-      <header className={styles.top}>
-        <div className={styles.brand}>
-          <h1>Rent Roll</h1>
-          <div className={styles.tagline}>Rent collected, repairs paid, and the profit left over — by property.</div>
-        </div>
-        <div className={styles.userBar}>
-          <span>Signed in as {userLabel}</span>
-          <Link href="/dashboard/team" className={styles.textLink}>
-            Team
-          </Link>
-          <Link href="/dashboard/backup" className={styles.textLink}>
-            Backup
-          </Link>
-          <Link href="/dashboard/export" className={styles.textLink}>
-            Export
-          </Link>
-          <button type="button" onClick={() => signOut({ callbackUrl: "/login" })}>
-            Sign out
+    <AppShell
+      title="Overview"
+      tagline="Rent collected, repairs paid, and the profit left over — by property."
+      userLabel={userLabel}
+      actions={
+        companies.length > 0 ? (
+          <button type="button" className={`${styles.btn} ${styles.accent}`} onClick={() => openRecord()}>
+            + Record a transaction
           </button>
-        </div>
-      </header>
-
-      <nav className={styles.companyBar} aria-label="LLCs">
-        {companies.length > 1 && (
-          <button
-            type="button"
-            className={`${styles.chip} ${selectedCompany === "all" ? styles.active : ""}`}
-            onClick={() => setSelectedCompany("all")}
-          >
-            All LLCs
-          </button>
-        )}
-        {companies.map((c) => (
-          <button
-            key={c.id}
-            type="button"
-            className={`${styles.chip} ${selectedCompany === c.id ? styles.active : ""}`}
-            onClick={() => setSelectedCompany(c.id)}
-          >
-            {c.name}
-          </button>
-        ))}
-        {addingCompany ? (
-          <form className={styles.inlineForm} onSubmit={addCompany}>
-            <input
-              id="new-company"
-              type="text"
-              autoFocus
-              placeholder="e.g. Birchwood Holdings LLC"
-              value={companyName}
-              onChange={(e) => setCompanyName(e.target.value)}
-            />
-            <button type="submit" className={`${styles.btn} ${styles.small} ${styles.primary}`}>
-              Add
-            </button>
+        ) : undefined
+      }
+    >
+      <nav className={styles.contextBar} aria-label="Scope">
+        <div className={styles.companyBar}>
+          {companies.length > 1 && (
             <button
               type="button"
-              className={`${styles.btn} ${styles.small}`}
-              onClick={() => {
-                setAddingCompany(false);
-                setCompanyName("");
-              }}
+              className={`${styles.chip} ${selectedCompany === "all" ? styles.active : ""}`}
+              onClick={() => setSelectedCompany("all")}
             >
-              Cancel
+              All LLCs
             </button>
-          </form>
-        ) : (
-          <button type="button" className={`${styles.chip} ${styles.chipAdd}`} onClick={() => setAddingCompany(true)}>
-            + Add LLC
-          </button>
-        )}
-
-        {joining ? (
-          <form className={styles.inlineForm} onSubmit={joinWithCode}>
-            <input
-              id="join-code"
-              type="text"
-              autoFocus
-              placeholder="Join code, e.g. K7P2-M9X4"
-              value={joinCode}
-              onChange={(e) => setJoinCode(e.target.value)}
-            />
-            <button type="submit" className={`${styles.btn} ${styles.small} ${styles.primary}`} disabled={joinBusy}>
-              {joinBusy ? "Joining…" : "Join"}
-            </button>
+          )}
+          {companies.map((c) => (
             <button
+              key={c.id}
               type="button"
-              className={`${styles.btn} ${styles.small}`}
-              onClick={() => {
-                setJoining(false);
-                setJoinCode("");
-              }}
+              className={`${styles.chip} ${selectedCompany === c.id ? styles.active : ""}`}
+              onClick={() => setSelectedCompany(c.id)}
             >
-              Cancel
+              {c.name}
             </button>
-          </form>
-        ) : (
-          <button type="button" className={`${styles.chip} ${styles.chipAdd}`} onClick={() => setJoining(true)}>
-            Join with a code
+          ))}
+          {addingCompany ? (
+            <form className={styles.inlineForm} onSubmit={addCompany}>
+              <input
+                id="new-company"
+                type="text"
+                autoFocus
+                placeholder="e.g. Birchwood Holdings LLC"
+                value={companyName}
+                onChange={(e) => setCompanyName(e.target.value)}
+              />
+              <button type="submit" className={`${styles.btn} ${styles.small} ${styles.primary}`}>
+                Add
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.small}`}
+                onClick={() => {
+                  setAddingCompany(false);
+                  setCompanyName("");
+                }}
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <button type="button" className={`${styles.chip} ${styles.chipAdd}`} onClick={() => setAddingCompany(true)}>
+              + LLC
+            </button>
+          )}
+
+          {joining ? (
+            <form className={styles.inlineForm} onSubmit={joinWithCode}>
+              <input
+                id="join-code"
+                type="text"
+                autoFocus
+                placeholder="Join code, e.g. K7P2-M9X4"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+              />
+              <button type="submit" className={`${styles.btn} ${styles.small} ${styles.primary}`} disabled={joinBusy}>
+                {joinBusy ? "Joining…" : "Join"}
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.small}`}
+                onClick={() => {
+                  setJoining(false);
+                  setJoinCode("");
+                }}
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <button type="button" className={`${styles.chip} ${styles.chipAdd}`} onClick={() => setJoining(true)}>
+              Join with a code
+            </button>
+          )}
+        </div>
+
+        <div className={styles.monthBar}>
+          <button
+            type="button"
+            className={styles.monthArrow}
+            aria-label="Previous month"
+            disabled={allTime || monthIndex <= 0}
+            onClick={() => setSelectedMonth(months[monthIndex - 1])}
+          >
+            ‹
           </button>
-        )}
+          <span className={styles.monthLabel}>{allTime ? "All time" : monthName(selectedMonth)}</span>
+          <button
+            type="button"
+            className={styles.monthArrow}
+            aria-label="Next month"
+            disabled={allTime || monthIndex < 0 || monthIndex >= months.length - 1}
+            onClick={() => setSelectedMonth(months[monthIndex + 1])}
+          >
+            ›
+          </button>
+          <button
+            type="button"
+            className={`${styles.chip} ${allTime ? styles.active : ""}`}
+            onClick={() => setSelectedMonth(allTime ? currentMonthKey() : ALL_TIME)}
+          >
+            {allTime ? "This month" : "All time"}
+          </button>
+        </div>
       </nav>
 
       {error && <div className={styles.errorBar}>{error}</div>}
@@ -727,65 +902,175 @@ export default function DashboardClient({
         </div>
       ) : (
         <>
-          <nav className={styles.monthBar} aria-label="Period">
-            <button
-              type="button"
-              className={styles.monthArrow}
-              aria-label="Previous month"
-              disabled={allTime || monthIndex <= 0}
-              onClick={() => setSelectedMonth(months[monthIndex - 1])}
-            >
-              ‹
-            </button>
-            <span className={styles.monthLabel}>
-              {allTime ? "All time" : monthName(selectedMonth)}
-            </span>
-            <button
-              type="button"
-              className={styles.monthArrow}
-              aria-label="Next month"
-              disabled={allTime || monthIndex < 0 || monthIndex >= months.length - 1}
-              onClick={() => setSelectedMonth(months[monthIndex + 1])}
-            >
-              ›
-            </button>
-            <button
-              type="button"
-              className={`${styles.chip} ${allTime ? styles.active : ""}`}
-              onClick={() => setSelectedMonth(allTime ? currentMonthKey() : ALL_TIME)}
-            >
-              {allTime ? "Back to this month" : "All time"}
-            </button>
-          </nav>
+          <section className={styles.kpis} aria-label="Totals">
+            <div className={`${styles.kpi} ${styles.rentKpi}`}>
+              <div className={styles.kpiLabel}>Rent collected</div>
+              <div className={`${styles.kpiValue} num`}>{fmtFull.format(overall.rent)}</div>
+              <div className={styles.kpiFoot}>
+                {deltaFor(overall.rent, previous?.rent, true) ?? (
+                  <span className={styles.delta}>
+                    <span className={styles.deltaNote}>
+                      all time{activeCompany ? ` · ${activeCompany.name}` : ""}
+                    </span>
+                  </span>
+                )}
+                <span className={styles.kpiSpark}>
+                  <Sparkline points={series.map((s) => s.rent)} tone="accent" />
+                </span>
+              </div>
+            </div>
 
-          <section className={styles.summary}>
-            <div className={`${styles.tile} ${styles.rent}`}>
-              <div className={styles.label}>Rent collected</div>
-              <div className={`${styles.value} num`}>{fmtFull.format(overall.rent)}</div>
-              <div className={styles.sub}>
-                {allTime ? "all time" : monthName(selectedMonth)}
-                {activeCompany ? ` · ${activeCompany.name}` : ""}
+            <div className={`${styles.kpi} ${styles.expenseKpi}`}>
+              <div className={styles.kpiLabel}>Repairs &amp; expenses</div>
+              <div className={`${styles.kpiValue} num`}>{fmtFull.format(overall.expense)}</div>
+              <div className={styles.kpiFoot}>
+                {deltaFor(overall.expense, previous?.expense, false) ?? (
+                  <span className={styles.delta}>
+                    <span className={styles.deltaNote}>
+                      {scopedTransactions.filter((t) => t.type === "expense").length} logged
+                    </span>
+                  </span>
+                )}
+                <span className={styles.kpiSpark}>
+                  <Sparkline points={series.map((s) => s.expense)} tone="expense" />
+                </span>
               </div>
             </div>
-            <div className={`${styles.tile} ${styles.expense}`}>
-              <div className={styles.label}>Repairs &amp; expenses</div>
-              <div className={`${styles.value} num`}>{fmtFull.format(overall.expense)}</div>
-              <div className={styles.sub}>
-                {scopedTransactions.filter((t) => t.type === "expense").length} logged
-              </div>
-            </div>
-            <div className={styles.tile}>
-              <div className={styles.label}>Net profit</div>
-              <div className={`${styles.value} num ${overall.net >= 0 ? styles.pos : styles.neg}`}>
+
+            <div className={`${styles.kpi} ${styles.netKpi}`}>
+              <div className={styles.kpiLabel}>Net profit</div>
+              <div className={`${styles.kpiValue} num ${overall.net >= 0 ? styles.pos : styles.neg}`}>
                 {overall.net >= 0 ? "" : "−"}
                 {fmtFull.format(Math.abs(overall.net))}
               </div>
-              <div className={styles.sub}>
-                {overall.net >= 0 ? "in the black" : "in the red"}
-                {allTime ? " to date" : ` in ${monthName(selectedMonth, false)}`}
+              <div className={styles.kpiFoot}>
+                {deltaFor(overall.net, previous?.net, true) ?? (
+                  <span className={styles.delta}>
+                    <span className={styles.deltaNote}>
+                      {overall.net >= 0 ? "in the black to date" : "in the red to date"}
+                    </span>
+                  </span>
+                )}
+                <span className={styles.kpiSpark}>
+                  <Sparkline points={series.map((s) => s.rent - s.expense)} tone="neutral" />
+                </span>
               </div>
             </div>
           </section>
+
+          {collection.dueCount > 0 && (
+            <section className={styles.collect} aria-label="Rent collection progress">
+              <div className={styles.collectTop}>
+                <span className={styles.collectTitle}>{monthName(barMonth)} rent roll</span>
+                <span className={`${styles.collectFigure} num`}>
+                  {fmt.format(collection.collected)}{" "}
+                  <span className={styles.of}>of {fmt.format(collection.expected)}</span>
+                </span>
+              </div>
+              <div className={styles.bigBar}>
+                <span
+                  className={collectDone ? styles.barFull : undefined}
+                  style={{ width: `${collectPct}%` }}
+                />
+              </div>
+              <div className={styles.collectMeta}>
+                <span>
+                  {collection.paidCount} of {collection.dueCount}{" "}
+                  {collection.dueCount === 1 ? "unit has" : "units have"} paid in full
+                </span>
+                <span>{collectPct}%</span>
+              </div>
+            </section>
+          )}
+
+          <section className={styles.chartGrid} aria-label="Charts">
+            <div className={styles.card}>
+              <CashFlowChart data={series} />
+            </div>
+            <div className={styles.card}>
+              <CategoryBars
+                data={byCategory}
+                caption={allTime ? "All time" : monthName(selectedMonth)}
+              />
+            </div>
+          </section>
+
+          {!allTime && (
+            <section className={styles.block}>
+              <div className={styles.blockHead}>
+                <h2>Needs attention — {monthName(barMonth, false)}</h2>
+                {attentionCount > 0 && (
+                  <span className={styles.count}>
+                    {attentionCount} {attentionCount === 1 ? "item" : "items"}
+                  </span>
+                )}
+              </div>
+
+              {attentionCount === 0 ? (
+                <div className={styles.allClear}>
+                  <span className={styles.allClearMark} aria-hidden="true">
+                    ✓
+                  </span>
+                  Every unit has paid and every recurring bill is logged for {monthName(barMonth, false)}.
+                </div>
+              ) : (
+                <div className={styles.attnList}>
+                  {unpaidThisMonth.map(({ target, paid }) => (
+                    <div key={`u-${target.key}`} className={styles.attnRow}>
+                      <div className={styles.attnMain}>
+                        <div className={styles.attnLabel}>
+                          {target.label} <span className={`${styles.pill} ${styles.owed}`}>Rent owed</span>
+                        </div>
+                        <div className={styles.attnSub}>
+                          {paid > 0
+                            ? `${fmt.format(paid)} of ${fmt.format(target.monthlyRent)} paid so far`
+                            : `Nothing received of ${fmt.format(target.monthlyRent)}`}
+                        </div>
+                      </div>
+                      <span className={`${styles.attnAmt} ${styles.due} num`}>
+                        {fmt.format(target.monthlyRent - paid)}
+                      </span>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.small}`}
+                        onClick={() =>
+                          openRecord({
+                            type: "rent",
+                            targetKey: target.key,
+                            amount: target.monthlyRent - paid,
+                          })
+                        }
+                      >
+                        Record payment
+                      </button>
+                    </div>
+                  ))}
+
+                  {dueRecurring.map((r) => (
+                    <div key={`r-${r.id}`} className={styles.attnRow}>
+                      <div className={styles.attnMain}>
+                        <div className={styles.attnLabel}>
+                          {targetLabel(r)} <span className={`${styles.pill} ${styles.bill}`}>{r.category}</span>
+                        </div>
+                        <div className={styles.attnSub}>
+                          {r.detail || `${r.frequency === "monthly" ? "Monthly" : "Yearly"} bill, not logged yet`}
+                        </div>
+                      </div>
+                      <span className={`${styles.attnAmt} ${styles.neg} num`}>{fmt.format(r.amount)}</span>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                        disabled={recurringBusyId === r.id}
+                        onClick={() => logRecurring(r.id)}
+                      >
+                        {recurringBusyId === r.id ? "Logging…" : "Log it"}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
           {selectedCompany === "all" && companies.length > 1 && (
             <section className={styles.block}>
@@ -830,83 +1115,6 @@ export default function DashboardClient({
             </section>
           )}
 
-          {!allTime && unpaidThisMonth.length > 0 && (
-            <section className={styles.block}>
-              <div className={styles.blockHead}>
-                <h2>Who hasn&apos;t paid — {monthName(barMonth, false)}</h2>
-                <span className={styles.count}>
-                  {unpaidThisMonth.length} {unpaidThisMonth.length === 1 ? "unit" : "units"}
-                </span>
-              </div>
-              <div className={styles.ledgerWrap}>
-                <table className={styles.ledger}>
-                  <thead>
-                    <tr>
-                      <th>Property</th>
-                      <th style={{ textAlign: "right" }}>Paid</th>
-                      <th style={{ textAlign: "right" }}>Owed</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {unpaidThisMonth.map(({ target, paid }) => (
-                      <tr key={target.key}>
-                        <td>{target.label}</td>
-                        <td className="num" style={{ textAlign: "right" }}>
-                          {fmt.format(paid)} of {fmt.format(target.monthlyRent)}
-                        </td>
-                        <td className={`${styles.amt} num ${styles.neg}`}>
-                          {fmt.format(target.monthlyRent - paid)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
-          {!allTime && dueRecurring.length > 0 && (
-            <section className={styles.block}>
-              <div className={styles.blockHead}>
-                <h2>Recurring expenses due — {monthName(barMonth, false)}</h2>
-              </div>
-              <div className={styles.ledgerWrap}>
-                <table className={styles.ledger}>
-                  <thead>
-                    <tr>
-                      <th>Property</th>
-                      <th>Category</th>
-                      <th style={{ textAlign: "right" }}>Amount</th>
-                      <th></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {dueRecurring.map((r) => (
-                      <tr key={r.id}>
-                        <td>
-                          {targetLabel(r)}
-                          {r.detail && <div className={styles.note}>{r.detail}</div>}
-                        </td>
-                        <td>{r.category}</td>
-                        <td className={`${styles.amt} num ${styles.neg}`}>{fmt.format(r.amount)}</td>
-                        <td style={{ textAlign: "right" }}>
-                          <button
-                            type="button"
-                            className={`${styles.btn} ${styles.small} ${styles.primary}`}
-                            disabled={recurringBusyId === r.id}
-                            onClick={() => logRecurring(r.id)}
-                          >
-                            {recurringBusyId === r.id ? "Logging…" : "Log it"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </section>
-          )}
-
           <section className={styles.block}>
             <div className={styles.blockHead}>
               <h2>Properties</h2>
@@ -926,6 +1134,24 @@ export default function DashboardClient({
                 const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
                 const paidInFull = target > 0 && paidThisMonth >= target;
                 const owner = companies.find((c) => c.id === p.companyId);
+
+                // One glanceable state per card: vacant, all paid, or how many
+                // units are still short this month.
+                const rentedUnits = propUnits.filter((u) => !u.vacant && u.monthlyRent > 0);
+                const unitsPaid = rentedUnits.filter(
+                  (u) => rentInMonth(p.id, u.id, barMonth) >= u.monthlyRent
+                ).length;
+                let status: { text: string; tone: string } | null = null;
+                if (propUnits.length === 0) {
+                  if (p.vacant) status = { text: "Vacant", tone: styles.vacant };
+                  else if (paidInFull) status = { text: "Paid", tone: styles.paid };
+                  else if (target > 0) status = { text: `${fmt.format(target - paidThisMonth)} short`, tone: styles.owed };
+                } else if (rentedUnits.length > 0) {
+                  status =
+                    unitsPaid === rentedUnits.length
+                      ? { text: "All paid", tone: styles.paid }
+                      : { text: `${unitsPaid}/${rentedUnits.length} paid`, tone: styles.owed };
+                }
 
                 if (editingPropertyId === p.id) {
                   return (
@@ -996,17 +1222,15 @@ export default function DashboardClient({
 
                 return (
                   <div key={p.id} className={styles.propCard}>
-                    <div>
-                      <div className={styles.name}>
-                        {p.name}
-                        {propUnits.length === 0 && p.vacant && (
-                          <span className={styles.vacantTag}>Vacant</span>
+                    <div className={styles.propHead}>
+                      <div style={{ minWidth: 0 }}>
+                        <div className={styles.name}>{p.name}</div>
+                        {p.address && <div className={styles.addr}>{p.address}</div>}
+                        {selectedCompany === "all" && owner && (
+                          <div className={styles.ownerTag}>{owner.name}</div>
                         )}
                       </div>
-                      <div className={styles.addr}>{p.address}</div>
-                      {selectedCompany === "all" && owner && (
-                        <div className={styles.ownerTag}>{owner.name}</div>
-                      )}
+                      {status && <span className={`${styles.pill} ${status.tone}`}>{status.text}</span>}
                     </div>
 
                     {propUnits.length > 0 ? (
@@ -1058,21 +1282,26 @@ export default function DashboardClient({
                       </>
                     )}
 
-                    <div className={styles.propRow}>
-                      <span className={styles.l}>Collected</span>
-                      <span className={`${styles.v} ${styles.pos} num`}>{fmt.format(t.rent)}</span>
+                    <div className={styles.propFigures}>
+                      <div className={styles.figure}>
+                        <span className={styles.figureLabel}>In</span>
+                        <span className={`${styles.figureValue} ${styles.pos} num`}>{fmt.format(t.rent)}</span>
+                      </div>
+                      <div className={styles.figure}>
+                        <span className={styles.figureLabel}>Out</span>
+                        <span className={`${styles.figureValue} ${styles.neg} num`}>{fmt.format(t.expense)}</span>
+                      </div>
+                      <div className={styles.figure}>
+                        <span className={styles.figureLabel}>Net</span>
+                        <span
+                          className={`${styles.figureValue} ${t.net >= 0 ? styles.pos : styles.neg} num`}
+                        >
+                          {t.net >= 0 ? "" : "−"}
+                          {fmt.format(Math.abs(t.net))}
+                        </span>
+                      </div>
                     </div>
-                    <div className={styles.propRow}>
-                      <span className={styles.l}>Repairs &amp; expenses</span>
-                      <span className={`${styles.v} ${styles.neg} num`}>{fmt.format(t.expense)}</span>
-                    </div>
-                    <div className={styles.propRow}>
-                      <span className={styles.l}>Net</span>
-                      <span className={`${styles.v} ${t.net >= 0 ? styles.pos : styles.neg} num`}>
-                        {t.net >= 0 ? "" : "−"}
-                        {fmt.format(Math.abs(t.net))}
-                      </span>
-                    </div>
+
                     <div className={styles.propActions}>
                       <button
                         type="button"
@@ -1082,14 +1311,14 @@ export default function DashboardClient({
                         Edit
                       </button>
                       <Link href={`/dashboard/properties/${p.id}`} className={`${styles.btn} ${styles.small}`}>
-                        Manage
+                        Units &amp; bills
                       </Link>
                       <button
                         type="button"
                         className={`${styles.btn} ${styles.small} ${styles.ghost}`}
-                        onClick={() => removeProperty(p.id)}
+                        onClick={() => removeProperty(p)}
                       >
-                        Remove property
+                        Remove
                       </button>
                     </div>
                   </div>
@@ -1170,141 +1399,13 @@ export default function DashboardClient({
 
           <section className={styles.block}>
             <div className={styles.blockHead}>
-              <h2>Record a transaction</h2>
-            </div>
-            <div className={styles.formCard}>
-              <div className={styles.typeToggle}>
-                <button
-                  type="button"
-                  className={type === "rent" ? `${styles.active} ${styles.rent}` : ""}
-                  onClick={() => setType("rent")}
-                >
-                  Rent payment
-                </button>
-                <button
-                  type="button"
-                  className={type === "expense" ? `${styles.active} ${styles.expense}` : ""}
-                  onClick={() => setType("expense")}
-                >
-                  Repair / expense
-                </button>
-              </div>
-              <form onSubmit={onSubmit}>
-                <div className={styles.fieldGrid}>
-                  <div className={`${styles.field} ${styles.wide}`}>
-                    <label htmlFor="f-property">Property</label>
-                    <select
-                      id="f-property"
-                      required
-                      value={formTarget?.key ?? ""}
-                      onChange={(e) => setTargetKey(e.target.value)}
-                    >
-                      {visibleTargets.length === 0 && <option value="">Add a property first</option>}
-                      {visibleTargets.map((t) => (
-                        <option key={t.key} value={t.key}>
-                          {t.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className={styles.field}>
-                    <label htmlFor="f-date">Date</label>
-                    <input id="f-date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
-                  </div>
-                  <div className={styles.field}>
-                    <label htmlFor="f-amount">Amount ($)</label>
-                    <input
-                      id="f-amount"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="0.00"
-                      required
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                    />
-                  </div>
-                  {!isRent && (
-                    <div className={styles.field}>
-                      <label htmlFor="f-category">Category</label>
-                      <select
-                        id="f-category"
-                        required
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                      >
-                        <option value="">Choose one</option>
-                        {EXPENSE_CATEGORIES.map((c) => (
-                          <option key={c} value={c}>
-                            {c}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  )}
-                  <div className={`${styles.field} ${styles.wide}`}>
-                    <label htmlFor="f-detail">{isRent ? "Paid by (tenant)" : "Description (optional)"}</label>
-                    <input
-                      id="f-detail"
-                      type="text"
-                      placeholder={isRent ? "e.g. J. Alvarez" : "e.g. Fixed leaking kitchen faucet"}
-                      value={detail}
-                      onChange={(e) => setDetail(e.target.value)}
-                    />
-                  </div>
-                  <div className={`${styles.field} ${styles.span3}`}>
-                    <label htmlFor="f-note">Note (optional)</label>
-                    <input
-                      id="f-note"
-                      type="text"
-                      placeholder={isRent ? "e.g. September rent, paid via check" : "e.g. Paid to Smith Plumbing, invoice #123"}
-                      value={note}
-                      onChange={(e) => setNote(e.target.value)}
-                    />
-                  </div>
-                  <div className={`${styles.field} ${styles.span4}`}>
-                    <label htmlFor="f-proof">
-                      {isRent ? "Proof of payment (optional)" : "Receipt or photo (optional)"}
-                    </label>
-                    <input
-                      id="f-proof"
-                      ref={proofInput}
-                      type="file"
-                      multiple
-                      accept="image/*,application/pdf"
-                      className={styles.fileInput}
-                      disabled={!storageReady}
-                      onChange={(e) => setPendingProof(Array.from(e.target.files ?? []))}
-                    />
-                    {!storageReady && <span className={styles.proofWarn}>{STORAGE_HINT}</span>}
-                    {storageReady && pendingProof.length > 0 && (
-                      <span className={styles.note}>
-                        {pendingProof.length} file{pendingProof.length === 1 ? "" : "s"} will be attached
-                      </span>
-                    )}
-                    {proofError?.scope === "form" && (
-                      <span className={styles.proofWarn}>{proofError.message}</span>
-                    )}
-                  </div>
-                </div>
-                <div className={styles.formFoot}>
-                  <button
-                    type="submit"
-                    className={`${styles.btn} ${styles.primary}`}
-                    disabled={submitting || visibleTargets.length === 0}
-                  >
-                    {isRent ? "Add rent payment" : "Add expense"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </section>
-
-          <section className={styles.block}>
-            <div className={styles.blockHead}>
               <h2>Ledger · {allTime ? "all time" : monthName(selectedMonth)}</h2>
               <div className={styles.ledgerControls}>
-                <select value={filterProperty} onChange={(e) => setFilterProperty(e.target.value)}>
+                <select
+                  value={filterProperty}
+                  onChange={(e) => setFilterProperty(e.target.value)}
+                  aria-label="Filter by property"
+                >
                   <option value="">All properties</option>
                   {visibleProperties.map((p) => (
                     <option key={p.id} value={p.id}>
@@ -1312,7 +1413,11 @@ export default function DashboardClient({
                     </option>
                   ))}
                 </select>
-                <select value={filterType} onChange={(e) => setFilterType(e.target.value)}>
+                <select
+                  value={filterType}
+                  onChange={(e) => setFilterType(e.target.value)}
+                  aria-label="Filter by type"
+                >
                   <option value="">All types</option>
                   <option value="rent">Rent only</option>
                   <option value="expense">Expenses only</option>
@@ -1323,107 +1428,246 @@ export default function DashboardClient({
               <div className={styles.ledgerWrap}>
                 <div className={styles.emptyState}>
                   {allTime
-                    ? "No transactions yet — record a rent payment or expense above."
+                    ? "No transactions yet — record a rent payment or expense to get started."
                     : `Nothing recorded in ${monthName(selectedMonth)} yet.`}
                 </div>
               </div>
             ) : (
-            <div className={styles.ledgerWrap}>
-              <table className={styles.ledger}>
-                <thead>
-                  <tr>
-                    <th>Date</th>
-                    <th>Property</th>
-                    <th>Type</th>
-                    <th>Details</th>
-                    <th style={{ textAlign: "right" }}>Amount</th>
-                    <th></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((t) => (
-                    <tr key={t.id}>
-                      <td>{fmtDate(t.date)}</td>
-                      <td>{targetLabel(t)}</td>
-                      <td>
-                        <span className={`${styles.tag} ${t.type === "rent" ? styles.rent : styles.expense}`}>
-                          {t.type === "rent" ? "Rent" : "Expense"}
-                        </span>
-                      </td>
-                      <td>
-                        {t.category && <div className={styles.categoryTag}>{t.category}</div>}
-                        {t.detail}
-                        {t.note && <div className={styles.note}>{t.note}</div>}
-                        {t.attachments.length > 0 && (
-                          <div className={styles.proofRow}>
-                            {t.attachments.map((a) => (
-                              <span key={a.id} className={styles.proofItem}>
-                                <a href={a.url} target="_blank" rel="noopener noreferrer" title={a.filename}>
-                                  {a.contentType.startsWith("image/") ? (
-                                    // eslint-disable-next-line @next/next/no-img-element
-                                    <img src={a.url} alt={a.filename} className={styles.proofThumb} />
-                                  ) : (
-                                    <span className={styles.proofFile}>PDF</span>
-                                  )}
-                                </a>
-                                <button
-                                  type="button"
-                                  className={styles.proofRemove}
-                                  aria-label={`Remove ${a.filename}`}
-                                  onClick={() => removeAttachment(a.id)}
-                                >
-                                  ×
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        {storageReady && (
-                          <label className={styles.proofAdd}>
-                            {uploadingFor === t.id
-                              ? "Uploading…"
-                              : t.attachments.length > 0
-                                ? "+ Add another"
-                                : "+ Attach proof"}
-                            <input
-                              type="file"
-                              multiple
-                              accept="image/*,application/pdf"
-                              hidden
-                              disabled={uploadingFor === t.id}
-                              onChange={(e) => {
-                                addProofToRow(t.id, e.target.files);
-                                e.target.value = "";
-                              }}
-                            />
-                          </label>
-                        )}
-                        {proofError?.scope === t.id && (
-                          <div className={styles.proofWarn}>{proofError.message}</div>
-                        )}
-                      </td>
-                      <td className={`${styles.amt} num ${t.type === "rent" ? styles.pos : styles.neg}`}>
-                        {t.type === "rent" ? "+" : "−"}
-                        {fmt.format(t.amount)}
-                      </td>
-                      <td>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.small} ${styles.ghost} ${styles.rowDel}`}
-                          onClick={() => removeTransaction(t.id)}
-                        >
-                          Delete
-                        </button>
-                      </td>
+              <div className={styles.ledgerWrap}>
+                <table className={`${styles.ledger} ${styles.txnTable}`}>
+                  <thead>
+                    <tr>
+                      <th>Date</th>
+                      <th>Property</th>
+                      <th>Type</th>
+                      <th>Details</th>
+                      <th style={{ textAlign: "right" }}>Amount</th>
+                      <th></th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {rows.map((t) => (
+                      <tr key={t.id}>
+                        <td>{fmtDate(t.date)}</td>
+                        <td>{targetLabel(t)}</td>
+                        <td>
+                          <span className={`${styles.tag} ${t.type === "rent" ? styles.rent : styles.expense}`}>
+                            {t.type === "rent" ? "Rent" : "Expense"}
+                          </span>
+                        </td>
+                        <td>
+                          {t.category && <div className={styles.categoryTag}>{t.category}</div>}
+                          {t.detail}
+                          {t.note && <div className={styles.note}>{t.note}</div>}
+                          {t.attachments.length > 0 && (
+                            <div className={styles.proofRow}>
+                              {t.attachments.map((a) => (
+                                <span key={a.id} className={styles.proofItem}>
+                                  <a href={a.url} target="_blank" rel="noopener noreferrer" title={a.filename}>
+                                    {a.contentType.startsWith("image/") ? (
+                                      // eslint-disable-next-line @next/next/no-img-element
+                                      <img src={a.url} alt={a.filename} className={styles.proofThumb} />
+                                    ) : (
+                                      <span className={styles.proofFile}>PDF</span>
+                                    )}
+                                  </a>
+                                  <button
+                                    type="button"
+                                    className={styles.proofRemove}
+                                    aria-label={`Remove ${a.filename}`}
+                                    onClick={() => removeAttachment(a.id)}
+                                  >
+                                    ×
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          {storageReady && (
+                            <label className={styles.proofAdd}>
+                              {uploadingFor === t.id
+                                ? "Uploading…"
+                                : t.attachments.length > 0
+                                  ? "+ Add another"
+                                  : "+ Attach proof"}
+                              <input
+                                type="file"
+                                multiple
+                                accept="image/*,application/pdf"
+                                hidden
+                                disabled={uploadingFor === t.id}
+                                onChange={(e) => {
+                                  addProofToRow(t.id, e.target.files);
+                                  e.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                          {proofError?.scope === t.id && (
+                            <div className={styles.proofWarn}>{proofError.message}</div>
+                          )}
+                        </td>
+                        <td className={`${styles.amt} num ${t.type === "rent" ? styles.pos : styles.neg}`}>
+                          {t.type === "rent" ? "+" : "−"}
+                          {fmt.format(t.amount)}
+                        </td>
+                        <td>
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small} ${styles.ghost} ${styles.rowDel}`}
+                            onClick={() => removeTransaction(t)}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             )}
           </section>
+
+          <div className={styles.fabSpace} aria-hidden="true" />
+          <button type="button" className={styles.fab} onClick={() => openRecord()} aria-label="Record a transaction">
+            <span aria-hidden="true">+</span> Record
+          </button>
         </>
       )}
-    </div>
+
+      <Modal
+        open={recording}
+        title="Record a transaction"
+        subtitle="Rent that came in, or money that went out on a repair or bill."
+        onClose={() => setRecording(false)}
+      >
+        <div className={`${styles.formCard} ${styles.formBare}`}>
+          <div className={styles.typeToggle}>
+            <button
+              type="button"
+              className={type === "rent" ? `${styles.active} ${styles.rent}` : ""}
+              onClick={() => setType("rent")}
+            >
+              Rent payment
+            </button>
+            <button
+              type="button"
+              className={type === "expense" ? `${styles.active} ${styles.expense}` : ""}
+              onClick={() => setType("expense")}
+            >
+              Repair / expense
+            </button>
+          </div>
+          <form onSubmit={onSubmit}>
+            <div className={`${styles.fieldGrid} ${styles.modalGrid}`}>
+              <div className={`${styles.field} ${styles.wide}`}>
+                <label htmlFor="f-property">Property</label>
+                <select
+                  id="f-property"
+                  required
+                  value={formTarget?.key ?? ""}
+                  onChange={(e) => setTargetKey(e.target.value)}
+                >
+                  {visibleTargets.length === 0 && <option value="">Add a property first</option>}
+                  {visibleTargets.map((t) => (
+                    <option key={t.key} value={t.key}>
+                      {t.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="f-date">Date</label>
+                <input id="f-date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
+              </div>
+              <div className={styles.field}>
+                <label htmlFor="f-amount">Amount ($)</label>
+                <input
+                  id="f-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  required
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+              {!isRent && (
+                <div className={`${styles.field} ${styles.wide}`}>
+                  <label htmlFor="f-category">Category</label>
+                  <select id="f-category" required value={category} onChange={(e) => setCategory(e.target.value)}>
+                    <option value="">Choose one</option>
+                    {EXPENSE_CATEGORIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className={`${styles.field} ${styles.wide}`}>
+                <label htmlFor="f-detail">{isRent ? "Paid by (tenant)" : "Description (optional)"}</label>
+                <input
+                  id="f-detail"
+                  type="text"
+                  placeholder={isRent ? "e.g. J. Alvarez" : "e.g. Fixed leaking kitchen faucet"}
+                  value={detail}
+                  onChange={(e) => setDetail(e.target.value)}
+                />
+              </div>
+              <div className={`${styles.field} ${styles.span3}`}>
+                <label htmlFor="f-note">Note (optional)</label>
+                <input
+                  id="f-note"
+                  type="text"
+                  placeholder={
+                    isRent ? "e.g. September rent, paid via check" : "e.g. Paid to Smith Plumbing, invoice #123"
+                  }
+                  value={note}
+                  onChange={(e) => setNote(e.target.value)}
+                />
+              </div>
+              <div className={`${styles.field} ${styles.span4}`}>
+                <label htmlFor="f-proof">{isRent ? "Proof of payment (optional)" : "Receipt or photo (optional)"}</label>
+                <input
+                  id="f-proof"
+                  ref={proofInput}
+                  type="file"
+                  multiple
+                  accept="image/*,application/pdf"
+                  className={styles.fileInput}
+                  disabled={!storageReady}
+                  onChange={(e) => setPendingProof(Array.from(e.target.files ?? []))}
+                />
+                {!storageReady && <span className={styles.proofWarn}>{STORAGE_HINT}</span>}
+                {storageReady && pendingProof.length > 0 && (
+                  <span className={styles.note}>
+                    {pendingProof.length} file{pendingProof.length === 1 ? "" : "s"} will be attached
+                  </span>
+                )}
+                {proofError?.scope === "form" && <span className={styles.proofWarn}>{proofError.message}</span>}
+              </div>
+            </div>
+            {error && <div className={styles.errorBar}>{error}</div>}
+            <div className={styles.formFoot}>
+              <button type="button" className={styles.btn} onClick={() => setRecording(false)}>
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className={`${styles.btn} ${styles.accent}`}
+                disabled={submitting || visibleTargets.length === 0}
+              >
+                {submitting ? "Saving…" : isRent ? "Add rent payment" : "Add expense"}
+              </button>
+            </div>
+          </form>
+        </div>
+      </Modal>
+
+      <ConfirmDialog request={confirming} onCancel={() => setConfirming(null)} />
+      <Toasts toasts={toasts} onDismiss={dismiss} />
+    </AppShell>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import AppShell from "../../components/AppShell";
 import styles from "../dashboard.module.css";
 
 type Counts = { companies: number; properties: number; units: number; recurring: number; transactions: number };
@@ -54,18 +55,10 @@ export default function BackupClient({ counts }: { counts: Counts }) {
   }
 
   return (
-    <div className={styles.page}>
-      <header className={styles.top}>
-        <div className={styles.brand}>
-          <h1>Backup</h1>
-          <div className={styles.tagline}>Download a copy of everything, or restore one back into the app.</div>
-        </div>
-        <div className={styles.userBar}>
-          <a href="/dashboard" className={styles.textLink}>
-            Back to dashboard
-          </a>
-        </div>
-      </header>
+    <AppShell
+      title="Backup"
+      tagline="Download a copy of everything, or restore one back into the app."
+    >
 
       {error && <div className={styles.errorBar}>{error}</div>}
       {result && <div className={styles.successBar}>{result}</div>}
@@ -113,6 +106,6 @@ export default function BackupClient({ counts }: { counts: Counts }) {
           {importing && <p className={styles.helpText}>Restoring…</p>}
         </div>
       </section>
-    </div>
+    </AppShell>
   );
 }

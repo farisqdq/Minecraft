@@ -50,6 +50,9 @@ function SignupForm() {
   return (
     <div className="authPage">
       <div className="authBrand">
+        <span className="authMark" aria-hidden="true">
+          R
+        </span>
         <h1>Rent Roll</h1>
         <p>Create an account to start tracking your properties.</p>
       </div>
