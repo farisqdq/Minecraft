@@ -37,8 +37,9 @@ export default function ExportClient({
           <div className={styles.formCard}>
             <p className={styles.helpText} style={{ marginTop: 0 }}>
               Produces a CSV with every rent payment and expense for the year, categorized the way a Schedule E is —
-              plus a summary block totaling rental income and each expense category. Hand it straight to an
-              accountant or open it in a spreadsheet.
+              plus a summary totalling rental income and each expense category — and, when the LLC owns more
+              than one house, the same breakdown per property, which is how Schedule E is filled in.
+              Hand it straight to an accountant or open it in a spreadsheet.
             </p>
             <div className={styles.twoCol}>
               <div className={styles.field}>
