@@ -10,6 +10,7 @@ import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money } from "@/lib/money";
+import { historyFor, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, smsHref, telHref } from "@/lib/lease";
 
@@ -72,6 +73,7 @@ export default function PropertyManageClient({
   initialUnits,
   initialRecurring,
   initialTenants,
+  rentChanges,
   transactions,
 }: {
   companyName: string;
@@ -80,6 +82,7 @@ export default function PropertyManageClient({
   initialUnits: Unit[];
   initialRecurring: RecurringExpense[];
   initialTenants: TenantDTO[];
+  rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
 }) {
   const router = useRouter();
@@ -351,6 +354,37 @@ export default function PropertyManageClient({
     });
   }
 
+  /**
+   * The rent trail for a place, newest first. Only rendered when there is
+   * one — most properties have never had a change, and an empty history is
+   * not worth a line of chrome.
+   */
+  function RentTrail({ unitId }: { unitId: string | null }) {
+    const history = historyFor(rentChanges, property.id, unitId);
+    if (history.length === 0) return null;
+
+    const asMonth = (key: string) => {
+      const [y, m] = key.split("-").map(Number);
+      // The backfilled row stands for "since before any of this was recorded".
+      if (y <= 1970) return "at first";
+      return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short", year: "numeric" });
+    };
+
+    // The current figure is already on screen beside this, so the trail
+    // starts at "since when" and only names the older amounts.
+    return (
+      <div className={styles.note}>
+        since {asMonth(history[0].effectiveFrom)}
+        {history.slice(1).map((c) => (
+          <span key={c.id}>
+            {" · "}
+            {money(c.amount)} {asMonth(c.effectiveFrom)}
+          </span>
+        ))}
+      </div>
+    );
+  }
+
   function unitLabel(unitId: string | null) {
     if (!unitId) return "Whole property";
     return units.find((u) => u.id === unitId)?.name ?? "—";
@@ -411,6 +445,14 @@ export default function PropertyManageClient({
     >
 
       {error && <div className={styles.errorBar}>{error}</div>}
+
+      {units.length === 0 && property.monthlyRent > 0 && (
+        <div className={styles.rentTrailRow}>
+          <span>Monthly rent</span>
+          <span className="num">{money(property.monthlyRent)}</span>
+          <RentTrail unitId={null} />
+        </div>
+      )}
 
       <section className={styles.kpis} aria-label="This property">
         <div className={`${styles.kpi} ${styles.rentKpi}`}>
@@ -643,6 +685,7 @@ export default function PropertyManageClient({
                     </td>
                     <td className="num" style={{ textAlign: "right" }}>
                       {money(u.monthlyRent)}
+                      <RentTrail unitId={u.id} />
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <button

@@ -1692,3 +1692,18 @@ tr:hover .rowDel {
   justify-content: center;
   margin-top: 12px;
 }
+
+.rentTrailRow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13.5px;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+
+.rentTrailRow .num {
+  color: var(--ink);
+  font-weight: 600;
+}
