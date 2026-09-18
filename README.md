@@ -9,7 +9,8 @@ data — safe to deploy publicly on Vercel.
 
 - **Next.js** (App Router) — pages and API routes
 - **NextAuth (Auth.js) v4** — email/password authentication, session cookies
-- **Prisma + PostgreSQL** — users, properties, and transactions
+- **Prisma + PostgreSQL** — users, properties, tenants, and transactions
+- **Vercel Blob** (optional) — proof photos and receipts
 
 ## Local setup
 
@@ -36,6 +37,17 @@ data — safe to deploy publicly on Vercel.
    ```
 6. Visit `http://localhost:3000` — you'll land on `/signup` to create the first account.
 
+Run the tests with:
+
+```
+npm test
+```
+
+They cover the parts where a quiet mistake costs money: how late rent is
+counted, what a place rented for in a given month, how amounts are rounded,
+and how the tax CSV is escaped. No test framework is installed — they run on
+Node's own test runner in about a second.
+
 ## Deploying to Vercel
 
 1. Import this repository into Vercel.
@@ -60,8 +72,11 @@ houses, ledger, and profit — nothing from your other LLCs.
 
 - The dashboard has a chip for each LLC you're on, plus an **All LLCs** view
   with a per-LLC profit rollup.
-- **Owners** can delete the LLC, create join codes, and change teammates'
-  roles. **Members** can record rent and expenses but can't manage the team.
+- **Owners** can delete the LLC, remove properties and units, create join
+  codes, and change teammates' roles. **Members** can record and correct rent
+  and expenses, add tenants, and edit property details — but can't delete a
+  property, a unit, or the LLC, and can't manage the team. Deleting a property
+  takes its whole ledger with it, which isn't a member's call to make.
 - Joining works by **code**: an owner creates one on the Team page (e.g.
   `K7P2-M9X4`) and sends it however they like. The other person signs in,
   enters it under "Join with a code" on the dashboard, and lands on that LLC.
@@ -71,48 +86,100 @@ houses, ledger, and profit — nothing from your other LLCs.
 - The last owner can't leave an LLC (that would strand it with nobody able to
   manage it) — either make someone else an owner first, or delete the LLC.
 
-## Deleting an LLC
+## Tenants and leases
 
-On the Team page, an owner can delete an LLC. This also deletes its
-properties and every ledger entry under it, for everyone on the team, so the
-confirmation asks you to type the LLC's name and tells you exactly how much
-history would go. Download a backup first if you might want those records.
+Each property — or each unit, in a building that has them — can have a
+tenant on file: name, phone, email, lease start and end, security deposit,
+and the day of the month their rent is due.
 
-## Backups
+That due day is what makes the dashboard able to say **"17 days late"**
+rather than just "unpaid", and the phone number puts **Call** and **Text**
+next to the amount owed, which is the whole point of storing it. A lease
+ending within 60 days — or one that has already run out — shows up in
+"Needs attention" alongside the unpaid rent, because a lease nobody noticed
+expiring is a vacancy waiting to happen.
 
-The **Backup** page downloads a single JSON file with every LLC, property,
-and ledger entry you can see, and restores one back into the app.
+Someone who moves out is kept as a **past tenant** rather than deleted, so
+their history and their old ledger entries still make sense and the next
+tenant is a new record rather than an overwrite.
 
-Restoring only ever **adds**. Each LLC in the file comes back as a new LLC you
-own; if the name is already taken, the restored copy is renamed (e.g.
-`Birchwood Holdings LLC (imported)`) so you can compare the two before
-removing either. Nothing is ever overwritten or deleted by an import.
+## Rent changes
 
-## Your data and app updates
+Rent goes up. The app records what a place rented for **and from when**, so
+raising the rent doesn't re-judge months already on the books.
 
-Schema changes ship as versioned migration files in `prisma/migrations`, and
-deploys run `prisma migrate deploy` — which only applies those files and never
-drops data to force the schema into shape. (An earlier version used
-`prisma db push --accept-data-loss`, which could silently destroy records on a
-schema change; that's gone.)
+Without that, putting the rent up from $1,450 to $1,550 would make every
+month a tenant had paid $1,450 read as $100 short — and the bulk "Mark all
+paid" would have offered to collect the difference. Instead, each month is
+measured against whatever the rent was *that* month.
 
-`prisma/baseline.js` runs first and handles one specific case: a database
-created before migrations existed has no migration history, so it marks the
-initial migration as already applied and lets later ones run normally on top.
-It no-ops once history exists.
+Nothing is asked of you: edit the rent as usual and the change is recorded
+from the current month. The property page shows the trail beside the rent
+("since Sep 2026 · $1,450 at first") so you can see what the app is using.
 
-When changing the schema, generate a migration rather than pushing:
+## Recording, correcting, and clearing a month
 
-```
-npx prisma migrate dev --name describe_the_change
-```
+- **Mark paid** on a late row logs the full outstanding amount in one tap,
+  dated in the month on screen, with the tenant's name on the entry. **Part
+  paid** opens the form instead, prefilled.
+- **Mark all N paid** and **Log all N bills** clear the whole month at once.
+  Both confirm first and name every line, since they write real money into
+  the books, and both post one entry per tenant or bill so any single one can
+  still be corrected.
+- **Edit** on a ledger row corrects an entry in place. Deleting and re-adding
+  would throw away the receipt attached to it, which is the one thing worth
+  keeping.
 
-## Legacy artifact version
+## Viewing by month, year, or all time
 
-`rent-roll/index.html` is an earlier, single-file version of this app built
-for Claude Artifacts (no login, no separate backend — data is stored by the
-Artifacts platform). It's kept for reference; the Next.js app above is the
-one meant for a real deployment.
+The dashboard opens on the current month: the totals, the charts, the
+per-property figures, and the ledger all cover that period, and the arrows
+page back through earlier ones. The switcher next to them changes the unit:
+
+- **Month** — one month at a time, as far back as your first entry.
+- **Year** — a whole tax year, with the change shown against the year before.
+- **All** — lifetime totals.
+
+Whatever the period, "Needs attention" and the rent-roll meter always describe
+one month, because chasing rent is a monthly job.
+
+**Searching.** The ledger's search box deliberately looks across *every*
+month, not the period on screen — being told there's nothing in September
+when the invoice was in March is the opposite of useful. It matches the
+property, description, note, category, date and amount, and shows what the
+matches total. Long ledgers render 60 rows at a time with a "Show more".
+
+## Units, categories, recurring expenses, exports
+
+**Units.** A property can be split into units on its own page — a
+duplex, triplex, or any building with more than one tenant. Each unit gets
+its own rent target and its own progress bar. Leave a property with no units
+and it's tracked as a single house, exactly as before.
+
+**Expense categories.** Every expense now picks a category (Repairs,
+Insurance, Property Tax, Mortgage Interest, HOA, Utilities, Management Fees,
+Supplies, Legal & Professional, Other) — the same buckets a Schedule E uses.
+
+**Who hasn't paid.** The dashboard lists any property or unit that's short
+on rent for the month you're viewing, with how much is owed. Mark a
+property or unit **vacant** (on its edit form) to leave it out of that list
+and hide its rent bar.
+
+**Recurring expenses.** Set up a mortgage, insurance, or HOA payment once on
+a property's page — amount, category, and a monthly or yearly
+schedule. Nothing posts itself: when one is due, it shows up on the
+dashboard for that month with a one-click **Log it** button that creates
+the transaction and marks it done for that period.
+
+**Tax-year export.** The **Export** page downloads a CSV for one LLC and
+one year — every transaction, a summary totalling rental income and each
+expense category, and, when the LLC owns more than one house, the same
+breakdown per property. Schedule E is filled in per property, so that last
+block is the one an accountant actually wants.
+
+Text going into the CSV is escaped so a note can't become a live formula in
+whoever's spreadsheet opens it. Amounts are left alone, so the columns still
+add up.
 
 ## Proof photos and receipts
 
@@ -138,39 +205,57 @@ Backups include links to the proof files rather than the files themselves. The
 files live in blob storage, so a restored backup re-links to the same images as
 long as that storage still exists.
 
-## Viewing by month
+## Installing it on a phone
 
-The dashboard opens on the current month: the totals, the per-property figures,
-and the ledger all cover that month, and the arrows page back through earlier
-months (as far back as your first entry). **All time** switches to lifetime
-totals. The rent bar always tracks whichever month you're viewing.
+Most of the logging happens standing in a doorway, so the app ships a web
+manifest and icons: **Add to Home Screen** gives it a real icon and opens it
+without browser chrome. The layout is built for a phone first — a bottom tab
+bar in thumb reach, the record form as a sheet that rises from the bottom,
+and the ledger as a card per entry rather than a table you scroll sideways.
 
-## Units, categories, recurring expenses, exports
+Dark mode follows the system setting.
 
-**Units.** A property can be split into units on its **Manage** page — a
-duplex, triplex, or any building with more than one tenant. Each unit gets
-its own rent target and its own progress bar. Leave a property with no units
-and it's tracked as a single house, exactly as before.
+## Backups
 
-**Expense categories.** Every expense now picks a category (Repairs,
-Insurance, Property Tax, Mortgage Interest, HOA, Utilities, Management Fees,
-Supplies, Legal & Professional, Other) — the same buckets a Schedule E uses.
+The **Backup** page downloads a single JSON file with every LLC, property,
+unit, tenant, recurring expense, rent change and ledger entry you can see,
+and restores one back into the app. Proof files are referenced by link rather
+than copied into the file.
 
-**Who hasn't paid.** The dashboard lists any property or unit that's short
-on rent for the month you're viewing, with how much is owed. Mark a
-property or unit **vacant** (on its edit form) to leave it out of that list
-and hide its rent bar.
+Restoring only ever **adds**. Each LLC in the file comes back as a new LLC you
+own; if the name is already taken, the restored copy is renamed (e.g.
+`Birchwood Holdings LLC (imported)`) so you can compare the two before
+removing either. Nothing is ever overwritten or deleted by an import.
 
-**Recurring expenses.** Set up a mortgage, insurance, or HOA payment once on
-a property's Manage page — amount, category, and a monthly or yearly
-schedule. Nothing posts itself: when one is due, it shows up on the
-dashboard for that month with a one-click **Log it** button that creates
-the transaction and marks it done for that period.
+## Your data and app updates
 
-**Tax-year export.** The **Export** page downloads a CSV for one LLC and
-one year — every transaction plus a summary block totaling rental income
-and each expense category. Hand it to an accountant or open it in a
-spreadsheet.
+Schema changes ship as versioned migration files in `prisma/migrations`, and
+deploys run `prisma migrate deploy` — which only applies those files and never
+drops data to force the schema into shape. (An earlier version used
+`prisma db push --accept-data-loss`, which could silently destroy records on a
+schema change; that's gone.)
 
-Backups now include units, per-unit and per-property recurring expenses,
-expense categories, and vacancy status — restoring one recreates all of it.
+`prisma/baseline.js` runs first and handles one specific case: a database
+created before migrations existed has no migration history, so it marks the
+initial migration as already applied and lets later ones run normally on top.
+It no-ops once history exists.
+
+When changing the schema, generate a migration rather than pushing:
+
+```
+npx prisma migrate dev --name describe_the_change
+```
+
+## Deleting an LLC
+
+On the Team page, an owner can delete an LLC. This also deletes its
+properties and every ledger entry under it, for everyone on the team, so the
+confirmation asks you to type the LLC's name and tells you exactly how much
+history would go. Download a backup first if you might want those records.
+
+## Legacy artifact version
+
+`rent-roll/index.html` is an earlier, single-file version of this app built
+for Claude Artifacts (no login, no separate backend — data is stored by the
+Artifacts platform). It's kept for reference; the Next.js app above is the
+one meant for a real deployment.
