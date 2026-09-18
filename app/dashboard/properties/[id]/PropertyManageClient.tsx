@@ -9,6 +9,7 @@ import Modal from "../../../components/Modal";
 import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
+import { money } from "@/lib/money";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, smsHref, telHref } from "@/lib/lease";
 
@@ -39,12 +40,6 @@ type RecurringExpense = {
   active: boolean;
 };
 
-const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
-const fmtRound = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 0,
-});
 const MONTHS = [
   "January", "February", "March", "April", "May", "June",
   "July", "August", "September", "October", "November", "December",
@@ -420,19 +415,19 @@ export default function PropertyManageClient({
       <section className={styles.kpis} aria-label="This property">
         <div className={`${styles.kpi} ${styles.rentKpi}`}>
           <div className={styles.kpiLabel}>Rent, last 12 months</div>
-          <div className={`${styles.kpiValue} num`}>{fmtRound.format(lastTwelve.rent)}</div>
+          <div className={`${styles.kpiValue} num`}>{money(lastTwelve.rent)}</div>
           <div className={styles.kpiFoot}>
             <span className={styles.delta}>
-              <span className={styles.deltaNote}>{fmtRound.format(lifetime.rent)} all time</span>
+              <span className={styles.deltaNote}>{money(lifetime.rent)} all time</span>
             </span>
           </div>
         </div>
         <div className={`${styles.kpi} ${styles.expenseKpi}`}>
           <div className={styles.kpiLabel}>Spent, last 12 months</div>
-          <div className={`${styles.kpiValue} num`}>{fmtRound.format(lastTwelve.expense)}</div>
+          <div className={`${styles.kpiValue} num`}>{money(lastTwelve.expense)}</div>
           <div className={styles.kpiFoot}>
             <span className={styles.delta}>
-              <span className={styles.deltaNote}>{fmtRound.format(lifetime.expense)} all time</span>
+              <span className={styles.deltaNote}>{money(lifetime.expense)} all time</span>
             </span>
           </div>
         </div>
@@ -440,13 +435,13 @@ export default function PropertyManageClient({
           <div className={styles.kpiLabel}>Net, last 12 months</div>
           <div className={`${styles.kpiValue} num ${lastTwelve.net >= 0 ? styles.pos : styles.neg}`}>
             {lastTwelve.net < 0 ? "\u2212" : ""}
-            {fmtRound.format(Math.abs(lastTwelve.net))}
+            {money(Math.abs(lastTwelve.net))}
           </div>
           <div className={styles.kpiFoot}>
             <span className={styles.delta}>
               <span className={styles.deltaNote}>
                 {lifetime.net < 0 ? "\u2212" : ""}
-                {fmtRound.format(Math.abs(lifetime.net))} all time
+                {money(Math.abs(lifetime.net))} all time
               </span>
             </span>
           </div>
@@ -463,7 +458,7 @@ export default function PropertyManageClient({
         <div className={styles.blockHead}>
           <h2>Tenants</h2>
           <span className={styles.count}>
-            {depositsHeld > 0 ? `${fmt.format(depositsHeld)} in deposits held` : ""}
+            {depositsHeld > 0 ? `${money(depositsHeld)} in deposits held` : ""}
           </span>
         </div>
         <p className={styles.helpText} style={{ marginTop: 0 }}>
@@ -491,15 +486,15 @@ export default function PropertyManageClient({
                       : styles.bill;
               return (
                 <div key={t.id} className={`${styles.tenantCard} ${t.active ? "" : styles.pastTenant}`}>
-                  <div className={styles.propHead}>
-                    <div style={{ minWidth: 0 }}>
-                      <div className={styles.name}>{t.name}</div>
-                      <div className={styles.addr}>
-                        {t.unitId ? unitLabel(t.unitId) : "Whole property"} · rent due on the{" "}
-                        {ordinal(t.dueDay)}
-                      </div>
+                  <div className={styles.tenantHead}>
+                    <div className={styles.tenantName}>
+                      <span className={styles.name}>{t.name}</span>
+                      <span className={`${styles.pill} ${tone}`}>{status.label}</span>
                     </div>
-                    <span className={`${styles.pill} ${tone}`}>{status.label}</span>
+                    <div className={styles.addr}>
+                      {t.unitId ? unitLabel(t.unitId) : "Whole property"} · rent due on the{" "}
+                      {ordinal(t.dueDay)}
+                    </div>
                   </div>
 
                   {(t.phone || t.email) && (
@@ -529,7 +524,7 @@ export default function PropertyManageClient({
                     </div>
                     <div className={styles.figure}>
                       <span className={styles.figureLabel}>Deposit</span>
-                      <span className={styles.figureValue}>{fmt.format(t.deposit)}</span>
+                      <span className={styles.figureValue}>{money(t.deposit)}</span>
                     </div>
                   </div>
 
@@ -538,21 +533,21 @@ export default function PropertyManageClient({
                   <div className={styles.propActions}>
                     <button
                       type="button"
-                      className={`${styles.btn} ${styles.small}`}
+                      className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                       onClick={() => openTenant(t)}
                     >
                       Edit
                     </button>
                     <button
                       type="button"
-                      className={`${styles.btn} ${styles.small}`}
+                      className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                       onClick={() => setTenantActive(t, !t.active)}
                     >
                       {t.active ? "Moved out" : "Moved back in"}
                     </button>
                     <button
                       type="button"
-                      className={`${styles.btn} ${styles.small} ${styles.ghost}`}
+                      className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`}
                       onClick={() => removeTenant(t)}
                     >
                       Delete
@@ -647,7 +642,7 @@ export default function PropertyManageClient({
                       {u.vacant && <span className={styles.vacantTag}>Vacant</span>}
                     </td>
                     <td className="num" style={{ textAlign: "right" }}>
-                      {fmt.format(u.monthlyRent)}
+                      {money(u.monthlyRent)}
                     </td>
                     <td style={{ textAlign: "right" }}>
                       <button
@@ -744,7 +739,7 @@ export default function PropertyManageClient({
                   </td>
                   <td>{unitLabel(r.unitId)}</td>
                   <td>{scheduleLabel(r)}</td>
-                  <td className={`${styles.amt} num ${styles.neg}`}>{fmt.format(r.amount)}</td>
+                  <td className={`${styles.amt} num ${styles.neg}`}>{money(r.amount)}</td>
                   <td style={{ textAlign: "right" }}>
                     <button
                       type="button"
@@ -929,7 +924,7 @@ export default function PropertyManageClient({
                     </td>
                     <td className={`${styles.amt} num ${t.type === "rent" ? styles.pos : styles.neg}`}>
                       {t.type === "rent" ? "+" : "\u2212"}
-                      {fmtRound.format(t.amount)}
+                      {money(t.amount)}
                     </td>
                   </tr>
                 ))}

@@ -206,6 +206,16 @@
     padding: 18px 16px calc(84px + env(safe-area-inset-bottom));
   }
 
+  .pageHead {
+    margin-bottom: 16px;
+  }
+
+  /* When the page's actions are hidden on a phone, this wrapper would still
+     wrap onto its own empty line and push the content down. */
+  .headActions {
+    display: contents;
+  }
+
   .tabBar {
     position: fixed;
     left: 0;

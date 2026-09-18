@@ -74,12 +74,14 @@ export function leaseStatus(tenant: LeaseLike, now = today()) {
   if (!tenant.active) return { kind: "past" as const, label: "Past", days: null };
   const days = daysUntilLeaseEnd(tenant.leaseEnd, now);
   if (days === null) return { kind: "ok" as const, label: "Current", days: null };
+  // Kept short: these sit in a pill beside a name, and the row or card around
+  // them already says it's a lease.
   if (days < 0) return { kind: "expired" as const, label: "Lease ended", days };
-  if (days === 0) return { kind: "ending" as const, label: "Lease ends today", days };
+  if (days === 0) return { kind: "ending" as const, label: "Ends today", days };
   if (days <= LEASE_WARNING_DAYS) {
     return {
       kind: "ending" as const,
-      label: days === 1 ? "Lease ends tomorrow" : `Lease ends in ${days} days`,
+      label: days === 1 ? "Ends tomorrow" : `Ends in ${days} days`,
       days,
     };
   }

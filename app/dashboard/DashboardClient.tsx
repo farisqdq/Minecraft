@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
+import { money } from "@/lib/money";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref } from "@/lib/lease";
 import AppShell from "../components/AppShell";
@@ -82,8 +83,6 @@ type Target = {
   vacant: boolean;
 };
 
-const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
-const fmtFull = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const fmtDate = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 type PeriodKind = "month" | "year" | "all";
@@ -671,7 +670,7 @@ export default function DashboardClient({
   function removeTransaction(t: Transaction) {
     setConfirming({
       title: "Delete this entry?",
-      body: `${t.type === "rent" ? "Rent" : "Expense"} of ${fmtFull.format(t.amount)} on ${fmtDate(
+      body: `${t.type === "rent" ? "Rent" : "Expense"} of ${money(t.amount)} on ${fmtDate(
         t.date
       )} for ${targetLabel(t)}. Any proof attached to it is deleted too.`,
       confirmLabel: "Delete entry",
@@ -819,7 +818,7 @@ export default function DashboardClient({
     if (!uploadFailed) {
       setRecording(false);
       push(
-        `${type === "rent" ? "Rent" : "Expense"} of ${fmtFull.format(amt)} recorded for ${formTarget.label}.`
+        `${type === "rent" ? "Rent" : "Expense"} of ${money(amt)} recorded for ${formTarget.label}.`
       );
     }
   }
@@ -838,7 +837,7 @@ export default function DashboardClient({
     const good = up === upIsGood;
     return (
       <span className={`${styles.delta} ${good ? styles.good : styles.bad}`}>
-        {up ? "↑" : "↓"} {fmt.format(Math.abs(change))}{" "}
+        {up ? "↑" : "↓"} {money(Math.abs(change))}{" "}
         <span className={styles.deltaNote}>vs {previous.label}</span>
       </span>
     );
@@ -873,7 +872,11 @@ export default function DashboardClient({
       userLabel={userLabel}
       actions={
         companies.length > 0 ? (
-          <button type="button" className={`${styles.btn} ${styles.accent}`} onClick={() => openRecord()}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.accent} ${styles.desktopOnly}`}
+            onClick={() => openRecord()}
+          >
             + Record a transaction
           </button>
         ) : undefined
@@ -1017,7 +1020,7 @@ export default function DashboardClient({
           <section className={styles.kpis} aria-label="Totals">
             <div className={`${styles.kpi} ${styles.rentKpi}`}>
               <div className={styles.kpiLabel}>Rent collected</div>
-              <div className={`${styles.kpiValue} num`}>{fmtFull.format(overall.rent)}</div>
+              <div className={`${styles.kpiValue} num`}>{money(overall.rent)}</div>
               <div className={styles.kpiFoot}>
                 {deltaFor(overall.rent, previous?.rent, true) ?? (
                   <span className={styles.delta}>
@@ -1034,7 +1037,7 @@ export default function DashboardClient({
 
             <div className={`${styles.kpi} ${styles.expenseKpi}`}>
               <div className={styles.kpiLabel}>Repairs &amp; expenses</div>
-              <div className={`${styles.kpiValue} num`}>{fmtFull.format(overall.expense)}</div>
+              <div className={`${styles.kpiValue} num`}>{money(overall.expense)}</div>
               <div className={styles.kpiFoot}>
                 {deltaFor(overall.expense, previous?.expense, false) ?? (
                   <span className={styles.delta}>
@@ -1053,7 +1056,7 @@ export default function DashboardClient({
               <div className={styles.kpiLabel}>Net profit</div>
               <div className={`${styles.kpiValue} num ${overall.net >= 0 ? styles.pos : styles.neg}`}>
                 {overall.net >= 0 ? "" : "−"}
-                {fmtFull.format(Math.abs(overall.net))}
+                {money(Math.abs(overall.net))}
               </div>
               <div className={styles.kpiFoot}>
                 {deltaFor(overall.net, previous?.net, true) ?? (
@@ -1075,8 +1078,8 @@ export default function DashboardClient({
               <div className={styles.collectTop}>
                 <span className={styles.collectTitle}>{monthName(barMonth)} rent roll</span>
                 <span className={`${styles.collectFigure} num`}>
-                  {fmt.format(collection.collected)}{" "}
-                  <span className={styles.of}>of {fmt.format(collection.expected)}</span>
+                  {money(collection.collected)}{" "}
+                  <span className={styles.of}>of {money(collection.expected)}</span>
                 </span>
               </div>
               <div className={styles.bigBar}>
@@ -1142,25 +1145,25 @@ export default function DashboardClient({
                         <div className={styles.attnSub}>
                           {tenant ? `${target.label} · ` : ""}
                           {paid > 0
-                            ? `${fmt.format(paid)} of ${fmt.format(target.monthlyRent)} paid so far`
-                            : `Nothing received of ${fmt.format(target.monthlyRent)}`}
+                            ? `${money(paid)} of ${money(target.monthlyRent)} paid so far`
+                            : `Nothing received of ${money(target.monthlyRent)}`}
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} ${late > 0 ? styles.neg : styles.due} num`}>
-                        {fmt.format(target.monthlyRent - paid)}
+                        {money(target.monthlyRent - paid)}
                       </span>
                       <div className={styles.attnActions}>
                         {tenant?.phone && (
                           <>
                             <a
-                              className={`${styles.btn} ${styles.small}`}
+                              className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                               href={telHref(tenant.phone)}
                               aria-label={`Call ${tenant.name}`}
                             >
                               Call
                             </a>
                             <a
-                              className={`${styles.btn} ${styles.small}`}
+                              className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                               href={smsHref(tenant.phone)}
                               aria-label={`Text ${tenant.name}`}
                             >
@@ -1203,7 +1206,10 @@ export default function DashboardClient({
                       </div>
                       <div className={styles.attnActions}>
                         {tenant.phone && (
-                          <a className={`${styles.btn} ${styles.small}`} href={telHref(tenant.phone)}>
+                          <a
+                            className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                            href={telHref(tenant.phone)}
+                          >
                             Call
                           </a>
                         )}
@@ -1227,11 +1233,11 @@ export default function DashboardClient({
                           {r.detail || `${r.frequency === "monthly" ? "Monthly" : "Yearly"} bill, not logged yet`}
                         </div>
                       </div>
-                      <span className={`${styles.attnAmt} ${styles.neg} num`}>{fmt.format(r.amount)}</span>
+                      <span className={`${styles.attnAmt} ${styles.neg} num`}>{money(r.amount)}</span>
                       <div className={styles.attnActions}>
                         <button
                           type="button"
-                          className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                          className={`${styles.btn} ${styles.small}`}
                           disabled={recurringBusyId === r.id}
                           onClick={() => logRecurring(r.id)}
                         >
@@ -1273,11 +1279,11 @@ export default function DashboardClient({
                           </button>
                         </td>
                         <td>{row.count}</td>
-                        <td className={`${styles.amt} num ${styles.pos}`}>{fmt.format(row.rent)}</td>
-                        <td className={`${styles.amt} num ${styles.neg}`}>{fmt.format(row.expense)}</td>
+                        <td className={`${styles.amt} num ${styles.pos}`}>{money(row.rent)}</td>
+                        <td className={`${styles.amt} num ${styles.neg}`}>{money(row.expense)}</td>
                         <td className={`${styles.amt} num ${row.net >= 0 ? styles.pos : styles.neg}`}>
                           {row.net >= 0 ? "" : "−"}
-                          {fmt.format(Math.abs(row.net))}
+                          {money(Math.abs(row.net))}
                         </td>
                       </tr>
                     ))}
@@ -1318,7 +1324,7 @@ export default function DashboardClient({
                 if (propUnits.length === 0) {
                   if (p.vacant) status = { text: "Vacant", tone: styles.vacant };
                   else if (paidInFull) status = { text: "Paid", tone: styles.paid };
-                  else if (target > 0) status = { text: `${fmt.format(target - paidThisMonth)} short`, tone: styles.owed };
+                  else if (target > 0) status = { text: `${money(target - paidThisMonth)} short`, tone: styles.owed };
                 } else if (rentedUnits.length > 0) {
                   status =
                     unitsPaid === rentedUnits.length
@@ -1426,7 +1432,7 @@ export default function DashboardClient({
                                 <span className={styles.vacantTag}>Vacant</span>
                               ) : uTarget > 0 ? (
                                 <span className={`num ${uFull ? styles.pos : styles.unitDue}`}>
-                                  {uFull ? "Paid in full" : `${fmt.format(uPaid)} of ${fmt.format(uTarget)}`}
+                                  {uFull ? "Paid in full" : `${money(uPaid)} of ${money(uTarget)}`}
                                 </span>
                               ) : (
                                 <span className={styles.note}>No rent set</span>
@@ -1439,7 +1445,7 @@ export default function DashboardClient({
                       <>
                         <div className={styles.rentLine}>
                           <span>Monthly rent</span>
-                          <span className="num">{fmt.format(target)}</span>
+                          <span className="num">{money(target)}</span>
                         </div>
                         {!p.vacant && target > 0 && (
                           <div>
@@ -1454,7 +1460,7 @@ export default function DashboardClient({
                               <span className={`num ${paidInFull ? styles.pos : ""}`}>
                                 {paidInFull
                                   ? "Paid in full"
-                                  : `${fmt.format(paidThisMonth)} of ${fmt.format(target)}`}
+                                  : `${money(paidThisMonth)} of ${money(target)}`}
                               </span>
                             </div>
                           </div>
@@ -1465,11 +1471,11 @@ export default function DashboardClient({
                     <div className={styles.propFigures}>
                       <div className={styles.figure}>
                         <span className={styles.figureLabel}>In</span>
-                        <span className={`${styles.figureValue} ${styles.pos} num`}>{fmt.format(t.rent)}</span>
+                        <span className={`${styles.figureValue} ${styles.pos} num`}>{money(t.rent)}</span>
                       </div>
                       <div className={styles.figure}>
                         <span className={styles.figureLabel}>Out</span>
-                        <span className={`${styles.figureValue} ${styles.neg} num`}>{fmt.format(t.expense)}</span>
+                        <span className={`${styles.figureValue} ${styles.neg} num`}>{money(t.expense)}</span>
                       </div>
                       <div className={styles.figure}>
                         <span className={styles.figureLabel}>Net</span>
@@ -1477,25 +1483,28 @@ export default function DashboardClient({
                           className={`${styles.figureValue} ${t.net >= 0 ? styles.pos : styles.neg} num`}
                         >
                           {t.net >= 0 ? "" : "−"}
-                          {fmt.format(Math.abs(t.net))}
+                          {money(Math.abs(t.net))}
                         </span>
                       </div>
                     </div>
 
                     <div className={styles.propActions}>
+                      <Link
+                        href={`/dashboard/properties/${p.id}`}
+                        className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                      >
+                        Open
+                      </Link>
                       <button
                         type="button"
-                        className={`${styles.btn} ${styles.small}`}
+                        className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                         onClick={() => startEditProperty(p)}
                       >
                         Edit
                       </button>
-                      <Link href={`/dashboard/properties/${p.id}`} className={`${styles.btn} ${styles.small}`}>
-                        Units &amp; bills
-                      </Link>
                       <button
                         type="button"
-                        className={`${styles.btn} ${styles.small} ${styles.ghost}`}
+                        className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`}
                         onClick={() => removeProperty(p)}
                       >
                         Remove
@@ -1630,9 +1639,9 @@ export default function DashboardClient({
                   &ldquo;{query.trim()}&rdquo; across all time
                 </span>
                 <span className="num">
-                  {searchTotals.rent > 0 && <>+{fmt.format(searchTotals.rent)} in</>}
+                  {searchTotals.rent > 0 && <>+{money(searchTotals.rent)} in</>}
                   {searchTotals.rent > 0 && searchTotals.expense > 0 && " · "}
-                  {searchTotals.expense > 0 && <>−{fmt.format(searchTotals.expense)} out</>}
+                  {searchTotals.expense > 0 && <>−{money(searchTotals.expense)} out</>}
                 </span>
               </div>
             )}
@@ -1723,7 +1732,7 @@ export default function DashboardClient({
                         </td>
                         <td className={`${styles.amt} num ${t.type === "rent" ? styles.pos : styles.neg}`}>
                           {t.type === "rent" ? "+" : "−"}
-                          {fmt.format(t.amount)}
+                          {money(t.amount)}
                         </td>
                         <td>
                           <button

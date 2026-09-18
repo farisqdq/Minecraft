@@ -8,11 +8,7 @@
   justify-content: space-between;
   gap: 12px 18px;
   flex-wrap: wrap;
-  padding: 10px 14px;
-  background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-sm);
+  padding: 0;
 }
 
 .companyBar {
@@ -163,7 +159,6 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 28px;
-  box-shadow: var(--shadow);
   max-width: 560px;
 }
 
@@ -180,13 +175,11 @@
 }
 
 .ownerTag {
-  display: inline-block;
-  margin-top: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--gold);
+  display: block;
+  margin-top: 3px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
 }
 
 .vacantTag {
@@ -231,11 +224,9 @@
 
 .categoryTag {
   display: block;
-  font-size: 11px;
+  font-size: 11.5px;
   font-weight: 600;
   color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
   margin-bottom: 2px;
 }
 
@@ -530,16 +521,15 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 11px;
-  transition: box-shadow var(--fast), border-color var(--fast);
+  transition: border-color var(--fast), background var(--fast);
 }
 
 .propCard:hover {
   border-color: var(--line-strong);
-  box-shadow: var(--shadow-lg);
+  background: var(--surface-2);
 }
 
 .propCard .name {
@@ -612,10 +602,11 @@
 
 .propActions {
   display: flex;
-  gap: 8px;
+  gap: 2px;
   flex-wrap: wrap;
-  margin-top: auto;
-  padding-top: 4px;
+  align-items: center;
+  margin: auto -6px -4px;
+  padding-top: 2px;
 }
 
 .addCard {
@@ -644,27 +635,28 @@
   padding: 8px 14px;
   font-size: 13.5px;
   font-weight: 500;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   transition: border-color var(--fast), background var(--fast), opacity var(--fast);
 }
 .btn:hover {
   border-color: var(--ink);
 }
+/* One primary colour across the app: green means "this is the action".
+   Ink stays reserved for selection states (the active LLC chip, the period
+   toggle), so a selected thing never looks like a button to press. */
+.btn.primary,
 .btn.accent {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
 }
+.btn.primary:hover,
 .btn.accent:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
-}
-.btn.primary {
-  background: var(--ink);
-  color: var(--bg);
-  border-color: var(--ink);
-}
-.btn.primary:hover {
-  opacity: 0.88;
 }
 .btn.ghost {
   border-color: transparent;
@@ -675,8 +667,34 @@
   color: var(--expense);
 }
 .btn.small {
-  padding: 5px 10px;
-  font-size: 12px;
+  padding: 6px 11px;
+  font-size: 12.5px;
+  min-height: 32px;
+}
+
+/* No border at rest; the hover fill is the affordance. */
+.btn.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--ink-2);
+}
+
+.btn.quiet:hover {
+  border-color: transparent;
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.btn.quiet.danger,
+.btn.quiet.danger:hover {
+  background: transparent;
+  color: var(--muted);
+  border-color: transparent;
+}
+
+.btn.quiet.danger:hover {
+  background: var(--expense-soft);
+  color: var(--expense);
 }
 .btn[disabled] {
   opacity: 0.5;
@@ -688,7 +706,6 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 20px;
-  box-shadow: var(--shadow);
 }
 
 /* Inside a modal the card chrome is the modal's own. */
@@ -749,11 +766,9 @@
   grid-column: span 4;
 }
 .field label {
-  font-size: 12px;
+  font-size: 12.5px;
   color: var(--muted);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  font-weight: 500;
 }
 .field input,
 .field select {
@@ -834,7 +849,6 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: var(--shadow);
 }
 .ledger {
   width: 100%;
@@ -850,13 +864,11 @@
 .ledger th {
   text-align: left;
   font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   color: var(--muted);
   font-weight: 600;
-  padding: 12px 16px;
+  padding: 11px 16px;
   border-bottom: 1px solid var(--line);
-  background: var(--surface-2);
 }
 .ledger td {
   padding: 12px 16px;
@@ -900,10 +912,10 @@ tr:hover .rowDel {
   opacity: 1;
 }
 .emptyState {
-  padding: 40px 20px;
+  padding: 26px 20px;
   text-align: center;
   color: var(--muted);
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 .note {
@@ -918,7 +930,6 @@ tr:hover .rowDel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 18px;
 }
 
@@ -934,45 +945,16 @@ tr:hover .rowDel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 15px 16px 12px;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  position: relative;
-  overflow: hidden;
-}
-
-/* A hairline of the series colour along the top edge ties the card to its
-   colour in the chart below without tinting the numbers themselves. */
-.kpi::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: var(--line-strong);
-}
-
-.kpi.rentKpi::before {
-  background: var(--accent);
-}
-
-.kpi.expenseKpi::before {
-  background: var(--expense);
-}
-
-.kpi.netKpi::before {
-  background: var(--gold);
 }
 
 .kpiLabel {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 13px;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .kpiValue {
@@ -1034,7 +1016,6 @@ tr:hover .rowDel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 16px 18px;
 }
 
@@ -1048,11 +1029,9 @@ tr:hover .rowDel {
 }
 
 .collectTitle {
-  font-size: 11.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  font-size: 13px;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .collectFigure {
@@ -1119,7 +1098,6 @@ tr:hover .rowDel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
-  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
@@ -1170,11 +1148,9 @@ tr:hover .rowDel {
 .pill {
   display: inline-block;
   white-space: nowrap;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
   border-radius: 999px;
   vertical-align: middle;
 }
@@ -1235,7 +1211,7 @@ tr:hover .rowDel {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
-  padding: 10px 0 2px;
+  padding: 11px 0 3px;
   border-top: 1px solid var(--line);
 }
 
@@ -1247,11 +1223,9 @@ tr:hover .rowDel {
 }
 
 .figureLabel {
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  font-size: 11.5px;
   color: var(--muted);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .figureValue {
@@ -1446,7 +1420,6 @@ tr:hover .rowDel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px;
-  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 11px;
@@ -1496,7 +1469,7 @@ tr:hover .rowDel {
   display: grid;
   grid-template-columns: 1fr auto;
   gap: 8px 12px;
-  padding-top: 10px;
+  padding-top: 11px;
   border-top: 1px solid var(--line);
 }
 
@@ -1597,13 +1570,13 @@ tr:hover .rowDel {
   flex-wrap: wrap;
 }
 
-/* The tenant is who you act on; the unit is where they are. So the name
-   leads and the address plays second. */
+/* The tenant is who you act on, so their name sits in full-strength ink
+   while the owning LLC below it recedes. */
 .tenantLine {
-  font-size: 12.5px;
+  font-size: 13px;
   font-weight: 600;
-  color: var(--accent);
-  margin-top: 4px;
+  color: var(--ink);
+  margin-top: 5px;
 }
 
 .unitTenant {
@@ -1627,4 +1600,73 @@ tr:hover .rowDel {
   .ledgerControls select {
     flex: 1 1 calc(50% - 4px);
   }
+}
+
+/* ---------- Phone density ----------
+   Three full-height stat cards pushed everything actionable below the fold.
+   On a phone they collapse into one panel of three rows: label and value on
+   a line, the change underneath. The sparkline steps aside — the cash flow
+   chart immediately below already shows the trend, at a size worth reading. */
+@media (max-width: 720px) {
+  .kpis {
+    gap: 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+
+  .kpi {
+    border: none;
+    border-radius: 0;
+    border-bottom: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: baseline;
+    gap: 0 12px;
+    padding: 12px 14px;
+  }
+
+  .kpi:last-child {
+    border-bottom: none;
+  }
+
+  .kpiValue {
+    grid-column: 2;
+    grid-row: 1;
+    font-size: 21px;
+    margin-top: 0;
+  }
+
+  .kpiFoot {
+    grid-column: 1 / -1;
+    margin-top: 3px;
+  }
+
+  .kpiSpark {
+    display: none;
+  }
+
+  /* The floating button does this job on a phone; two of them on one screen
+     is one too many. */
+  .desktopOnly {
+    display: none;
+  }
+}
+
+/* A tenant's name and their lease status belong on the same line; the unit
+   and due day are a caption under both, so a long status pill can't squeeze
+   the caption into a three-line column. */
+.tenantHead {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.tenantName {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
 }
