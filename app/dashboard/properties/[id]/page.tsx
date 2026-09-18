@@ -18,6 +18,11 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   const property = await requireProperty(userId, id);
   if (!property) notFound();
 
+  const membership = await prisma.companyMember.findUnique({
+    where: { companyId_userId: { companyId: property.companyId, userId } },
+    select: { role: true },
+  });
+
   const [company, units, recurring, tenants, rentChanges, transactions] = await Promise.all([
     prisma.company.findUnique({ where: { id: property.companyId }, select: { name: true } }),
     prisma.unit.findMany({ where: { propertyId: id }, orderBy: { createdAt: "asc" } }),
@@ -40,6 +45,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   return (
     <PropertyManageClient
       companyName={company?.name ?? ""}
+      canManage={membership?.role === "owner"}
       serverToday={isoDay(new Date())}
       property={{
         id: property.id,

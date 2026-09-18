@@ -71,6 +71,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!(await requireUnit(userId, id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  // Cascades to the unit's tenants and rent history.
+  if (!(await requireUnit(userId, id, "owner"))) {
+    return NextResponse.json({ error: "Only an owner of this LLC can remove a unit." }, { status: 403 });
+  }
 
   await prisma.unit.delete({ where: { id } });
   return NextResponse.json({ ok: true });

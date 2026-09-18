@@ -1526,6 +1526,10 @@ export default function DashboardClient({
                 const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
                 const paidInFull = target > 0 && paidThisMonth >= target;
                 const owner = companies.find((c) => c.id === p.companyId);
+                // Members can record and correct; only an owner can remove a
+                // house and the ledger under it, so don't offer them a button
+                // that will come back refused.
+                const canRemove = owner?.role === "owner";
                 const houseTenant = propUnits.length === 0 ? tenantFor(p.id, null) : null;
 
                 // One glanceable state per card: vacant, all paid, or how many
@@ -1718,13 +1722,15 @@ export default function DashboardClient({
                       >
                         Edit
                       </button>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`}
-                        onClick={() => removeProperty(p)}
-                      >
-                        Remove
-                      </button>
+                      {canRemove && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`}
+                          onClick={() => removeProperty(p)}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
                   </div>
                 );

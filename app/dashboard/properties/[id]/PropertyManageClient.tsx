@@ -68,6 +68,7 @@ const EMPTY_TENANT = {
 
 export default function PropertyManageClient({
   companyName,
+  canManage,
   serverToday,
   property,
   initialUnits,
@@ -77,6 +78,8 @@ export default function PropertyManageClient({
   transactions,
 }: {
   companyName: string;
+  /** Owners can remove units; members record against them. */
+  canManage: boolean;
   serverToday: string;
   property: Property;
   initialUnits: Unit[];
@@ -697,13 +700,15 @@ export default function PropertyManageClient({
                       </button>
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.small} ${styles.ghost}`}
-                        onClick={() => removeUnit(u)}
-                      >
-                        Remove
-                      </button>
+                      {canManage && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.ghost}`}
+                          onClick={() => removeUnit(u)}
+                        >
+                          Remove
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

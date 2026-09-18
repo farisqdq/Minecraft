@@ -16,19 +16,25 @@ export async function requireCompany(userId: string, companyId: string, role: Ro
   return membership;
 }
 
-/** A property the user can reach through one of their company teams. */
-export async function requireProperty(userId: string, propertyId: string) {
+/**
+ * A property the user can reach through one of their company teams.
+ *
+ * `role` raises the bar: the team page promises a member can "record rent and
+ * expenses" while only an owner "can also invite and delete", so anything that
+ * destroys records other people rely on asks for "owner".
+ */
+export async function requireProperty(userId: string, propertyId: string, role: Role = "member") {
   const property = await prisma.property.findUnique({ where: { id: propertyId } });
   if (!property) return null;
-  const membership = await getMembership(userId, property.companyId);
+  const membership = await requireCompany(userId, property.companyId, role);
   return membership ? property : null;
 }
 
 /** A unit the user can reach through one of their company teams. */
-export async function requireUnit(userId: string, unitId: string) {
+export async function requireUnit(userId: string, unitId: string, role: Role = "member") {
   const unit = await prisma.unit.findUnique({ where: { id: unitId }, include: { property: true } });
   if (!unit) return null;
-  const membership = await getMembership(userId, unit.property.companyId);
+  const membership = await requireCompany(userId, unit.property.companyId, role);
   return membership ? unit : null;
 }
 

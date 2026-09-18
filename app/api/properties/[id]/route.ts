@@ -71,8 +71,15 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
+  // Two checks, so "there is no such property" and "you may not delete this
+  // one" don't come back as the same answer.
   if (!(await requireProperty(userId, id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  // Removing a property takes its whole ledger, units, tenants, recurring
+  // bills and rent history with it. That is not "record rent and expenses".
+  if (!(await requireProperty(userId, id, "owner"))) {
+    return NextResponse.json({ error: "Only an owner of this LLC can remove a property." }, { status: 403 });
   }
 
   await prisma.property.delete({ where: { id } });
