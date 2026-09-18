@@ -5,6 +5,7 @@ import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money } from "@/lib/money";
+import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref } from "@/lib/lease";
 import AppShell from "../components/AppShell";
@@ -123,6 +124,7 @@ export default function DashboardClient({
   initialProperties,
   initialUnits,
   initialRecurring,
+  initialRentChanges,
   initialTenants,
   initialTransactions,
 }: {
@@ -133,6 +135,7 @@ export default function DashboardClient({
   initialProperties: Property[];
   initialUnits: Unit[];
   initialRecurring: RecurringExpense[];
+  initialRentChanges: RentChangeDTO[];
   initialTenants: TenantDTO[];
   initialTransactions: Transaction[];
 }) {
@@ -156,6 +159,7 @@ export default function DashboardClient({
   const [units, setUnits] = useState<Unit[]>(initialUnits);
   const [recurring, setRecurring] = useState<RecurringExpense[]>(initialRecurring);
   const tenants = initialTenants;
+  const [rentChanges, setRentChanges] = useState<RentChangeDTO[]>(initialRentChanges);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
 
   const [selectedCompany, setSelectedCompany] = useState<string>(
@@ -388,6 +392,15 @@ export default function DashboardClient({
     return { key, label, ...totalsFor(null, prior) };
   }, [visibleTransactions, selectedMonth, selectedYear, periodKind]);
 
+  /**
+   * What this place was renting for in a given month, which is not always
+   * what it rents for today. Judging a past month against the current figure
+   * would make a year of correctly paid rent read as short after a raise.
+   */
+  function expectedRent(target: { propertyId: string; unitId: string | null; monthlyRent: number }, month: string) {
+    return rentForMonth(rentChanges, target.propertyId, target.unitId, month, target.monthlyRent);
+  }
+
   function rentInMonth(propertyId: string, unitId: string | null, month: string) {
     return transactions
       .filter(
@@ -405,11 +418,12 @@ export default function DashboardClient({
   // reason to check this every month instead of clicking through each card.
   const unpaidThisMonth = useMemo(() => {
     return visibleTargets
-      .filter((t) => !t.vacant && t.monthlyRent > 0)
+      .filter((t) => !t.vacant && expectedRent(t, barMonth) > 0)
       .map((t) => {
         const tenant = tenantFor(t.propertyId, t.unitId);
         return {
           target: t,
+          expected: expectedRent(t, barMonth),
           paid: rentInMonth(t.propertyId, t.unitId, barMonth),
           tenant,
           // Only a month that has actually started can be late, so a future
@@ -417,13 +431,10 @@ export default function DashboardClient({
           late: tenant ? Math.max(0, daysLate(barMonth, tenant.dueDay, now)) : 0,
         };
       })
-      .filter(({ target, paid }) => paid < target.monthlyRent)
+      .filter(({ expected, paid }) => paid < expected)
       // Longest overdue first, then by how much is outstanding.
-      .sort(
-        (a, b) =>
-          b.late - a.late || b.target.monthlyRent - b.paid - (a.target.monthlyRent - a.paid)
-      );
-  }, [visibleTargets, transactions, barMonth, tenants, now]);
+      .sort((a, b) => b.late - a.late || b.expected - b.paid - (a.expected - a.paid));
+  }, [visibleTargets, transactions, barMonth, tenants, now, rentChanges]);
 
   // How far through the month's rent roll we are. Each unit's contribution is
   // capped at what it owes, so one tenant paying double can't hide another
@@ -434,15 +445,16 @@ export default function DashboardClient({
     let paidCount = 0;
     let dueCount = 0;
     for (const t of visibleTargets) {
-      if (t.vacant || t.monthlyRent <= 0) continue;
+      const due = expectedRent(t, barMonth);
+      if (t.vacant || due <= 0) continue;
       const paid = rentInMonth(t.propertyId, t.unitId, barMonth);
-      expected += t.monthlyRent;
-      collected += Math.min(paid, t.monthlyRent);
+      expected += due;
+      collected += Math.min(paid, due);
       dueCount += 1;
-      if (paid >= t.monthlyRent) paidCount += 1;
+      if (paid >= due) paidCount += 1;
     }
     return { expected, collected, paidCount, dueCount };
-  }, [visibleTargets, transactions, barMonth]);
+  }, [visibleTargets, transactions, barMonth, rentChanges]);
 
   // Recurring templates due this billing period that haven't been logged yet.
   const dueRecurring = useMemo(() => {
@@ -585,11 +597,11 @@ export default function DashboardClient({
   function markAllPaid() {
     const rows = unpaidThisMonth;
     if (rows.length === 0) return;
-    const total = rows.reduce((sum, r) => sum + (r.target.monthlyRent - r.paid), 0);
+    const total = rows.reduce((sum, r) => sum + (r.expected - r.paid), 0);
     setConfirming({
       title: `Record ${money(total)} of rent?`,
       body: `One entry per tenant, dated in ${monthName(barMonth)}, for the full amount each still owes: ${rows
-        .map((r) => `${r.tenant?.name ?? r.target.label} ${money(r.target.monthlyRent - r.paid)}`)
+        .map((r) => `${r.tenant?.name ?? r.target.label} ${money(r.expected - r.paid)}`)
         .join(", ")}.`,
       confirmLabel: `Record ${rows.length} payments`,
       onConfirm: async () => {
@@ -597,7 +609,7 @@ export default function DashboardClient({
         let done = 0;
         let failed = 0;
         for (const r of rows) {
-          const result = await postRent(r.target, r.target.monthlyRent - r.paid, r.tenant?.name);
+          const result = await postRent(r.target, r.expected - r.paid, r.tenant?.name);
           if (result.ok) done += 1;
           else failed += 1;
         }
@@ -751,7 +763,19 @@ export default function DashboardClient({
       return;
     }
 
-    setProperties((prev) => prev.map((p) => (p.id === editingPropertyId ? { ...p, ...data } : p)));
+    // rentChanges rides along on the response but isn't part of the property.
+    const { rentChanges: updatedHistory, ...propertyFields } = data as Property & {
+      rentChanges?: RentChangeDTO[];
+    };
+    setProperties((prev) =>
+      prev.map((p) => (p.id === editingPropertyId ? { ...p, ...propertyFields } : p))
+    );
+    if (updatedHistory) {
+      setRentChanges((prev) => [
+        ...prev.filter((c) => !(c.propertyId === editingPropertyId && c.unitId === null)),
+        ...updatedHistory,
+      ]);
+    }
     setEditingPropertyId("");
     push("Changes saved.");
   }
@@ -1311,7 +1335,7 @@ export default function DashboardClient({
                 </div>
               ) : (
                 <div className={styles.attnList}>
-                  {unpaidThisMonth.map(({ target, paid, tenant, late }) => (
+                  {unpaidThisMonth.map(({ target, expected, paid, tenant, late }) => (
                     <div key={`u-${target.key}`} className={styles.attnRow}>
                       <div className={styles.attnMain}>
                         <div className={styles.attnLabel}>
@@ -1327,12 +1351,12 @@ export default function DashboardClient({
                         <div className={styles.attnSub}>
                           {tenant ? `${target.label} · ` : ""}
                           {paid > 0
-                            ? `${money(paid)} of ${money(target.monthlyRent)} paid so far`
-                            : `Nothing received of ${money(target.monthlyRent)}`}
+                            ? `${money(paid)} of ${money(expected)} paid so far`
+                            : `Nothing received of ${money(expected)}`}
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} ${late > 0 ? styles.neg : styles.due} num`}>
-                        {money(target.monthlyRent - paid)}
+                        {money(expected - paid)}
                       </span>
                       <div className={styles.attnActions}>
                         {tenant?.phone && (
@@ -1360,7 +1384,7 @@ export default function DashboardClient({
                             openRecord({
                               type: "rent",
                               targetKey: target.key,
-                              amount: target.monthlyRent - paid,
+                              amount: expected - paid,
                             })
                           }
                         >
@@ -1370,7 +1394,7 @@ export default function DashboardClient({
                           type="button"
                           className={`${styles.btn} ${styles.small} ${styles.primary}`}
                           disabled={markingKey === target.key}
-                          onClick={() => markPaid(target, target.monthlyRent - paid, tenant?.name)}
+                          onClick={() => markPaid(target, expected - paid, tenant?.name)}
                         >
                           {markingKey === target.key ? "Saving…" : "Mark paid"}
                         </button>
@@ -1497,7 +1521,7 @@ export default function DashboardClient({
                 const ids = new Set([p.id]);
                 const t = totalsFor(ids, inScopeTransactions);
                 const propUnits = unitsForProperty(p.id);
-                const target = p.monthlyRent || 0;
+                const target = expectedRent({ propertyId: p.id, unitId: null, monthlyRent: p.monthlyRent }, barMonth);
                 const paidThisMonth = rentInBarMonth(p.id);
                 const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
                 const paidInFull = target > 0 && paidThisMonth >= target;
@@ -1506,9 +1530,11 @@ export default function DashboardClient({
 
                 // One glanceable state per card: vacant, all paid, or how many
                 // units are still short this month.
-                const rentedUnits = propUnits.filter((u) => !u.vacant && u.monthlyRent > 0);
+                const unitRent = (u: Unit) =>
+                  expectedRent({ propertyId: p.id, unitId: u.id, monthlyRent: u.monthlyRent }, barMonth);
+                const rentedUnits = propUnits.filter((u) => !u.vacant && unitRent(u) > 0);
                 const unitsPaid = rentedUnits.filter(
-                  (u) => rentInMonth(p.id, u.id, barMonth) >= u.monthlyRent
+                  (u) => rentInMonth(p.id, u.id, barMonth) >= unitRent(u)
                 ).length;
                 let status: { text: string; tone: string } | null = null;
                 if (propUnits.length === 0) {
@@ -1609,7 +1635,7 @@ export default function DashboardClient({
                       <div className={styles.unitList}>
                         {propUnits.map((u) => {
                           const uPaid = rentInMonth(p.id, u.id, barMonth);
-                          const uTarget = u.monthlyRent || 0;
+                          const uTarget = unitRent(u);
                           const uFull = uTarget > 0 && uPaid >= uTarget;
                           const uTenant = tenantFor(p.id, u.id);
                           return (

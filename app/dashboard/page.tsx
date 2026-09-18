@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { blobConfigured } from "@/lib/blob";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
+import { monthKeyOf } from "@/lib/rent";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
@@ -22,7 +23,7 @@ export default async function DashboardPage() {
   });
   const companyIds = memberships.map((m) => m.companyId);
 
-  const [properties, units, recurring, tenants, transactions] = await Promise.all([
+  const [properties, units, recurring, rentChanges, tenants, transactions] = await Promise.all([
     prisma.property.findMany({
       where: { companyId: { in: companyIds } },
       orderBy: { createdAt: "asc" },
@@ -34,6 +35,10 @@ export default async function DashboardPage() {
     prisma.recurringExpense.findMany({
       where: { property: { companyId: { in: companyIds } } },
       orderBy: { createdAt: "asc" },
+    }),
+    prisma.rentChange.findMany({
+      where: { property: { companyId: { in: companyIds } } },
+      orderBy: { effectiveFrom: "asc" },
     }),
     prisma.tenant.findMany({
       where: { property: { companyId: { in: companyIds } }, active: true },
@@ -83,6 +88,13 @@ export default async function DashboardPage() {
         day: r.day,
         month: r.month,
         active: r.active,
+      }))}
+      initialRentChanges={rentChanges.map((c) => ({
+        id: c.id,
+        propertyId: c.propertyId,
+        unitId: c.unitId,
+        effectiveFrom: monthKeyOf(c.effectiveFrom),
+        amount: c.amount,
       }))}
       initialTenants={tenants.map(serializeTenant)}
       initialTransactions={transactions.map((t) => ({

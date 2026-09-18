@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireUnit } from "@/lib/access";
+import { monthKeyOf, recordRentChange } from "@/lib/rent";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!(await requireUnit(userId, id))) {
+  const existing = await requireUnit(userId, id);
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -31,8 +33,34 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     data.vacant = Boolean(body.vacant);
   }
 
-  const unit = await prisma.unit.update({ where: { id }, data });
-  return NextResponse.json(unit);
+  const unit = await prisma.$transaction(async (tx) => {
+    if (data.monthlyRent !== undefined) {
+      await recordRentChange(tx, {
+        propertyId: existing.propertyId,
+        unitId: id,
+        from: existing.monthlyRent,
+        to: data.monthlyRent,
+        month: monthKeyOf(new Date()),
+        userId,
+      });
+    }
+    return tx.unit.update({ where: { id }, data });
+  });
+  const rentChanges = await prisma.rentChange.findMany({
+    where: { propertyId: existing.propertyId, unitId: id },
+    orderBy: { effectiveFrom: "asc" },
+  });
+
+  return NextResponse.json({
+    ...unit,
+    rentChanges: rentChanges.map((c) => ({
+      id: c.id,
+      propertyId: c.propertyId,
+      unitId: c.unitId,
+      effectiveFrom: monthKeyOf(c.effectiveFrom),
+      amount: c.amount,
+    })),
+  });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {

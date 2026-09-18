@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
+import { monthKeyOf, recordRentChange } from "@/lib/rent";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!(await requireProperty(userId, id))) {
+  const existing = await requireProperty(userId, id);
+  if (!existing) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -31,8 +33,37 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   };
   if (body?.vacant !== undefined) data.vacant = Boolean(body.vacant);
 
-  const property = await prisma.property.update({ where: { id }, data });
-  return NextResponse.json({ ...property, address: property.address ?? "" });
+  // The rent change and the property update land together, so the books can
+  // never show a new rent with no record of when it started.
+  const property = await prisma.$transaction(async (tx) => {
+    await recordRentChange(tx, {
+      propertyId: id,
+      unitId: null,
+      from: existing.monthlyRent,
+      to: monthlyRent,
+      month: monthKeyOf(new Date()),
+      userId,
+    });
+    return tx.property.update({ where: { id }, data });
+  });
+  // The client judges past months against this history, so hand back what
+  // now applies rather than leaving it working from a pre-edit copy.
+  const rentChanges = await prisma.rentChange.findMany({
+    where: { propertyId: id, unitId: null },
+    orderBy: { effectiveFrom: "asc" },
+  });
+
+  return NextResponse.json({
+    ...property,
+    address: property.address ?? "",
+    rentChanges: rentChanges.map((c) => ({
+      id: c.id,
+      propertyId: c.propertyId,
+      unitId: c.unitId,
+      effectiveFrom: monthKeyOf(c.effectiveFrom),
+      amount: c.amount,
+    })),
+  });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {

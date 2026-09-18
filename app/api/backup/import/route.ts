@@ -13,6 +13,7 @@ const MAX_UNITS = 5000;
 const MAX_TRANSACTIONS = 50000;
 const MAX_RECURRING = 5000;
 const MAX_TENANTS = 5000;
+const MAX_RENT_CHANGES = 20000;
 
 type CleanAttachment = { url: string; filename: string; contentType: string; size: number };
 type CleanTransaction = {
@@ -45,6 +46,7 @@ type CleanTenant = {
   active: boolean;
   note: string | null;
 };
+type CleanRentChange = { effectiveFrom: Date; amount: number };
 type CleanUnit = {
   name: string;
   monthlyRent: number;
@@ -52,6 +54,7 @@ type CleanUnit = {
   transactions: CleanTransaction[];
   recurringExpenses: CleanRecurring[];
   tenants: CleanTenant[];
+  rentChanges: CleanRentChange[];
 };
 type CleanProperty = {
   name: string;
@@ -61,6 +64,7 @@ type CleanProperty = {
   transactions: CleanTransaction[];
   recurringExpenses: CleanRecurring[];
   tenants: CleanTenant[];
+  rentChanges: CleanRentChange[];
   units: CleanUnit[];
 };
 type CleanCompany = { name: string; properties: CleanProperty[] };
@@ -92,6 +96,7 @@ function parseBackup(raw: unknown) {
   let transactionTotal = 0;
   let recurringTotal = 0;
   let tenantTotal = 0;
+  let rentChangeTotal = 0;
 
   function parseTransactions(raw: unknown): CleanTransaction[] {
     const out: CleanTransaction[] = [];
@@ -178,6 +183,21 @@ function parseBackup(raw: unknown) {
     return out;
   }
 
+  function parseRentChanges(raw: unknown): CleanRentChange[] {
+    const out: CleanRentChange[] = [];
+    for (const rawC of Array.isArray(raw) ? raw : []) {
+      const c = (rawC ?? {}) as Record<string, unknown>;
+      const effectiveFrom = day(c.effectiveFrom);
+      const amount = num(c.amount);
+      // A zero is a real rent (a place taken off the market), but a missing
+      // date is not a history entry at all.
+      if (!effectiveFrom) continue;
+      if (++rentChangeTotal > MAX_RENT_CHANGES) throw new Error("That backup is too large to import.");
+      out.push({ effectiveFrom, amount });
+    }
+    return out;
+  }
+
   const companies: CleanCompany[] = [];
   for (const rawCompany of body.companies) {
     const c = (rawCompany ?? {}) as Record<string, unknown>;
@@ -205,6 +225,7 @@ function parseBackup(raw: unknown) {
           transactions: parseTransactions(u.transactions),
           recurringExpenses: parseRecurring(u.recurringExpenses),
           tenants: parseTenants(u.tenants),
+          rentChanges: parseRentChanges(u.rentChanges),
         });
       }
 
@@ -216,6 +237,7 @@ function parseBackup(raw: unknown) {
         transactions: parseTransactions(p.transactions),
         recurringExpenses: parseRecurring(p.recurringExpenses),
         tenants: parseTenants(p.tenants),
+        rentChanges: parseRentChanges(p.rentChanges),
         units,
       });
     }
@@ -224,7 +246,15 @@ function parseBackup(raw: unknown) {
   }
 
   if (companies.length === 0) throw new Error("That backup has no LLCs in it.");
-  return { companies, propertyTotal, unitTotal, transactionTotal, recurringTotal, tenantTotal };
+  return {
+    companies,
+    propertyTotal,
+    unitTotal,
+    transactionTotal,
+    recurringTotal,
+    tenantTotal,
+    rentChangeTotal,
+  };
 }
 
 export async function POST(req: Request) {
@@ -268,6 +298,7 @@ export async function POST(req: Request) {
     attachments: 0,
     recurring: 0,
     tenants: 0,
+    rentChanges: 0,
   };
 
   async function createTransactions(
@@ -347,6 +378,19 @@ export async function POST(req: Request) {
     created.tenants += tenants.length;
   }
 
+  async function createRentChanges(
+    tx: Tx,
+    propertyId: string,
+    unitId: string | null,
+    changes: CleanRentChange[]
+  ) {
+    if (changes.length === 0) return;
+    await tx.rentChange.createMany({
+      data: changes.map((c) => ({ ...c, propertyId, unitId, createdById: userId })),
+    });
+    created.rentChanges += changes.length;
+  }
+
   await prisma.$transaction(async (tx) => {
     for (const company of parsed.companies) {
       const record = await tx.company.create({
@@ -370,6 +414,7 @@ export async function POST(req: Request) {
         await createTransactions(tx, prop.id, null, property.transactions);
         await createRecurring(tx, prop.id, null, property.recurringExpenses);
         await createTenants(tx, prop.id, null, property.tenants);
+        await createRentChanges(tx, prop.id, null, property.rentChanges);
 
         for (const unit of property.units) {
           const u = await tx.unit.create({
@@ -385,6 +430,7 @@ export async function POST(req: Request) {
           await createTransactions(tx, prop.id, u.id, unit.transactions);
           await createRecurring(tx, prop.id, u.id, unit.recurringExpenses);
           await createTenants(tx, prop.id, u.id, unit.tenants);
+          await createRentChanges(tx, prop.id, u.id, unit.rentChanges);
         }
       }
     }

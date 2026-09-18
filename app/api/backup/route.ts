@@ -4,7 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 3;
+export const BACKUP_VERSION = 4;
 
 type TxnRow = {
   type: string;
@@ -85,6 +85,13 @@ function serializeTenants(rows: TenantRow[]) {
   }));
 }
 
+function serializeRentChanges(rows: { effectiveFrom: Date; amount: number }[]) {
+  return rows.map((c) => ({
+    effectiveFrom: c.effectiveFrom.toISOString().slice(0, 10),
+    amount: c.amount,
+  }));
+}
+
 export async function GET() {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -103,6 +110,7 @@ export async function GET() {
           },
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
           tenants: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
+          rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
           units: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -112,6 +120,7 @@ export async function GET() {
               },
               recurringExpenses: { orderBy: { createdAt: "asc" } },
               tenants: { orderBy: { createdAt: "asc" } },
+              rentChanges: { orderBy: { effectiveFrom: "asc" } },
             },
           },
         },
@@ -134,6 +143,7 @@ export async function GET() {
         transactions: serializeTxns(p.transactions),
         recurringExpenses: serializeRecurring(p.recurringExpenses),
         tenants: serializeTenants(p.tenants),
+        rentChanges: serializeRentChanges(p.rentChanges),
         units: p.units.map((u) => ({
           name: u.name,
           monthlyRent: u.monthlyRent,
@@ -141,6 +151,7 @@ export async function GET() {
           transactions: serializeTxns(u.transactions),
           recurringExpenses: serializeRecurring(u.recurringExpenses),
           tenants: serializeTenants(u.tenants),
+          rentChanges: serializeRentChanges(u.rentChanges),
         })),
       })),
     })),

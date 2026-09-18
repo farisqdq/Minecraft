@@ -21,6 +21,7 @@ model User {
   uploadedAttachments Attachment[]
   createdRecurring    RecurringExpense[]
   createdTenants      Tenant[]
+  RentChange          RentChange[]
 }
 
 model Company {
@@ -79,6 +80,7 @@ model Property {
   transactions      Transaction[]
   recurringExpenses RecurringExpense[]
   tenants           Tenant[]
+  rentChanges       RentChange[]
 
   @@index([companyId])
 }
@@ -98,6 +100,7 @@ model Unit {
   transactions      Transaction[]
   recurringExpenses RecurringExpense[]
   tenants           Tenant[]
+  rentChanges       RentChange[]
 
   @@index([propertyId])
 }
@@ -107,6 +110,28 @@ model Unit {
 // "who's in the house right now" — a tenant who moves out is kept with
 // active = false so their history and their old ledger entries still make
 // sense, and the next tenant is a new row.
+// What a place rented for, and from when. Without this, raising the rent
+// would re-judge every month already on the books against the new figure —
+// a year of correctly paid rent would suddenly read as short. A row is
+// written whenever the rent changes; months before the earliest row fall
+// back to whatever the property or unit currently says.
+model RentChange {
+  id            String   @id @default(cuid())
+  propertyId    String
+  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unitId        String?
+  unit          Unit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  // Always the first day of the month the amount takes effect.
+  effectiveFrom DateTime
+  amount        Float
+  createdById   String?
+  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime @default(now())
+
+  @@index([propertyId])
+  @@index([unitId])
+}
+
 model Tenant {
   id          String    @id @default(cuid())
   propertyId  String
