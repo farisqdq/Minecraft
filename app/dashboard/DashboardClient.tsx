@@ -185,6 +185,7 @@ export default function DashboardClient({
   const [recording, setRecording] = useState(false);
   const [editingTxnId, setEditingTxnId] = useState("");
   const [markingKey, setMarkingKey] = useState("");
+  const [bulkBusy, setBulkBusy] = useState<"" | "rent" | "bills">("");
   const [type, setType] = useState<"rent" | "expense">("rent");
   const [targetKey, setTargetKey] = useState("");
   const [date, setDate] = useState(serverToday);
@@ -503,6 +504,18 @@ export default function DashboardClient({
 
   const searchTotals = useMemo(() => totalsFor(null, rows), [rows]);
 
+  // A few years in, "All time" is thousands of rows and the browser renders
+  // every one of them before the page settles. Show a page at a time; the
+  // period switcher and the search box are the real ways to narrow things.
+  const LEDGER_PAGE = 60;
+  const [ledgerLimit, setLedgerLimit] = useState(LEDGER_PAGE);
+  useEffect(() => {
+    setLedgerLimit(LEDGER_PAGE);
+  }, [search, filterProperty, filterType, scopeKey, selectedCompany]);
+
+  const visibleRows = rows.slice(0, ledgerLimit);
+  const hiddenRows = rows.length - visibleRows.length;
+
   const activeCompany = companies.find((c) => c.id === selectedCompany) ?? null;
 
   const isRent = type === "rent";
@@ -531,8 +544,7 @@ export default function DashboardClient({
    * A mistake is fixable from the ledger, where the entry can be edited or
    * deleted.
    */
-  async function markPaid(target: Target, owed: number, tenantName?: string) {
-    setMarkingKey(target.key);
+  async function postRent(target: Target, owed: number, tenantName?: string) {
     const res = await fetch("/api/transactions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -547,13 +559,53 @@ export default function DashboardClient({
       }),
     });
     const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false as const, error: data?.error as string | undefined };
+    setTransactions((prev) => [...prev, { ...data, attachments: [] }]);
+    return { ok: true as const };
+  }
+
+  async function markPaid(target: Target, owed: number, tenantName?: string) {
+    setMarkingKey(target.key);
+    const result = await postRent(target, owed, tenantName);
     setMarkingKey("");
-    if (!res.ok) {
-      push(data?.error || "Couldn't record that payment.", "bad");
+    if (!result.ok) {
+      push(result.error || "Couldn't record that payment.", "bad");
       return;
     }
-    setTransactions((prev) => [...prev, { ...data, attachments: [] }]);
     push(`${money(owed)} recorded for ${tenantName ?? target.label}.`);
+  }
+
+  /**
+   * The same thing for every tenant who owes, because on the 3rd of the month
+   * most of them have paid and clearing them one row at a time is the bulk of
+   * the work. Confirmed first — it writes real money into the books — and it
+   * posts one entry per tenant, so any single one can still be edited or
+   * removed afterwards.
+   */
+  function markAllPaid() {
+    const rows = unpaidThisMonth;
+    if (rows.length === 0) return;
+    const total = rows.reduce((sum, r) => sum + (r.target.monthlyRent - r.paid), 0);
+    setConfirming({
+      title: `Record ${money(total)} of rent?`,
+      body: `One entry per tenant, dated in ${monthName(barMonth)}, for the full amount each still owes: ${rows
+        .map((r) => `${r.tenant?.name ?? r.target.label} ${money(r.target.monthlyRent - r.paid)}`)
+        .join(", ")}.`,
+      confirmLabel: `Record ${rows.length} payments`,
+      onConfirm: async () => {
+        setBulkBusy("rent");
+        let done = 0;
+        let failed = 0;
+        for (const r of rows) {
+          const result = await postRent(r.target, r.target.monthlyRent - r.paid, r.tenant?.name);
+          if (result.ok) done += 1;
+          else failed += 1;
+        }
+        setBulkBusy("");
+        if (failed > 0) push(`Recorded ${done}; ${failed} didn't save. Check the ledger.`, "bad");
+        else push(`${money(total)} recorded across ${done} ${done === 1 ? "tenant" : "tenants"}.`);
+      },
+    });
   }
 
   /** Opens the same sheet over an existing entry, to correct it in place. */
@@ -815,6 +867,37 @@ export default function DashboardClient({
     }
     setTransactions((prev) => [...prev, { ...data, attachments: [] }]);
     push("Logged to the ledger.");
+  }
+
+  /** Every recurring bill due this period, logged in one go. */
+  function logAllRecurring() {
+    const rows = dueRecurring;
+    if (rows.length === 0) return;
+    const total = rows.reduce((sum, r) => sum + r.amount, 0);
+    setConfirming({
+      title: `Log ${money(total)} of bills?`,
+      body: `Adds ${rows.length} ${rows.length === 1 ? "entry" : "entries"} for ${monthName(
+        barMonth
+      )}: ${rows.map((r) => `${r.category} ${money(r.amount)}`).join(", ")}.`,
+      confirmLabel: `Log ${rows.length} bills`,
+      onConfirm: async () => {
+        setBulkBusy("bills");
+        let failed = 0;
+        for (const r of rows) {
+          const res = await fetch(`/api/recurring/${r.id}/log`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ month: barMonth }),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (res.ok) setTransactions((prev) => [...prev, { ...data, attachments: [] }]);
+          else failed += 1;
+        }
+        setBulkBusy("");
+        if (failed > 0) push(`${failed} of ${rows.length} bills didn't log.`, "bad");
+        else push(`${money(total)} of bills logged for ${monthName(barMonth, false)}.`);
+      },
+    });
   }
 
   async function onSubmit(e: React.FormEvent) {
@@ -1187,11 +1270,36 @@ export default function DashboardClient({
           <section className={styles.block}>
               <div className={styles.blockHead}>
                 <h2>Needs attention — {monthName(barMonth, false)}</h2>
-                {attentionCount > 0 && (
-                  <span className={styles.count}>
-                    {attentionCount} {attentionCount === 1 ? "item" : "items"}
-                  </span>
-                )}
+                <div className={styles.headTools}>
+                  {attentionCount > 0 && (
+                    <span className={styles.count}>
+                      {attentionCount} {attentionCount === 1 ? "item" : "items"}
+                    </span>
+                  )}
+                  {/* Only worth offering once there's more than one of a thing
+                      to clear — with a single row the per-row button is fewer
+                      taps and needs no confirming. */}
+                  {unpaidThisMonth.length > 1 && (
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.small}`}
+                      disabled={bulkBusy !== ""}
+                      onClick={markAllPaid}
+                    >
+                      {bulkBusy === "rent" ? "Recording…" : `Mark all ${unpaidThisMonth.length} paid`}
+                    </button>
+                  )}
+                  {dueRecurring.length > 1 && (
+                    <button
+                      type="button"
+                      className={`${styles.btn} ${styles.small}`}
+                      disabled={bulkBusy !== ""}
+                      onClick={logAllRecurring}
+                    >
+                      {bulkBusy === "bills" ? "Logging…" : `Log all ${dueRecurring.length} bills`}
+                    </button>
+                  )}
+                </div>
               </div>
 
               {attentionCount === 0 ? (
@@ -1751,7 +1859,7 @@ export default function DashboardClient({
                     </tr>
                   </thead>
                   <tbody>
-                    {rows.map((t) => (
+                    {visibleRows.map((t) => (
                       <tr key={t.id}>
                         <td>{fmtDate(t.date)}</td>
                         <td>{targetLabel(t)}</td>
@@ -1838,6 +1946,20 @@ export default function DashboardClient({
                     ))}
                   </tbody>
                 </table>
+              </div>
+            )}
+            {hiddenRows > 0 && (
+              <div className={styles.moreRow}>
+                <button
+                  type="button"
+                  className={styles.btn}
+                  onClick={() => setLedgerLimit((n) => n + LEDGER_PAGE)}
+                >
+                  Show {Math.min(hiddenRows, LEDGER_PAGE)} more
+                </button>
+                <span className={styles.count}>
+                  {visibleRows.length} of {rows.length} entries
+                </span>
               </div>
             )}
           </section>

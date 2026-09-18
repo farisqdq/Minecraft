@@ -1677,3 +1677,18 @@ tr:hover .rowDel {
   justify-content: flex-end;
   white-space: nowrap;
 }
+
+.headTools {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.moreRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 12px;
+}

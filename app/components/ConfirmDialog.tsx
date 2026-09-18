@@ -8,6 +8,8 @@ export type ConfirmRequest = {
   title: string;
   body: string;
   confirmLabel: string;
+  /** Overrides the cancel wording; defaults to what fits the tone below. */
+  cancelLabel?: string;
   danger?: boolean;
   onConfirm: () => void;
 };
@@ -29,7 +31,8 @@ export default function ConfirmDialog({
     <Modal open title={request.title} subtitle={request.body} onClose={onCancel} narrow>
       <div className={styles.confirmActions}>
         <button type="button" className={dash.btn} onClick={onCancel}>
-          Keep it
+          {/* "Keep it" only makes sense opposite a delete. */}
+          {request.cancelLabel ?? (request.danger ? "Keep it" : "Cancel")}
         </button>
         <button
           type="button"
