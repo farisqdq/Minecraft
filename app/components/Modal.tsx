@@ -27,6 +27,17 @@ export default function Modal({
   const restoreTo = useRef<HTMLElement | null>(null);
   const titleId = useId();
 
+  // Callers write onClose inline (`onClose={() => setOpen(false)}`), so its
+  // identity changes on every render of the parent. Keeping it in a ref lets
+  // the setup effect below depend on `open` alone. When it depended on
+  // onClose too, every keystroke in the form re-ran the whole effect, which
+  // pulled focus back to the first field — so on a phone the keyboard closed
+  // after each character and you had to tap the box again to type the next.
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
+
   useEffect(() => {
     if (!open) return;
 
@@ -35,22 +46,21 @@ export default function Modal({
     document.body.style.overflow = "hidden";
 
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") onCloseRef.current();
     }
     document.addEventListener("keydown", onKey);
 
-    // Prefer the first real control so a phone keyboard lands somewhere useful.
-    const first = panel.current?.querySelector<HTMLElement>(
-      "input:not([type=hidden]), select, textarea, button"
-    );
-    (first ?? panel.current)?.focus();
+    // Move focus into the dialog so it's the thing being read and typed into,
+    // but land on the panel rather than the first field: opening a sheet
+    // shouldn't throw a keyboard up before anyone has asked for one.
+    panel.current?.focus();
 
     return () => {
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
       restoreTo.current?.focus?.();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
 
