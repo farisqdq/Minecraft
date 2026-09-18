@@ -75,7 +75,7 @@ export default function PropertyManageClient({
   initialRecurring,
   initialTenants,
   rentChanges,
-  transactions,
+  transactions: initialTransactions,
 }: {
   companyName: string;
   /** Owners can remove units; members record against them. */
@@ -99,12 +99,25 @@ export default function PropertyManageClient({
   }, [serverToday]);
   const now = useMemo(() => dateFromISO(todayKey), [todayKey]);
 
+  const [transactions, setTransactions] = useState<LedgerEntry[]>(initialTransactions);
   const [units, setUnits] = useState<Unit[]>(initialUnits);
   const [recurring, setRecurring] = useState<RecurringExpense[]>(initialRecurring);
   const [tenants, setTenants] = useState<TenantDTO[]>(initialTenants);
   const [tenantForm, setTenantForm] = useState(EMPTY_TENANT);
   const [tenantOpen, setTenantOpen] = useState(false);
   const [tenantSaving, setTenantSaving] = useState(false);
+  const [entryOpen, setEntryOpen] = useState(false);
+  const [entrySaving, setEntrySaving] = useState(false);
+  const [entry, setEntry] = useState({
+    id: "",
+    type: "rent" as "rent" | "expense",
+    unitId: "",
+    date: "",
+    amount: "",
+    detail: "",
+    note: "",
+    category: "",
+  });
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
   const { toasts, push, dismiss } = useToasts();
@@ -352,6 +365,87 @@ export default function PropertyManageClient({
         }
         setTenants((prev) => prev.filter((x) => x.id !== t.id));
         push(`${t.name} deleted.`);
+        router.refresh();
+      },
+    });
+  }
+
+  // ---------- Correcting an entry ----------
+
+  function openEntry(t: LedgerEntry) {
+    setError("");
+    setEntry({
+      id: t.id,
+      type: t.type,
+      unitId: t.unitId ?? "",
+      date: t.date,
+      amount: String(t.amount),
+      detail: t.detail,
+      note: t.note,
+      category: t.category,
+    });
+    setEntryOpen(true);
+  }
+
+  async function saveEntry(e: React.FormEvent) {
+    e.preventDefault();
+    const amount = parseFloat(entry.amount);
+    if (!(amount > 0) || !entry.date) return;
+    if (entry.type === "expense" && !entry.category) {
+      setError("Pick a category for this expense.");
+      return;
+    }
+    setEntrySaving(true);
+    setError("");
+
+    const res = await fetch(`/api/transactions/${entry.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        propertyId: property.id,
+        unitId: entry.unitId || null,
+        type: entry.type,
+        date: entry.date,
+        amount,
+        detail: entry.detail,
+        note: entry.note,
+        category: entry.type === "expense" ? entry.category : undefined,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setEntrySaving(false);
+    if (!res.ok) {
+      setError(data?.error || "Couldn't save that entry.");
+      return;
+    }
+
+    // Proof already on the entry is untouched by an edit, so keep the count.
+    setTransactions((prev) =>
+      prev
+        .map((t) => (t.id === entry.id ? { ...t, ...data, proofCount: t.proofCount } : t))
+        .sort((a, b) => b.date.localeCompare(a.date))
+    );
+    setEntryOpen(false);
+    push("Entry updated.");
+    router.refresh();
+  }
+
+  function removeEntry(t: LedgerEntry) {
+    setConfirming({
+      title: "Delete this entry?",
+      body: `${t.type === "rent" ? "Rent" : "Expense"} of ${money(t.amount)} on ${formatDay(t.date)}${
+        t.proofCount > 0 ? `. Its ${t.proofCount === 1 ? "proof file goes" : "proof files go"} too` : ""
+      }. To fix a wrong figure, edit it instead — that keeps the proof.`,
+      confirmLabel: "Delete entry",
+      danger: true,
+      onConfirm: async () => {
+        const res = await fetch(`/api/transactions/${t.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          push("Couldn't delete that entry.", "bad");
+          return;
+        }
+        setTransactions((prev) => prev.filter((x) => x.id !== t.id));
+        push("Entry deleted.");
         router.refresh();
       },
     });
@@ -948,6 +1042,7 @@ export default function PropertyManageClient({
                   <th>Type</th>
                   <th>Details</th>
                   <th style={{ textAlign: "right" }}>Amount</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
@@ -974,6 +1069,24 @@ export default function PropertyManageClient({
                       {t.type === "rent" ? "+" : "\u2212"}
                       {money(t.amount)}
                     </td>
+                    <td>
+                      <div className={styles.rowActions}>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                          onClick={() => openEntry(t)}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`}
+                          onClick={() => removeEntry(t)}
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -987,6 +1100,120 @@ export default function PropertyManageClient({
           </p>
         )}
       </section>
+
+      <Modal
+        open={entryOpen}
+        title="Edit this entry"
+        subtitle="Correct any of it. Proof already attached to this entry stays put."
+        onClose={() => setEntryOpen(false)}
+      >
+        <form onSubmit={saveEntry}>
+          <div className={styles.typeToggle}>
+            <button
+              type="button"
+              className={entry.type === "rent" ? `${styles.active} ${styles.rent}` : ""}
+              onClick={() => setEntry((f) => ({ ...f, type: "rent" }))}
+            >
+              Rent payment
+            </button>
+            <button
+              type="button"
+              className={entry.type === "expense" ? `${styles.active} ${styles.expense}` : ""}
+              onClick={() => setEntry((f) => ({ ...f, type: "expense" }))}
+            >
+              Repair / expense
+            </button>
+          </div>
+          <div className={`${styles.fieldGrid} ${styles.modalGrid}`}>
+            {units.length > 0 && (
+              <div className={`${styles.field} ${styles.wide}`}>
+                <label htmlFor="e-unit">Applies to</label>
+                <select
+                  id="e-unit"
+                  value={entry.unitId}
+                  onChange={(e) => setEntry((f) => ({ ...f, unitId: e.target.value }))}
+                >
+                  <option value="">Whole property</option>
+                  {units.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className={styles.field}>
+              <label htmlFor="e-date">Date</label>
+              <input
+                id="e-date"
+                type="date"
+                required
+                value={entry.date}
+                onChange={(e) => setEntry((f) => ({ ...f, date: e.target.value }))}
+              />
+            </div>
+            <div className={styles.field}>
+              <label htmlFor="e-amount">Amount ($)</label>
+              <input
+                id="e-amount"
+                type="number"
+                min="0"
+                step="0.01"
+                required
+                value={entry.amount}
+                onChange={(e) => setEntry((f) => ({ ...f, amount: e.target.value }))}
+              />
+            </div>
+            {entry.type === "expense" && (
+              <div className={`${styles.field} ${styles.wide}`}>
+                <label htmlFor="e-category">Category</label>
+                <select
+                  id="e-category"
+                  required
+                  value={entry.category}
+                  onChange={(e) => setEntry((f) => ({ ...f, category: e.target.value }))}
+                >
+                  <option value="">Choose one</option>
+                  {EXPENSE_CATEGORIES.map((c) => (
+                    <option key={c} value={c}>
+                      {c}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+            <div className={`${styles.field} ${styles.wide}`}>
+              <label htmlFor="e-detail">
+                {entry.type === "rent" ? "Paid by (tenant)" : "Description"}
+              </label>
+              <input
+                id="e-detail"
+                type="text"
+                value={entry.detail}
+                onChange={(e) => setEntry((f) => ({ ...f, detail: e.target.value }))}
+              />
+            </div>
+            <div className={`${styles.field} ${styles.span4}`}>
+              <label htmlFor="e-note">Note</label>
+              <input
+                id="e-note"
+                type="text"
+                value={entry.note}
+                onChange={(e) => setEntry((f) => ({ ...f, note: e.target.value }))}
+              />
+            </div>
+          </div>
+          {error && <div className={styles.errorBar}>{error}</div>}
+          <div className={styles.formFoot}>
+            <button type="button" className={styles.btn} onClick={() => setEntryOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" className={`${styles.btn} ${styles.accent}`} disabled={entrySaving}>
+              {entrySaving ? "Saving\u2026" : "Save changes"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       <Modal
         open={tenantOpen}
