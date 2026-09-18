@@ -1670,3 +1670,10 @@ tr:hover .rowDel {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+.rowActions {
+  display: flex;
+  gap: 2px;
+  justify-content: flex-end;
+  white-space: nowrap;
+}

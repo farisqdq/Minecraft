@@ -183,6 +183,7 @@ export default function DashboardClient({
   const [editSaving, setEditSaving] = useState(false);
 
   const [recording, setRecording] = useState(false);
+  const [editingTxnId, setEditingTxnId] = useState("");
   const [type, setType] = useState<"rent" | "expense">("rent");
   const [targetKey, setTargetKey] = useState("");
   const [date, setDate] = useState(serverToday);
@@ -511,6 +512,7 @@ export default function DashboardClient({
   function openRecord(prefill?: { type: "rent" | "expense"; targetKey: string; amount?: number }) {
     setProofError(null);
     setError("");
+    setEditingTxnId("");
     setDate(defaultDateFor(barMonth, todayKey));
     if (prefill) {
       setType(prefill.type);
@@ -518,6 +520,32 @@ export default function DashboardClient({
       setAmount(prefill.amount ? String(prefill.amount) : "");
       if (prefill.type === "rent") setCategory("");
     }
+    setRecording(true);
+  }
+
+  /** Opens the same sheet over an existing entry, to correct it in place. */
+  function openEdit(t: Transaction) {
+    setProofError(null);
+    setError("");
+    setPendingProof([]);
+    if (proofInput.current) proofInput.current.value = "";
+    setEditingTxnId(t.id);
+    setType(t.type);
+    // Match the select: a unit-level entry points at its unit, a
+    // property-level one at the property (or its "whole building" option).
+    const propUnits = unitsForProperty(t.propertyId);
+    setTargetKey(
+      t.unitId
+        ? `${t.propertyId}:${t.unitId}`
+        : propUnits.length > 0
+          ? `${t.propertyId}:whole`
+          : t.propertyId
+    );
+    setDate(t.date);
+    setAmount(String(t.amount));
+    setDetail(t.detail);
+    setNote(t.note);
+    setCategory(t.category);
     setRecording(true);
   }
 
@@ -767,8 +795,9 @@ export default function DashboardClient({
     setError("");
 
     setSubmitting(true);
-    const res = await fetch("/api/transactions", {
-      method: "POST",
+    const editing = Boolean(editingTxnId);
+    const res = await fetch(editing ? `/api/transactions/${editingTxnId}` : "/api/transactions", {
+      method: editing ? "PATCH" : "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         propertyId: formTarget.propertyId,
@@ -785,6 +814,18 @@ export default function DashboardClient({
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(data?.error || "Couldn't save that transaction.");
+      return;
+    }
+
+    // Editing keeps whatever proof is already attached — that's the whole
+    // reason to correct an entry rather than delete and retype it.
+    if (editing) {
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === editingTxnId ? { ...t, ...data, attachments: t.attachments } : t))
+      );
+      setRecording(false);
+      setEditingTxnId("");
+      push(`Entry updated — ${money(amt)} for ${formTarget.label}.`);
       return;
     }
 
@@ -1735,13 +1776,22 @@ export default function DashboardClient({
                           {money(t.amount)}
                         </td>
                         <td>
-                          <button
-                            type="button"
-                            className={`${styles.btn} ${styles.small} ${styles.ghost} ${styles.rowDel}`}
-                            onClick={() => removeTransaction(t)}
-                          >
-                            Delete
-                          </button>
+                          <div className={styles.rowActions}>
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.rowDel}`}
+                              onClick={() => openEdit(t)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger} ${styles.rowDel}`}
+                              onClick={() => removeTransaction(t)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -1760,8 +1810,12 @@ export default function DashboardClient({
 
       <Modal
         open={recording}
-        title="Record a transaction"
-        subtitle="Rent that came in, or money that went out on a repair or bill."
+        title={editingTxnId ? "Edit this entry" : "Record a transaction"}
+        subtitle={
+          editingTxnId
+            ? "Correct any of it. Proof already attached to this entry stays put."
+            : "Rent that came in, or money that went out on a repair or bill."
+        }
         onClose={() => setRecording(false)}
       >
         <div className={`${styles.formCard} ${styles.formBare}`}>
@@ -1851,6 +1905,7 @@ export default function DashboardClient({
                   onChange={(e) => setNote(e.target.value)}
                 />
               </div>
+              {!editingTxnId && (
               <div className={`${styles.field} ${styles.span4}`}>
                 <label htmlFor="f-proof">{isRent ? "Proof of payment (optional)" : "Receipt or photo (optional)"}</label>
                 <input
@@ -1871,6 +1926,7 @@ export default function DashboardClient({
                 )}
                 {proofError?.scope === "form" && <span className={styles.proofWarn}>{proofError.message}</span>}
               </div>
+              )}
             </div>
             {error && <div className={styles.errorBar}>{error}</div>}
             <div className={styles.formFoot}>
@@ -1882,7 +1938,13 @@ export default function DashboardClient({
                 className={`${styles.btn} ${styles.accent}`}
                 disabled={submitting || visibleTargets.length === 0}
               >
-                {submitting ? "Saving…" : isRent ? "Add rent payment" : "Add expense"}
+                {submitting
+                  ? "Saving…"
+                  : editingTxnId
+                    ? "Save changes"
+                    : isRent
+                      ? "Add rent payment"
+                      : "Add expense"}
               </button>
             </div>
           </form>
