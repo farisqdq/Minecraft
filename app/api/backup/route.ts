@@ -4,7 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 2;
+export const BACKUP_VERSION = 3;
 
 type TxnRow = {
   type: string;
@@ -59,6 +59,32 @@ function serializeRecurring(rows: RecurringRow[]) {
   }));
 }
 
+type TenantRow = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  leaseStart: Date | null;
+  leaseEnd: Date | null;
+  deposit: number;
+  dueDay: number;
+  active: boolean;
+  note: string | null;
+};
+
+function serializeTenants(rows: TenantRow[]) {
+  return rows.map((t) => ({
+    name: t.name,
+    email: t.email ?? "",
+    phone: t.phone ?? "",
+    leaseStart: t.leaseStart ? t.leaseStart.toISOString().slice(0, 10) : "",
+    leaseEnd: t.leaseEnd ? t.leaseEnd.toISOString().slice(0, 10) : "",
+    deposit: t.deposit,
+    dueDay: t.dueDay,
+    active: t.active,
+    note: t.note ?? "",
+  }));
+}
+
 export async function GET() {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -76,6 +102,7 @@ export async function GET() {
             include: { attachments: { orderBy: { createdAt: "asc" } } },
           },
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
+          tenants: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
           units: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -84,6 +111,7 @@ export async function GET() {
                 include: { attachments: { orderBy: { createdAt: "asc" } } },
               },
               recurringExpenses: { orderBy: { createdAt: "asc" } },
+              tenants: { orderBy: { createdAt: "asc" } },
             },
           },
         },
@@ -105,12 +133,14 @@ export async function GET() {
         vacant: p.vacant,
         transactions: serializeTxns(p.transactions),
         recurringExpenses: serializeRecurring(p.recurringExpenses),
+        tenants: serializeTenants(p.tenants),
         units: p.units.map((u) => ({
           name: u.name,
           monthlyRent: u.monthlyRent,
           vacant: u.vacant,
           transactions: serializeTxns(u.transactions),
           recurringExpenses: serializeRecurring(u.recurringExpenses),
+          tenants: serializeTenants(u.tenants),
         })),
       })),
     })),

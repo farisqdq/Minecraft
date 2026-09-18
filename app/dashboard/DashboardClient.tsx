@@ -1,9 +1,11 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
+import type { TenantDTO } from "@/lib/tenants";
+import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref } from "@/lib/lease";
 import AppShell from "../components/AppShell";
 import CashFlowChart from "../components/CashFlowChart";
 import CategoryBars from "../components/CategoryBars";
@@ -84,17 +86,10 @@ const fmt = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD",
 const fmtFull = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const fmtDate = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
-const todayISO = () => new Date().toISOString().slice(0, 10);
-
-const ALL_TIME = "all";
+type PeriodKind = "month" | "year" | "all";
 
 const STORAGE_HINT =
   "Proof uploads need file storage. In Vercel, open this project's Storage tab, add Blob, then redeploy.";
-
-function currentMonthKey() {
-  const now = new Date();
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-}
 
 function monthName(key: string, withYear = true) {
   const [y, m] = key.split("-").map(Number);
@@ -117,32 +112,51 @@ function shiftMonth(key: string, delta: number) {
 }
 
 /** Today if we're looking at the current month, otherwise the 1st of the one on screen. */
-function defaultDateFor(month: string) {
-  const today = todayISO();
+function defaultDateFor(month: string, today: string) {
   return today.startsWith(month) ? today : `${month}-01`;
 }
 
 export default function DashboardClient({
   userLabel,
   storageReady,
+  serverToday,
   initialCompanies,
   initialProperties,
   initialUnits,
   initialRecurring,
+  initialTenants,
   initialTransactions,
 }: {
   userLabel: string;
   storageReady: boolean;
+  serverToday: string;
   initialCompanies: Company[];
   initialProperties: Property[];
   initialUnits: Unit[];
   initialRecurring: RecurringExpense[];
+  initialTenants: TenantDTO[];
   initialTransactions: Transaction[];
 }) {
+  // The server renders with its own clock; the browser may be on a different
+  // calendar day. Starting from the server's value keeps the first client
+  // render identical to the HTML, and the effect below swaps in the real
+  // local date straight after — so "17 days late" is never rendered twice
+  // with two different numbers.
+  const [todayKey, setTodayKey] = useState(serverToday);
+  useEffect(() => {
+    const local = isoDay(new Date());
+    if (local !== serverToday) setTodayKey(local);
+  }, [serverToday]);
+
+  const now = useMemo(() => dateFromISO(todayKey), [todayKey]);
+  const thisMonth = todayKey.slice(0, 7);
+  const thisYear = todayKey.slice(0, 4);
+
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
   const [properties, setProperties] = useState<Property[]>(initialProperties);
   const [units, setUnits] = useState<Unit[]>(initialUnits);
   const [recurring, setRecurring] = useState<RecurringExpense[]>(initialRecurring);
+  const tenants = initialTenants;
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
 
   const [selectedCompany, setSelectedCompany] = useState<string>(
@@ -172,7 +186,7 @@ export default function DashboardClient({
   const [recording, setRecording] = useState(false);
   const [type, setType] = useState<"rent" | "expense">("rent");
   const [targetKey, setTargetKey] = useState("");
-  const [date, setDate] = useState(todayISO());
+  const [date, setDate] = useState(serverToday);
   const [amount, setAmount] = useState("");
   const [detail, setDetail] = useState("");
   const [note, setNote] = useState("");
@@ -182,9 +196,12 @@ export default function DashboardClient({
 
   const [recurringBusyId, setRecurringBusyId] = useState("");
 
-  const [selectedMonth, setSelectedMonth] = useState(currentMonthKey());
+  const [periodKind, setPeriodKind] = useState<PeriodKind>("month");
+  const [selectedMonth, setSelectedMonth] = useState(serverToday.slice(0, 7));
+  const [selectedYear, setSelectedYear] = useState(serverToday.slice(0, 4));
   const [filterProperty, setFilterProperty] = useState("");
   const [filterType, setFilterType] = useState("");
+  const [query, setQuery] = useState("");
 
   const [pendingProof, setPendingProof] = useState<File[]>([]);
   const proofInput = useRef<HTMLInputElement>(null);
@@ -259,16 +276,13 @@ export default function DashboardClient({
   // Every month from the first recorded entry through the current one, so you
   // can page back through the year even where a month has nothing in it.
   const months = useMemo(() => {
-    const earliest = transactions.reduce(
-      (min, t) => (t.date < min ? t.date : min),
-      currentMonthKey() + "-01"
-    );
+    const earliest = transactions.reduce((min, t) => (t.date < min ? t.date : min), `${thisMonth}-01`);
     const [startY, startM] = earliest.slice(0, 7).split("-").map(Number);
-    const now = new Date();
+    const [endY, endM] = thisMonth.split("-").map(Number);
     const list: string[] = [];
     let y = startY;
     let m = startM;
-    while (y < now.getFullYear() || (y === now.getFullYear() && m <= now.getMonth() + 1)) {
+    while (y < endY || (y === endY && m <= endM)) {
       list.push(`${y}-${String(m).padStart(2, "0")}`);
       m += 1;
       if (m > 12) {
@@ -277,16 +291,33 @@ export default function DashboardClient({
       }
     }
     return list;
-  }, [transactions]);
+  }, [transactions, thisMonth]);
+
+  // Every year with something in it, newest first, so the year picker can't
+  // wander into years that never existed.
+  const years = useMemo(() => {
+    const seen = new Set(months.map((m) => m.slice(0, 4)));
+    seen.add(thisYear);
+    return Array.from(seen).sort();
+  }, [months, thisYear]);
 
   const monthIndex = months.indexOf(selectedMonth);
-  const allTime = selectedMonth === ALL_TIME;
+  const yearIndex = years.indexOf(selectedYear);
+  const allTime = periodKind === "all";
 
-  const inScope = (t: Transaction) => allTime || t.date.startsWith(selectedMonth);
+  // One string scopes everything: "2026-09" for a month, "2026" for a year,
+  // "" for all time — every filter is the same prefix test.
+  const scopeKey = periodKind === "month" ? selectedMonth : periodKind === "year" ? selectedYear : "";
+  const periodLabel =
+    periodKind === "month" ? monthName(selectedMonth) : periodKind === "year" ? selectedYear : "All time";
+  const periodShort =
+    periodKind === "month" ? monthName(selectedMonth, false) : periodKind === "year" ? selectedYear : "all time";
+
+  const inScope = (t: Transaction) => !scopeKey || t.date.startsWith(scopeKey);
 
   const scopedTransactions = useMemo(
     () => visibleTransactions.filter(inScope),
-    [visibleTransactions, selectedMonth]
+    [visibleTransactions, scopeKey]
   );
 
   function totalsFor(ids: Set<string> | null, txns: Transaction[]) {
@@ -300,7 +331,7 @@ export default function DashboardClient({
     return { rent, expense, net: rent - expense };
   }
 
-  const inScopeTransactions = useMemo(() => transactions.filter(inScope), [transactions, selectedMonth]);
+  const inScopeTransactions = useMemo(() => transactions.filter(inScope), [transactions, scopeKey]);
 
   const overall = totalsFor(visibleIds, scopedTransactions);
 
@@ -313,13 +344,17 @@ export default function DashboardClient({
     [companies, properties, inScopeTransactions]
   );
 
-  // The rent bar always measures one month; on All time that's the current one.
-  const barMonth = allTime ? currentMonthKey() : selectedMonth;
+  // Rent collection and what needs chasing are always about one month. When
+  // you're looking at a whole year, or at all time, that month is this one.
+  const barMonth = periodKind === "month" ? selectedMonth : thisMonth;
 
   // Twelve months ending at the month on screen. Feeds both the cash-flow
   // chart and the sparkline on each stat card, so they can never disagree.
   const series = useMemo(() => {
-    const keys = Array.from({ length: 12 }, (_, i) => shiftMonth(barMonth, i - 11));
+    const keys =
+      periodKind === "year"
+        ? Array.from({ length: 12 }, (_, i) => `${selectedYear}-${String(i + 1).padStart(2, "0")}`)
+        : Array.from({ length: 12 }, (_, i) => shiftMonth(barMonth, i - 11));
     const buckets = new Map(keys.map((k) => [k, { month: k, rent: 0, expense: 0 }]));
     for (const t of visibleTransactions) {
       const bucket = buckets.get(t.date.slice(0, 7));
@@ -328,7 +363,7 @@ export default function DashboardClient({
       else bucket.expense += t.amount;
     }
     return keys.map((k) => buckets.get(k)!);
-  }, [visibleTransactions, barMonth]);
+  }, [visibleTransactions, barMonth, periodKind, selectedYear]);
 
   const byCategory = useMemo(() => {
     const totals = new Map<string, number>();
@@ -343,11 +378,13 @@ export default function DashboardClient({
   // Month-over-month movement for the stat cards. Meaningless on All time,
   // where there is no previous period to compare against.
   const previous = useMemo(() => {
-    if (allTime) return null;
-    const key = shiftMonth(selectedMonth, -1);
+    if (periodKind === "all") return null;
+    const key =
+      periodKind === "month" ? shiftMonth(selectedMonth, -1) : String(Number(selectedYear) - 1);
+    const label = periodKind === "month" ? shortMonth(key) : key;
     const prior = visibleTransactions.filter((t) => t.date.startsWith(key));
-    return { key, ...totalsFor(null, prior) };
-  }, [visibleTransactions, selectedMonth, allTime]);
+    return { key, label, ...totalsFor(null, prior) };
+  }, [visibleTransactions, selectedMonth, selectedYear, periodKind]);
 
   function rentInMonth(propertyId: string, unitId: string | null, month: string) {
     return transactions
@@ -365,13 +402,26 @@ export default function DashboardClient({
   // Rent targets with an amount due, not fully paid, and not vacant — the
   // reason to check this every month instead of clicking through each card.
   const unpaidThisMonth = useMemo(() => {
-    if (allTime) return [];
     return visibleTargets
       .filter((t) => !t.vacant && t.monthlyRent > 0)
-      .map((t) => ({ target: t, paid: rentInMonth(t.propertyId, t.unitId, barMonth) }))
+      .map((t) => {
+        const tenant = tenantFor(t.propertyId, t.unitId);
+        return {
+          target: t,
+          paid: rentInMonth(t.propertyId, t.unitId, barMonth),
+          tenant,
+          // Only a month that has actually started can be late, so a future
+          // month shows as owed rather than overdue.
+          late: tenant ? Math.max(0, daysLate(barMonth, tenant.dueDay, now)) : 0,
+        };
+      })
       .filter(({ target, paid }) => paid < target.monthlyRent)
-      .sort((a, b) => b.target.monthlyRent - b.paid - (a.target.monthlyRent - a.paid));
-  }, [visibleTargets, transactions, barMonth, allTime]);
+      // Longest overdue first, then by how much is outstanding.
+      .sort(
+        (a, b) =>
+          b.late - a.late || b.target.monthlyRent - b.paid - (a.target.monthlyRent - a.paid)
+      );
+  }, [visibleTargets, transactions, barMonth, tenants, now]);
 
   // How far through the month's rent roll we are. Each unit's contribution is
   // capped at what it owes, so one tenant paying double can't hide another
@@ -394,7 +444,6 @@ export default function DashboardClient({
 
   // Recurring templates due this billing period that haven't been logged yet.
   const dueRecurring = useMemo(() => {
-    if (allTime) return [];
     const [, monthNum] = barMonth.split("-").map(Number);
     return recurring
       .filter((r) => r.active && visibleIds.has(r.propertyId))
@@ -403,17 +452,55 @@ export default function DashboardClient({
         (r) =>
           !transactions.some((t) => t.recurringExpenseId === r.id && t.date.startsWith(barMonth))
       );
-  }, [recurring, transactions, barMonth, allTime, visibleIds]);
+  }, [recurring, transactions, barMonth, visibleIds]);
 
-  const rows = useMemo(
-    () =>
-      scopedTransactions
-        .filter((t) => !filterProperty || t.propertyId === filterProperty)
-        .filter((t) => !filterType || t.type === filterType)
-        .slice()
-        .sort((a, b) => b.date.localeCompare(a.date)),
-    [scopedTransactions, filterProperty, filterType]
-  );
+  /** The current tenant of a target, if one is on file. */
+  function tenantFor(propertyId: string, unitId: string | null) {
+    return (
+      tenants.find((t) => t.active && t.propertyId === propertyId && (t.unitId ?? null) === unitId) ??
+      null
+    );
+  }
+
+  // Leases running out are the other thing worth knowing before the month
+  // turns — a lease that ended last week and nobody noticed is a vacancy.
+  const leaseAlerts = useMemo(() => {
+    return tenants
+      .filter((t) => visibleIds.has(t.propertyId))
+      .map((t) => ({ tenant: t, status: leaseStatus(t, now) }))
+      .filter(({ status }) => status.kind === "ending" || status.kind === "expired")
+      .sort((a, b) => (a.status.days ?? 0) - (b.status.days ?? 0));
+  }, [tenants, visibleIds, now]);
+
+  const search = query.trim().toLowerCase();
+
+  // A search looks across every month. Hunting for "that plumber invoice" and
+  // being told there's nothing in September — when it was in March — is the
+  // opposite of useful, so the period only applies when you aren't searching.
+  const rows = useMemo(() => {
+    const base = search ? visibleTransactions : scopedTransactions;
+    return base
+      .filter((t) => !filterProperty || t.propertyId === filterProperty)
+      .filter((t) => !filterType || t.type === filterType)
+      .filter((t) => {
+        if (!search) return true;
+        const haystack = [
+          targetLabel(t),
+          t.detail,
+          t.note,
+          t.category,
+          t.amount.toFixed(2),
+          fmtDate(t.date),
+        ]
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(search);
+      })
+      .slice()
+      .sort((a, b) => b.date.localeCompare(a.date));
+  }, [scopedTransactions, visibleTransactions, filterProperty, filterType, search]);
+
+  const searchTotals = useMemo(() => totalsFor(null, rows), [rows]);
 
   const activeCompany = companies.find((c) => c.id === selectedCompany) ?? null;
 
@@ -425,7 +512,7 @@ export default function DashboardClient({
   function openRecord(prefill?: { type: "rent" | "expense"; targetKey: string; amount?: number }) {
     setProofError(null);
     setError("");
-    setDate(defaultDateFor(barMonth));
+    setDate(defaultDateFor(barMonth, todayKey));
     if (prefill) {
       setType(prefill.type);
       setTargetKey(prefill.targetKey);
@@ -708,7 +795,7 @@ export default function DashboardClient({
     setDetail("");
     setNote("");
     setCategory("");
-    setDate(defaultDateFor(barMonth));
+    setDate(defaultDateFor(barMonth, todayKey));
 
     let uploadFailed = false;
     if (pendingProof.length > 0) {
@@ -743,7 +830,7 @@ export default function DashboardClient({
     if (Math.abs(change) < 0.005) {
       return (
         <span className={styles.delta}>
-          No change <span className={styles.deltaNote}>vs {shortMonth(previous.key)}</span>
+          No change <span className={styles.deltaNote}>vs {previous.label}</span>
         </span>
       );
     }
@@ -752,10 +839,24 @@ export default function DashboardClient({
     return (
       <span className={`${styles.delta} ${good ? styles.good : styles.bad}`}>
         {up ? "↑" : "↓"} {fmt.format(Math.abs(change))}{" "}
-        <span className={styles.deltaNote}>vs {shortMonth(previous.key)}</span>
+        <span className={styles.deltaNote}>vs {previous.label}</span>
       </span>
     );
   };
+
+  const canStepBack =
+    periodKind === "month" ? monthIndex > 0 : periodKind === "year" ? yearIndex > 0 : false;
+  const canStepForward =
+    periodKind === "month"
+      ? monthIndex >= 0 && monthIndex < months.length - 1
+      : periodKind === "year"
+        ? yearIndex >= 0 && yearIndex < years.length - 1
+        : false;
+
+  function stepPeriod(delta: number) {
+    if (periodKind === "month") setSelectedMonth(months[monthIndex + delta]);
+    else if (periodKind === "year") setSelectedYear(years[yearIndex + delta]);
+  }
 
   const collectPct =
     collection.expected > 0
@@ -763,7 +864,7 @@ export default function DashboardClient({
       : 0;
   const collectDone = collection.expected > 0 && collection.collected >= collection.expected;
 
-  const attentionCount = unpaidThisMonth.length + dueRecurring.length;
+  const attentionCount = unpaidThisMonth.length + leaseAlerts.length + dueRecurring.length;
 
   return (
     <AppShell
@@ -854,8 +955,13 @@ export default function DashboardClient({
               </button>
             </form>
           ) : (
-            <button type="button" className={`${styles.chip} ${styles.chipAdd}`} onClick={() => setJoining(true)}>
-              Join with a code
+            <button
+              type="button"
+              className={`${styles.chip} ${styles.chipAdd}`}
+              onClick={() => setJoining(true)}
+              aria-label="Join an LLC with a code"
+            >
+              Join code
             </button>
           )}
         </div>
@@ -864,29 +970,35 @@ export default function DashboardClient({
           <button
             type="button"
             className={styles.monthArrow}
-            aria-label="Previous month"
-            disabled={allTime || monthIndex <= 0}
-            onClick={() => setSelectedMonth(months[monthIndex - 1])}
+            aria-label={periodKind === "year" ? "Previous year" : "Previous month"}
+            disabled={!canStepBack}
+            onClick={() => stepPeriod(-1)}
           >
             ‹
           </button>
-          <span className={styles.monthLabel}>{allTime ? "All time" : monthName(selectedMonth)}</span>
+          <span className={styles.monthLabel}>{periodLabel}</span>
           <button
             type="button"
             className={styles.monthArrow}
-            aria-label="Next month"
-            disabled={allTime || monthIndex < 0 || monthIndex >= months.length - 1}
-            onClick={() => setSelectedMonth(months[monthIndex + 1])}
+            aria-label={periodKind === "year" ? "Next year" : "Next month"}
+            disabled={!canStepForward}
+            onClick={() => stepPeriod(1)}
           >
             ›
           </button>
-          <button
-            type="button"
-            className={`${styles.chip} ${allTime ? styles.active : ""}`}
-            onClick={() => setSelectedMonth(allTime ? currentMonthKey() : ALL_TIME)}
-          >
-            {allTime ? "This month" : "All time"}
-          </button>
+          <div className={styles.periodToggle} role="group" aria-label="Period">
+            {(["month", "year", "all"] as PeriodKind[]).map((kind) => (
+              <button
+                key={kind}
+                type="button"
+                className={periodKind === kind ? styles.active : ""}
+                aria-pressed={periodKind === kind}
+                onClick={() => setPeriodKind(kind)}
+              >
+                {kind === "month" ? "Month" : kind === "year" ? "Year" : "All"}
+              </button>
+            ))}
+          </div>
         </div>
       </nav>
 
@@ -990,13 +1102,12 @@ export default function DashboardClient({
             <div className={styles.card}>
               <CategoryBars
                 data={byCategory}
-                caption={allTime ? "All time" : monthName(selectedMonth)}
+                caption={periodLabel}
               />
             </div>
           </section>
 
-          {!allTime && (
-            <section className={styles.block}>
+          <section className={styles.block}>
               <div className={styles.blockHead}>
                 <h2>Needs attention — {monthName(barMonth, false)}</h2>
                 {attentionCount > 0 && (
@@ -1011,38 +1122,98 @@ export default function DashboardClient({
                   <span className={styles.allClearMark} aria-hidden="true">
                     ✓
                   </span>
-                  Every unit has paid and every recurring bill is logged for {monthName(barMonth, false)}.
+                  Every unit has paid, every recurring bill is logged, and no lease is running out.
                 </div>
               ) : (
                 <div className={styles.attnList}>
-                  {unpaidThisMonth.map(({ target, paid }) => (
+                  {unpaidThisMonth.map(({ target, paid, tenant, late }) => (
                     <div key={`u-${target.key}`} className={styles.attnRow}>
                       <div className={styles.attnMain}>
                         <div className={styles.attnLabel}>
-                          {target.label} <span className={`${styles.pill} ${styles.owed}`}>Rent owed</span>
+                          {tenant ? tenant.name : target.label}{" "}
+                          {late > 0 ? (
+                            <span className={`${styles.pill} ${styles.bill}`}>
+                              {late === 1 ? "1 day late" : `${late} days late`}
+                            </span>
+                          ) : (
+                            <span className={`${styles.pill} ${styles.owed}`}>Rent owed</span>
+                          )}
                         </div>
                         <div className={styles.attnSub}>
+                          {tenant ? `${target.label} · ` : ""}
                           {paid > 0
                             ? `${fmt.format(paid)} of ${fmt.format(target.monthlyRent)} paid so far`
                             : `Nothing received of ${fmt.format(target.monthlyRent)}`}
                         </div>
                       </div>
-                      <span className={`${styles.attnAmt} ${styles.due} num`}>
+                      <span className={`${styles.attnAmt} ${late > 0 ? styles.neg : styles.due} num`}>
                         {fmt.format(target.monthlyRent - paid)}
                       </span>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.small}`}
-                        onClick={() =>
-                          openRecord({
-                            type: "rent",
-                            targetKey: target.key,
-                            amount: target.monthlyRent - paid,
-                          })
-                        }
-                      >
-                        Record payment
-                      </button>
+                      <div className={styles.attnActions}>
+                        {tenant?.phone && (
+                          <>
+                            <a
+                              className={`${styles.btn} ${styles.small}`}
+                              href={telHref(tenant.phone)}
+                              aria-label={`Call ${tenant.name}`}
+                            >
+                              Call
+                            </a>
+                            <a
+                              className={`${styles.btn} ${styles.small}`}
+                              href={smsHref(tenant.phone)}
+                              aria-label={`Text ${tenant.name}`}
+                            >
+                              Text
+                            </a>
+                          </>
+                        )}
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small}`}
+                          onClick={() =>
+                            openRecord({
+                              type: "rent",
+                              targetKey: target.key,
+                              amount: target.monthlyRent - paid,
+                            })
+                          }
+                        >
+                          Record payment
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {leaseAlerts.map(({ tenant, status }) => (
+                    <div key={`l-${tenant.id}`} className={styles.attnRow}>
+                      <div className={styles.attnMain}>
+                        <div className={styles.attnLabel}>
+                          {tenant.name}{" "}
+                          <span
+                            className={`${styles.pill} ${status.kind === "expired" ? styles.bill : styles.owed}`}
+                          >
+                            {status.label}
+                          </span>
+                        </div>
+                        <div className={styles.attnSub}>
+                          {targetLabel({ propertyId: tenant.propertyId, unitId: tenant.unitId })} ·{" "}
+                          {status.kind === "expired" ? "ended" : "ends"} {formatDay(tenant.leaseEnd)}
+                        </div>
+                      </div>
+                      <div className={styles.attnActions}>
+                        {tenant.phone && (
+                          <a className={`${styles.btn} ${styles.small}`} href={telHref(tenant.phone)}>
+                            Call
+                          </a>
+                        )}
+                        <Link
+                          href={`/dashboard/properties/${tenant.propertyId}`}
+                          className={`${styles.btn} ${styles.small}`}
+                        >
+                          Open lease
+                        </Link>
+                      </div>
                     </div>
                   ))}
 
@@ -1057,20 +1228,21 @@ export default function DashboardClient({
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} ${styles.neg} num`}>{fmt.format(r.amount)}</span>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.small} ${styles.primary}`}
-                        disabled={recurringBusyId === r.id}
-                        onClick={() => logRecurring(r.id)}
-                      >
-                        {recurringBusyId === r.id ? "Logging…" : "Log it"}
-                      </button>
+                      <div className={styles.attnActions}>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                          disabled={recurringBusyId === r.id}
+                          onClick={() => logRecurring(r.id)}
+                        >
+                          {recurringBusyId === r.id ? "Logging…" : "Log it"}
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
               )}
             </section>
-          )}
 
           {selectedCompany === "all" && companies.length > 1 && (
             <section className={styles.block}>
@@ -1134,6 +1306,7 @@ export default function DashboardClient({
                 const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
                 const paidInFull = target > 0 && paidThisMonth >= target;
                 const owner = companies.find((c) => c.id === p.companyId);
+                const houseTenant = propUnits.length === 0 ? tenantFor(p.id, null) : null;
 
                 // One glanceable state per card: vacant, all paid, or how many
                 // units are still short this month.
@@ -1226,6 +1399,9 @@ export default function DashboardClient({
                       <div style={{ minWidth: 0 }}>
                         <div className={styles.name}>{p.name}</div>
                         {p.address && <div className={styles.addr}>{p.address}</div>}
+                        {propUnits.length === 0 && houseTenant && (
+                          <div className={styles.tenantLine}>{houseTenant.name}</div>
+                        )}
                         {selectedCompany === "all" && owner && (
                           <div className={styles.ownerTag}>{owner.name}</div>
                         )}
@@ -1239,9 +1415,13 @@ export default function DashboardClient({
                           const uPaid = rentInMonth(p.id, u.id, barMonth);
                           const uTarget = u.monthlyRent || 0;
                           const uFull = uTarget > 0 && uPaid >= uTarget;
+                          const uTenant = tenantFor(p.id, u.id);
                           return (
                             <div key={u.id} className={styles.unitRow}>
-                              <span className={styles.unitName}>{u.name}</span>
+                              <span className={styles.unitName}>
+                                {u.name}
+                                {uTenant && <span className={styles.unitTenant}>{uTenant.name}</span>}
+                              </span>
                               {u.vacant ? (
                                 <span className={styles.vacantTag}>Vacant</span>
                               ) : uTarget > 0 ? (
@@ -1399,8 +1579,27 @@ export default function DashboardClient({
 
           <section className={styles.block}>
             <div className={styles.blockHead}>
-              <h2>Ledger · {allTime ? "all time" : monthName(selectedMonth)}</h2>
+              <h2>Ledger · {search ? "search" : periodShort}</h2>
               <div className={styles.ledgerControls}>
+                <div className={styles.searchField}>
+                  <input
+                    type="search"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="Search every entry…"
+                    aria-label="Search the ledger"
+                  />
+                  {search && (
+                    <button
+                      type="button"
+                      className={styles.searchClear}
+                      onClick={() => setQuery("")}
+                      aria-label="Clear search"
+                    >
+                      ×
+                    </button>
+                  )}
+                </div>
                 <select
                   value={filterProperty}
                   onChange={(e) => setFilterProperty(e.target.value)}
@@ -1424,12 +1623,27 @@ export default function DashboardClient({
                 </select>
               </div>
             </div>
+            {search && rows.length > 0 && (
+              <div className={styles.searchSummary}>
+                <span>
+                  <strong>{rows.length}</strong> {rows.length === 1 ? "entry" : "entries"} matching
+                  &ldquo;{query.trim()}&rdquo; across all time
+                </span>
+                <span className="num">
+                  {searchTotals.rent > 0 && <>+{fmt.format(searchTotals.rent)} in</>}
+                  {searchTotals.rent > 0 && searchTotals.expense > 0 && " · "}
+                  {searchTotals.expense > 0 && <>−{fmt.format(searchTotals.expense)} out</>}
+                </span>
+              </div>
+            )}
             {rows.length === 0 ? (
               <div className={styles.ledgerWrap}>
                 <div className={styles.emptyState}>
-                  {allTime
-                    ? "No transactions yet — record a rent payment or expense to get started."
-                    : `Nothing recorded in ${monthName(selectedMonth)} yet.`}
+                  {search
+                    ? `Nothing matches “${query.trim()}”. Search covers the property, description, note, category, date and amount.`
+                    : allTime
+                      ? "No transactions yet — record a rent payment or expense to get started."
+                      : `Nothing recorded in ${periodLabel} yet.`}
                 </div>
               </div>
             ) : (

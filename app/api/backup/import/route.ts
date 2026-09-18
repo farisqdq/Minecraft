@@ -12,6 +12,7 @@ const MAX_PROPERTIES = 2000;
 const MAX_UNITS = 5000;
 const MAX_TRANSACTIONS = 50000;
 const MAX_RECURRING = 5000;
+const MAX_TENANTS = 5000;
 
 type CleanAttachment = { url: string; filename: string; contentType: string; size: number };
 type CleanTransaction = {
@@ -33,12 +34,24 @@ type CleanRecurring = {
   month: number | null;
   active: boolean;
 };
+type CleanTenant = {
+  name: string;
+  email: string | null;
+  phone: string | null;
+  leaseStart: Date | null;
+  leaseEnd: Date | null;
+  deposit: number;
+  dueDay: number;
+  active: boolean;
+  note: string | null;
+};
 type CleanUnit = {
   name: string;
   monthlyRent: number;
   vacant: boolean;
   transactions: CleanTransaction[];
   recurringExpenses: CleanRecurring[];
+  tenants: CleanTenant[];
 };
 type CleanProperty = {
   name: string;
@@ -47,6 +60,7 @@ type CleanProperty = {
   vacant: boolean;
   transactions: CleanTransaction[];
   recurringExpenses: CleanRecurring[];
+  tenants: CleanTenant[];
   units: CleanUnit[];
 };
 type CleanCompany = { name: string; properties: CleanProperty[] };
@@ -57,6 +71,11 @@ const num = (v: unknown) => {
   return Number.isFinite(n) && n >= 0 ? n : 0;
 };
 const bool = (v: unknown) => v === true;
+const day = (v: unknown) => {
+  if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
+  const d = new Date(`${v}T00:00:00.000Z`);
+  return isNaN(d.getTime()) ? null : d;
+};
 
 /** Reshape an uploaded file into exactly what we're willing to store. */
 function parseBackup(raw: unknown) {
@@ -72,6 +91,7 @@ function parseBackup(raw: unknown) {
   let unitTotal = 0;
   let transactionTotal = 0;
   let recurringTotal = 0;
+  let tenantTotal = 0;
 
   function parseTransactions(raw: unknown): CleanTransaction[] {
     const out: CleanTransaction[] = [];
@@ -135,6 +155,29 @@ function parseBackup(raw: unknown) {
     return out;
   }
 
+  function parseTenants(raw: unknown): CleanTenant[] {
+    const out: CleanTenant[] = [];
+    for (const rawT of Array.isArray(raw) ? raw : []) {
+      const t = (rawT ?? {}) as Record<string, unknown>;
+      const name = str(t.name, 120);
+      if (!name) continue;
+      if (++tenantTotal > MAX_TENANTS) throw new Error("That backup is too large to import.");
+
+      out.push({
+        name,
+        email: str(t.email, 200) || null,
+        phone: str(t.phone, 40) || null,
+        leaseStart: day(t.leaseStart),
+        leaseEnd: day(t.leaseEnd),
+        deposit: num(t.deposit),
+        dueDay: Math.min(31, Math.max(1, Math.round(num(t.dueDay)) || 1)),
+        active: t.active !== false,
+        note: str(t.note, 500) || null,
+      });
+    }
+    return out;
+  }
+
   const companies: CleanCompany[] = [];
   for (const rawCompany of body.companies) {
     const c = (rawCompany ?? {}) as Record<string, unknown>;
@@ -161,6 +204,7 @@ function parseBackup(raw: unknown) {
           vacant: bool(u.vacant),
           transactions: parseTransactions(u.transactions),
           recurringExpenses: parseRecurring(u.recurringExpenses),
+          tenants: parseTenants(u.tenants),
         });
       }
 
@@ -171,6 +215,7 @@ function parseBackup(raw: unknown) {
         vacant: bool(p.vacant),
         transactions: parseTransactions(p.transactions),
         recurringExpenses: parseRecurring(p.recurringExpenses),
+        tenants: parseTenants(p.tenants),
         units,
       });
     }
@@ -179,7 +224,7 @@ function parseBackup(raw: unknown) {
   }
 
   if (companies.length === 0) throw new Error("That backup has no LLCs in it.");
-  return { companies, propertyTotal, unitTotal, transactionTotal, recurringTotal };
+  return { companies, propertyTotal, unitTotal, transactionTotal, recurringTotal, tenantTotal };
 }
 
 export async function POST(req: Request) {
@@ -215,7 +260,15 @@ export async function POST(req: Request) {
     return candidate;
   }
 
-  const created = { companies: 0, properties: 0, units: 0, transactions: 0, attachments: 0, recurring: 0 };
+  const created = {
+    companies: 0,
+    properties: 0,
+    units: 0,
+    transactions: 0,
+    attachments: 0,
+    recurring: 0,
+    tenants: 0,
+  };
 
   async function createTransactions(
     tx: Tx,
@@ -281,6 +334,19 @@ export async function POST(req: Request) {
     created.recurring += templates.length;
   }
 
+  async function createTenants(
+    tx: Tx,
+    propertyId: string,
+    unitId: string | null,
+    tenants: CleanTenant[]
+  ) {
+    if (tenants.length === 0) return;
+    await tx.tenant.createMany({
+      data: tenants.map((t) => ({ ...t, propertyId, unitId, createdById: userId })),
+    });
+    created.tenants += tenants.length;
+  }
+
   await prisma.$transaction(async (tx) => {
     for (const company of parsed.companies) {
       const record = await tx.company.create({
@@ -303,6 +369,7 @@ export async function POST(req: Request) {
 
         await createTransactions(tx, prop.id, null, property.transactions);
         await createRecurring(tx, prop.id, null, property.recurringExpenses);
+        await createTenants(tx, prop.id, null, property.tenants);
 
         for (const unit of property.units) {
           const u = await tx.unit.create({
@@ -317,6 +384,7 @@ export async function POST(req: Request) {
 
           await createTransactions(tx, prop.id, u.id, unit.transactions);
           await createRecurring(tx, prop.id, u.id, unit.recurringExpenses);
+          await createTenants(tx, prop.id, u.id, unit.tenants);
         }
       }
     }

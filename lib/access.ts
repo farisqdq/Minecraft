@@ -43,6 +43,17 @@ export async function requireRecurring(userId: string, recurringId: string) {
   return membership ? template : null;
 }
 
+/** A tenant record the user can reach through one of their company teams. */
+export async function requireTenant(userId: string, tenantId: string) {
+  const tenant = await prisma.tenant.findUnique({
+    where: { id: tenantId },
+    include: { property: true },
+  });
+  if (!tenant) return null;
+  const membership = await getMembership(userId, tenant.property.companyId);
+  return membership ? tenant : null;
+}
+
 export async function companyIdsForUser(userId: string) {
   const memberships = await prisma.companyMember.findMany({
     where: { userId },

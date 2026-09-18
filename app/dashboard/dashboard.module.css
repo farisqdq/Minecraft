@@ -23,7 +23,11 @@
   min-width: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  padding-bottom: 1px;
+  /* The trailing space gives the fade below something empty to act on when
+     the strip fits, so only a genuinely cut-off chip ever looks cut off. */
+  padding: 0 20px 1px 0;
+  mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 20px), transparent);
 }
 
 .companyBar::-webkit-scrollbar {
@@ -1165,6 +1169,7 @@ tr:hover .rowDel {
 
 .pill {
   display: inline-block;
+  white-space: nowrap;
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
@@ -1426,5 +1431,200 @@ tr:hover .rowDel {
 @media (hover: none) {
   .rowDel {
     opacity: 1;
+  }
+}
+
+/* ---------- Tenant cards ---------- */
+.tenantGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(288px, 1fr));
+  gap: 12px;
+}
+
+.tenantCard {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 16px;
+  box-shadow: var(--shadow);
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+
+/* A past tenant stays visible for the history, but stops competing with the
+   person actually living there. */
+.pastTenant {
+  background: var(--surface-2);
+  box-shadow: none;
+}
+
+.pastTenant .name {
+  color: var(--ink-2);
+}
+
+.contactRow {
+  display: flex;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+/* Tapping through to the phone is the whole point of storing a number, so
+   these are real buttons, not underlined text. */
+.contactBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-decoration: none;
+  transition: border-color var(--fast), color var(--fast);
+}
+
+.contactBtn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.tenantFacts {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.tenantFacts .figureValue {
+  font-size: 13px;
+}
+
+.tenantFacts > div:last-child {
+  text-align: right;
+}
+
+/* ---------- Period switcher ---------- */
+.periodToggle {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+  flex: none;
+}
+
+.periodToggle button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 6px 13px;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background var(--fast), color var(--fast);
+}
+
+.periodToggle button:hover {
+  color: var(--ink);
+}
+
+.periodToggle button.active {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+/* ---------- Ledger search ---------- */
+.searchField {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.searchField input {
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 28px 6px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  width: 200px;
+  max-width: 100%;
+}
+
+.searchField input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.searchClear {
+  position: absolute;
+  right: 6px;
+  border: none;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.searchClear:hover {
+  color: var(--ink);
+}
+
+.searchSummary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--gold-soft);
+  border: 1px solid color-mix(in srgb, var(--gold) 30%, transparent);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+
+/* ---------- Tenants on the overview ---------- */
+.attnActions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* The tenant is who you act on; the unit is where they are. So the name
+   leads and the address plays second. */
+.tenantLine {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+.unitTenant {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-top: 1px;
+}
+
+@media (max-width: 720px) {
+  .searchField input {
+    width: 100%;
+  }
+  .ledgerControls {
+    width: 100%;
+  }
+  .searchField {
+    flex: 1 1 100%;
+  }
+  .ledgerControls select {
+    flex: 1 1 calc(50% - 4px);
   }
 }

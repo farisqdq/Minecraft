@@ -15,13 +15,16 @@ export default async function BackupPage() {
     await prisma.companyMember.findMany({ where: { userId }, select: { companyId: true } })
   ).map((m) => m.companyId);
 
-  const [companies, properties, units, recurring, transactions] = await Promise.all([
+  const [companies, properties, units, recurring, transactions, tenants] = await Promise.all([
     companyIds.length,
     prisma.property.count({ where: { companyId: { in: companyIds } } }),
     prisma.unit.count({ where: { property: { companyId: { in: companyIds } } } }),
     prisma.recurringExpense.count({ where: { property: { companyId: { in: companyIds } } } }),
     prisma.transaction.count({ where: { property: { companyId: { in: companyIds } } } }),
+    prisma.tenant.count({ where: { property: { companyId: { in: companyIds } } } }),
   ]);
 
-  return <BackupClient counts={{ companies, properties, units, recurring, transactions }} />;
+  return (
+    <BackupClient counts={{ companies, properties, units, recurring, transactions, tenants }} />
+  );
 }

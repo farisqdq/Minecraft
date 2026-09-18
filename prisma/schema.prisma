@@ -14,12 +14,13 @@ model User {
   name         String?
   createdAt    DateTime @default(now())
 
-  memberships          CompanyMember[]
-  invitesSent          Invite[]           @relation("InviteSender")
-  createdProperties    Property[]
-  createdTransactions  Transaction[]
-  uploadedAttachments  Attachment[]
-  createdRecurring     RecurringExpense[]
+  memberships         CompanyMember[]
+  invitesSent         Invite[]           @relation("InviteSender")
+  createdProperties   Property[]
+  createdTransactions Transaction[]
+  uploadedAttachments Attachment[]
+  createdRecurring    RecurringExpense[]
+  createdTenants      Tenant[]
 }
 
 model Company {
@@ -77,6 +78,7 @@ model Property {
   units             Unit[]
   transactions      Transaction[]
   recurringExpenses RecurringExpense[]
+  tenants           Tenant[]
 
   @@index([companyId])
 }
@@ -95,8 +97,39 @@ model Unit {
 
   transactions      Transaction[]
   recurringExpenses RecurringExpense[]
+  tenants           Tenant[]
 
   @@index([propertyId])
+}
+
+// Who is renting a place, and on what terms. Lease details live here rather
+// than in a separate Lease model because a small landlord thinks in terms of
+// "who's in the house right now" — a tenant who moves out is kept with
+// active = false so their history and their old ledger entries still make
+// sense, and the next tenant is a new row.
+model Tenant {
+  id          String    @id @default(cuid())
+  propertyId  String
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unitId      String?
+  unit        Unit?     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  name        String
+  email       String?
+  phone       String?
+  leaseStart  DateTime?
+  leaseEnd    DateTime?
+  deposit     Float     @default(0)
+  // Day of the month rent is due, 1-31 (clamped to the month's last day).
+  // Drives how many days late an unpaid month is.
+  dueDay      Int       @default(1)
+  active      Boolean   @default(true)
+  note        String?
+  createdById String?
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+
+  @@index([propertyId])
+  @@index([unitId])
 }
 
 model Transaction {

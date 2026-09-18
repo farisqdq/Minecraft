@@ -5,7 +5,14 @@ import { useRouter } from "next/navigation";
 import AppShell from "../../components/AppShell";
 import styles from "../dashboard.module.css";
 
-type Counts = { companies: number; properties: number; units: number; recurring: number; transactions: number };
+type Counts = {
+  companies: number;
+  properties: number;
+  units: number;
+  recurring: number;
+  transactions: number;
+  tenants: number;
+};
 
 export default function BackupClient({ counts }: { counts: Counts }) {
   const router = useRouter();
@@ -13,6 +20,23 @@ export default function BackupClient({ counts }: { counts: Counts }) {
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
   const [importing, setImporting] = useState(false);
+
+  // "2 LLCs, 4 properties, 3 tenants and 118 ledger entries" — built as a list
+  // so an empty category is left out rather than printed as "0 tenants".
+  const summary = (() => {
+    const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+    const parts = [
+      plural(counts.companies, "LLC", "LLCs"),
+      plural(counts.properties, "property", "properties"),
+    ];
+    if (counts.units) parts.push(plural(counts.units, "unit", "units"));
+    if (counts.tenants) parts.push(plural(counts.tenants, "tenant", "tenants"));
+    if (counts.recurring) parts.push(plural(counts.recurring, "recurring expense", "recurring expenses"));
+    parts.push(plural(counts.transactions, "ledger entry", "ledger entries"));
+    return parts.length > 1
+      ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
+      : parts[0];
+  })();
 
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -43,6 +67,7 @@ export default function BackupClient({ counts }: { counts: Counts }) {
       if (data.recurring) {
         parts.push(`${data.recurring} recurring ${data.recurring === 1 ? "expense" : "expenses"}`);
       }
+      if (data.tenants) parts.push(`${data.tenants} ${data.tenants === 1 ? "tenant" : "tenants"}`);
       parts.push(`${data.attachments} ${data.attachments === 1 ? "proof" : "proofs"}`);
       setResult(`Restored ${parts.join(", ")}.`);
       router.refresh();
@@ -69,9 +94,7 @@ export default function BackupClient({ counts }: { counts: Counts }) {
         </div>
         <div className={styles.formCard}>
           <p className={styles.helpText} style={{ marginTop: 0 }}>
-            Saves {counts.companies} {counts.companies === 1 ? "LLC" : "LLCs"}, {counts.properties}{" "}
-            {counts.properties === 1 ? "property" : "properties"}, and {counts.transactions} ledger{" "}
-            {counts.transactions === 1 ? "entry" : "entries"} to a single file on your computer. Keep it somewhere
+            Saves {summary} to a single file on your computer. Keep it somewhere
             safe — it&apos;s a full copy of your records.
           </p>
           <div className={styles.formFoot} style={{ justifyContent: "flex-start", marginTop: 14 }}>
