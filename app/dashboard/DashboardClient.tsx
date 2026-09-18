@@ -184,6 +184,7 @@ export default function DashboardClient({
 
   const [recording, setRecording] = useState(false);
   const [editingTxnId, setEditingTxnId] = useState("");
+  const [markingKey, setMarkingKey] = useState("");
   const [type, setType] = useState<"rent" | "expense">("rent");
   const [targetKey, setTargetKey] = useState("");
   const [date, setDate] = useState(serverToday);
@@ -521,6 +522,38 @@ export default function DashboardClient({
       if (prefill.type === "rent") setCategory("");
     }
     setRecording(true);
+  }
+
+  /**
+   * Logs the whole outstanding rent for a target in one tap. This is the
+   * action of the month — every tenant, every month — and routing it through
+   * the form meant opening a sheet to confirm numbers the app already knows.
+   * A mistake is fixable from the ledger, where the entry can be edited or
+   * deleted.
+   */
+  async function markPaid(target: Target, owed: number, tenantName?: string) {
+    setMarkingKey(target.key);
+    const res = await fetch("/api/transactions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        propertyId: target.propertyId,
+        unitId: target.unitId,
+        type: "rent",
+        date: defaultDateFor(barMonth, todayKey),
+        amount: owed,
+        detail: tenantName ?? "",
+        note: `${monthName(barMonth)} rent`,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setMarkingKey("");
+    if (!res.ok) {
+      push(data?.error || "Couldn't record that payment.", "bad");
+      return;
+    }
+    setTransactions((prev) => [...prev, { ...data, attachments: [] }]);
+    push(`${money(owed)} recorded for ${tenantName ?? target.label}.`);
   }
 
   /** Opens the same sheet over an existing entry, to correct it in place. */
@@ -1214,7 +1247,7 @@ export default function DashboardClient({
                         )}
                         <button
                           type="button"
-                          className={`${styles.btn} ${styles.small}`}
+                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                           onClick={() =>
                             openRecord({
                               type: "rent",
@@ -1223,7 +1256,15 @@ export default function DashboardClient({
                             })
                           }
                         >
-                          Record payment
+                          Part paid
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                          disabled={markingKey === target.key}
+                          onClick={() => markPaid(target, target.monthlyRent - paid, tenant?.name)}
+                        >
+                          {markingKey === target.key ? "Saving…" : "Mark paid"}
                         </button>
                       </div>
                     </div>
