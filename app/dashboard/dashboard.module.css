@@ -1590,6 +1590,10 @@ tr:hover .rowDel {
 @media (max-width: 720px) {
   .searchField input {
     width: 100%;
+    /* 33px is under the 44px touch-target guideline, and this is a phone-first
+       app — the extra padding costs nothing and makes it easier to hit. */
+    padding-top: 10px;
+    padding-bottom: 10px;
   }
   .ledgerControls {
     width: 100%;
