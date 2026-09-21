@@ -51,6 +51,7 @@ export default async function PortalHome() {
       <PortalRequests
         initial={requests.map(serializeRequest)}
         storageReady={blobConfigured()}
+        serverNow={new Date().toISOString()}
       />
 
       <section className={styles.card}>

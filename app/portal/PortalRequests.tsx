@@ -9,6 +9,7 @@ import {
   isOpen,
   type RequestDTO,
 } from "@/lib/maintenance";
+import { useNow } from "../components/useNow";
 import styles from "./portal.module.css";
 
 const EMPTY = {
@@ -29,9 +30,12 @@ const EMPTY = {
 export default function PortalRequests({
   initial,
   storageReady,
+  serverNow,
 }: {
   initial: RequestDTO[];
   storageReady: boolean;
+  /** When the server rendered, so the first client render agrees. */
+  serverNow: string;
 }) {
   const [requests, setRequests] = useState(initial);
   const [form, setForm] = useState(EMPTY);
@@ -39,10 +43,12 @@ export default function PortalRequests({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const [dropped, setDropped] = useState(0);
   const [expanded, setExpanded] = useState("");
   const [reply, setReply] = useState("");
   const [replying, setReplying] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
+  const now = useNow(serverNow);
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,6 +89,7 @@ export default function PortalRequests({
     setRequests((prev) => [withPhotos, ...prev]);
     setForm(EMPTY);
     setPhotos([]);
+    setDropped(0);
     if (fileInput.current) fileInput.current.value = "";
     setSaving(false);
     setOpen(false);
@@ -202,11 +209,17 @@ export default function PortalRequests({
                 type="file"
                 accept="image/*"
                 multiple
-                onChange={(e) => setPhotos(Array.from(e.target.files ?? []).slice(0, MAX_PHOTOS))}
+                onChange={(e) => {
+                  const picked = Array.from(e.target.files ?? []);
+                  setPhotos(picked.slice(0, MAX_PHOTOS));
+                  setDropped(Math.max(0, picked.length - MAX_PHOTOS));
+                }}
               />
               {photos.length > 0 && (
                 <span className={styles.hint}>
                   {photos.length} {photos.length === 1 ? "photo" : "photos"} will be sent with this.
+                  {dropped > 0 &&
+                    ` The other ${dropped} won't be — ${MAX_PHOTOS} is the limit for one report.`}
                 </span>
               )}
             </div>
@@ -240,7 +253,12 @@ export default function PortalRequests({
                 <button
                   type="button"
                   className={styles.requestHead}
-                  onClick={() => setExpanded(isExpanded ? "" : r.id)}
+                  onClick={() => {
+                    // Clear the draft when switching: half a sentence about
+                    // the sink shouldn't follow you to the door report.
+                    if (!isExpanded) setReply("");
+                    setExpanded(isExpanded ? "" : r.id);
+                  }}
                   aria-expanded={isExpanded}
                 >
                   <span className={styles.requestTitle}>
@@ -252,7 +270,7 @@ export default function PortalRequests({
                   </span>
                   <span className={styles.requestMeta}>
                     {r.category}
-                    {r.place ? ` · ${r.place}` : ""} · {ago(r.createdAt)}
+                    {r.place ? ` · ${r.place}` : ""} · {ago(r.createdAt, now)}
                   </span>
                 </button>
 
@@ -279,7 +297,7 @@ export default function PortalRequests({
                           } ${u.from === "landlord" ? styles.threadThem : ""}`}
                         >
                           <span className={styles.threadWho}>
-                            {u.from === "system" ? "Status" : u.authorName} · {ago(u.createdAt)}
+                            {u.from === "system" ? "Status" : u.authorName} · {ago(u.createdAt, now)}
                           </span>
                           <span className={styles.threadBody}>
                             {u.statusTo ? STATUS_LABEL[u.statusTo].tenant : u.body}

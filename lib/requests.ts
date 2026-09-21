@@ -10,11 +10,17 @@ export const requestInclude = {
   updates: { orderBy: { createdAt: "asc" } },
 } as const;
 
-type Row = Awaited<ReturnType<typeof loadOne>>;
-
-async function loadOne(id: string) {
+/**
+ * Not called anywhere — it exists so `Row` below tracks whatever
+ * `requestInclude` currently pulls. Change the include and the serializer
+ * stops compiling until it's updated too, which beats finding out in
+ * production that a field went missing.
+ */
+async function shapeOfOne(id: string) {
   return prisma.maintenanceRequest.findUnique({ where: { id }, include: requestInclude });
 }
+
+type Row = Awaited<ReturnType<typeof shapeOfOne>>;
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : "");
 

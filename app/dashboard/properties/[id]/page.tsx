@@ -67,6 +67,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       companyName={company?.name ?? ""}
       canManage={membership?.role === "owner"}
       serverToday={isoDay(new Date())}
+      serverNow={new Date().toISOString()}
       property={{
         id: property.id,
         name: property.name,

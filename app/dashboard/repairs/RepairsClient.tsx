@@ -6,6 +6,7 @@ import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
+import { useNow } from "../../components/useNow";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import {
   STATUSES,
@@ -21,11 +22,14 @@ type Filter = "open" | "urgent" | "all";
 export default function RepairsClient({
   userLabel,
   serverToday,
+  serverNow,
   initial,
   openCount: initialOpen,
 }: {
   userLabel: string;
   serverToday: string;
+  /** When the server rendered, so the first client render agrees. */
+  serverNow: string;
   initial: RequestDTO[];
   openCount: number;
 }) {
@@ -36,6 +40,7 @@ export default function RepairsClient({
   const [openId, setOpenId] = useState("");
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
+  const now = useNow(serverNow);
 
   const [expenseFor, setExpenseFor] = useState<RequestDTO | null>(null);
   const [expense, setExpense] = useState({ amount: "", date: serverToday, category: "", detail: "" });
@@ -198,7 +203,7 @@ export default function RepairsClient({
                   {r.place ? ` · ${r.place}` : ""}
                 </span>
                 <span className={styles.repairWho}>
-                  {r.tenantName || "A tenant"} · {ago(r.createdAt)}
+                  {r.tenantName || "A tenant"} · {ago(r.createdAt, now)}
                   {r.photos.length > 0
                     ? ` · ${r.photos.length} ${r.photos.length === 1 ? "photo" : "photos"}`
                     : ""}
@@ -217,7 +222,7 @@ export default function RepairsClient({
           current
             ? `${[current.propertyName, current.unitName].filter(Boolean).join(" — ")} · reported by ${
                 current.tenantName || "a tenant"
-              } ${ago(current.createdAt)}`
+              } ${ago(current.createdAt, now)}`
             : ""
         }
         onClose={() => {
@@ -265,7 +270,7 @@ export default function RepairsClient({
                   }`}
                 >
                   <span className={styles.threadWho}>
-                    {u.from === "system" ? "Status" : u.authorName} · {ago(u.createdAt)}
+                    {u.from === "system" ? "Status" : u.authorName} · {ago(u.createdAt, now)}
                   </span>
                   <span className={styles.threadBody}>
                     {u.statusTo ? STATUS_LABEL[u.statusTo].landlord : u.body}

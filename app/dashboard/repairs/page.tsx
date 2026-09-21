@@ -26,6 +26,7 @@ export default async function RepairsPage() {
     <RepairsClient
       userLabel={me.name || me.email || "you"}
       serverToday={isoDay(new Date())}
+      serverNow={new Date().toISOString()}
       initial={rows}
       openCount={rows.filter((r) => OPEN_STATUSES.includes(r.status)).length}
     />

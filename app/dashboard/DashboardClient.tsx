@@ -17,6 +17,7 @@ import Modal from "../components/Modal";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 import { Toasts, useToasts } from "../components/Toasts";
 import styles from "./dashboard.module.css";
+import { useNow } from "../components/useNow";
 
 type Company = { id: string; name: string; role: "owner" | "member" };
 
@@ -170,6 +171,7 @@ export default function DashboardClient({
   userLabel,
   storageReady,
   serverToday,
+  serverNow,
   initialCompanies,
   initialProperties,
   initialUnits,
@@ -185,6 +187,8 @@ export default function DashboardClient({
   userLabel: string;
   storageReady: boolean;
   serverToday: string;
+  /** When the server rendered, so the first client render agrees. */
+  serverNow: string;
   initialCompanies: Company[];
   initialProperties: Property[];
   initialUnits: Unit[];
@@ -205,6 +209,9 @@ export default function DashboardClient({
   }, [serverToday]);
 
   const now = useMemo(() => dateFromISO(todayKey), [todayKey]);
+  // Day precision is right for lease maths and useless for "3 days ago", so
+  // the relative times get a real timestamp of their own.
+  const clock = useNow(serverNow);
   const thisMonth = todayKey.slice(0, 7);
   const thisYear = todayKey.slice(0, 4);
 
@@ -1469,7 +1476,7 @@ export default function DashboardClient({
                         </div>
                         <div className={styles.attnSub}>
                           {[r.propertyName, r.unitName].filter(Boolean).join(" — ")} ·{" "}
-                          {r.tenantName || "a tenant"} · {ago(r.createdAt)}
+                          {r.tenantName || "a tenant"} · {ago(r.createdAt, clock)}
                         </div>
                       </div>
                       <div className={styles.attnActions}>

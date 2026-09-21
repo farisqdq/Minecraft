@@ -9,6 +9,7 @@ import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmD
 import Modal from "../../../components/Modal";
 import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
+import { useNow } from "../../../components/useNow";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money } from "@/lib/money";
 import { historyFor, rentForMonth, type RentChangeDTO } from "@/lib/rent";
@@ -73,6 +74,7 @@ export default function PropertyManageClient({
   companyName,
   canManage,
   serverToday,
+  serverNow,
   property,
   initialUnits,
   initialRecurring,
@@ -88,6 +90,8 @@ export default function PropertyManageClient({
   /** Owners can remove units; members record against them. */
   canManage: boolean;
   serverToday: string;
+  /** When the server rendered, so the first client render agrees. */
+  serverNow: string;
   property: Property;
   initialUnits: Unit[];
   initialRecurring: RecurringExpense[];
@@ -109,6 +113,8 @@ export default function PropertyManageClient({
     if (local !== serverToday) setTodayKey(local);
   }, [serverToday]);
   const now = useMemo(() => dateFromISO(todayKey), [todayKey]);
+  // Same split as the dashboard: `now` is a day, this is a moment.
+  const clock = useNow(serverNow);
 
   const [transactions, setTransactions] = useState<LedgerEntry[]>(initialTransactions);
   const [units, setUnits] = useState<Unit[]>(initialUnits);
@@ -991,7 +997,7 @@ export default function PropertyManageClient({
               <tbody>
                 {initialRequests.map((r) => (
                   <tr key={r.id}>
-                    <td>{ago(r.createdAt)}</td>
+                    <td>{ago(r.createdAt, clock)}</td>
                     <td>
                       {r.title}
                       {r.urgency === "urgent" && isOpen(r.status) && (

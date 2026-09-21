@@ -66,6 +66,7 @@ export default async function DashboardPage() {
       userLabel={me.name || me.email || "you"}
       storageReady={blobConfigured()}
       serverToday={isoDay(new Date())}
+      serverNow={new Date().toISOString()}
       initialCompanies={memberships.map((m) => ({
         id: m.company.id,
         name: m.company.name,
