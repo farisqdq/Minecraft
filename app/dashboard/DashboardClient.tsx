@@ -18,6 +18,8 @@ import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog"
 import { Toasts, useToasts } from "../components/Toasts";
 import styles from "./dashboard.module.css";
 import { useNow } from "../components/useNow";
+import { useLivePulse } from "../components/useLivePulse";
+import { useRouter } from "next/navigation";
 
 type Company = { id: string; name: string; role: "owner" | "member" };
 
@@ -212,6 +214,12 @@ export default function DashboardClient({
   // Day precision is right for lease maths and useless for "3 days ago", so
   // the relative times get a real timestamp of their own.
   const clock = useNow(serverNow);
+  const router = useRouter();
+
+  // Both the repair rows and the nav count are props from the server, so
+  // asking the server to render again is all this page needs. The ledger and
+  // the forms are local state and are untouched by it.
+  useLivePulse("/api/requests/pulse", () => router.refresh());
   const thisMonth = todayKey.slice(0, 7);
   const thisYear = todayKey.slice(0, 4);
 

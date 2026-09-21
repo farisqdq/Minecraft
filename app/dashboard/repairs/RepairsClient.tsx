@@ -7,6 +7,7 @@ import Modal from "../../components/Modal";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
 import { useNow } from "../../components/useNow";
+import { useLivePulse } from "../../components/useLivePulse";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import {
   STATUSES,
@@ -41,6 +42,17 @@ export default function RepairsClient({
   const [reply, setReply] = useState("");
   const [busy, setBusy] = useState(false);
   const now = useNow(serverNow);
+
+  // A tenant filing a repair, or replying to one, redraws this page within a
+  // few seconds. `current` is derived from `requests`, so a thread that's
+  // open on screen picks up the new message too — the reply box and its
+  // half-typed text are separate state and are left alone.
+  useLivePulse("/api/requests/pulse", async () => {
+    const res = await fetch("/api/requests", { cache: "no-store" });
+    if (!res.ok) return;
+    const fresh = await res.json().catch(() => null);
+    if (Array.isArray(fresh)) setRequests(fresh);
+  });
 
   const [expenseFor, setExpenseFor] = useState<RequestDTO | null>(null);
   const [expense, setExpense] = useState({ amount: "", date: serverToday, category: "", detail: "" });
@@ -96,6 +108,22 @@ export default function RepairsClient({
     merge(fresh);
     setReply("");
     push("Sent.");
+  }
+
+  /**
+   * Take one line out of the thread. No confirm, matching how a proof photo
+   * comes off a ledger entry — the control is small and only shows on hover,
+   * so it isn't next to anything you'd be reaching for.
+   */
+  async function removeUpdate(r: RequestDTO, updateId: string, isStatus: boolean) {
+    const res = await fetch(`/api/requests/${r.id}/updates/${updateId}`, { method: "DELETE" });
+    const fresh = await res.json().catch(() => null);
+    if (!res.ok || !fresh) {
+      push("Couldn't delete that.", "bad");
+      return;
+    }
+    merge(fresh);
+    push(isStatus ? "Status line removed." : "Message deleted.");
   }
 
   function openExpense(r: RequestDTO) {
@@ -275,6 +303,19 @@ export default function RepairsClient({
                   <span className={styles.threadBody}>
                     {u.statusTo ? STATUS_LABEL[u.statusTo].landlord : u.body}
                   </span>
+                  <button
+                    type="button"
+                    className={styles.threadDel}
+                    aria-label={
+                      u.from === "system"
+                        ? "Delete this status line"
+                        : `Delete this message from ${u.authorName}`
+                    }
+                    title="Delete"
+                    onClick={() => removeUpdate(current, u.id, u.from === "system")}
+                  >
+                    ×
+                  </button>
                 </li>
               ))}
             </ol>
@@ -282,6 +323,7 @@ export default function RepairsClient({
             <div className={styles.replyRow}>
               <input
                 type="text"
+                aria-label={`Reply to ${current.tenantName || "the tenant"}`}
                 placeholder={`Reply to ${current.tenantName || "the tenant"}…`}
                 value={reply}
                 onChange={(e) => setReply(e.target.value)}

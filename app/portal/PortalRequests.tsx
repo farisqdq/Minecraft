@@ -10,6 +10,7 @@ import {
   type RequestDTO,
 } from "@/lib/maintenance";
 import { useNow } from "../components/useNow";
+import { useLivePulse } from "../components/useLivePulse";
 import { formatPhone, telHref } from "@/lib/lease";
 import styles from "./portal.module.css";
 
@@ -53,6 +54,16 @@ export default function PortalRequests({
   const [replying, setReplying] = useState("");
   const fileInput = useRef<HTMLInputElement>(null);
   const now = useNow(serverNow);
+
+  // The landlord marking it scheduled, or writing back, shows up here without
+  // the tenant reloading. The form and any half-typed reply are separate
+  // state, so a refresh mid-sentence doesn't take the sentence with it.
+  useLivePulse("/api/portal/requests/pulse", async () => {
+    const res = await fetch("/api/portal/requests", { cache: "no-store" });
+    if (!res.ok) return;
+    const fresh = await res.json().catch(() => null);
+    if (Array.isArray(fresh)) setRequests(fresh);
+  });
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -327,6 +338,7 @@ export default function PortalRequests({
                     <div className={styles.replyRow}>
                       <input
                         type="text"
+                        aria-label={`Add to your report about ${r.title}`}
                         placeholder={
                           isOpen(r.status) ? "Add something…" : "Still a problem? Say so here."
                         }

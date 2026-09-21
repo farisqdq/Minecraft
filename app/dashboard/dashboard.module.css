@@ -2046,13 +2046,51 @@ tr:hover .rowDel {
 }
 
 .threadItem {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: 2px;
-  padding: 9px 11px;
+  padding: 9px 30px 9px 11px;
   border-radius: 10px;
   background: var(--surface-2);
   border: 1px solid var(--line);
+}
+
+/* Hidden until you point at the line it belongs to, so a thread reads as a
+   conversation rather than a row of buttons. */
+.threadDel {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity var(--fast), color var(--fast), background var(--fast);
+}
+
+.threadItem:hover .threadDel,
+.threadDel:focus-visible {
+  opacity: 1;
+}
+
+.threadDel:hover {
+  background: var(--expense-soft);
+  color: var(--expense);
+}
+
+/* Nothing reveals it on a touch screen, so there it simply stays. */
+@media (hover: none) {
+  .threadDel {
+    opacity: 1;
+  }
 }
 
 /* What the tenant said, as the other side of the conversation. */
