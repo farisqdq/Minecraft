@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "next-auth/react";
+import PropertySearch from "./PropertySearch";
 import styles from "./shell.module.css";
 
 function IconHome(props: { className?: string }) {
@@ -106,6 +107,7 @@ export default function AppShell({
           </nav>
 
           <span className={styles.spacer} />
+          <PropertySearch />
           {userLabel && <span className={styles.who}>{userLabel}</span>}
           <button type="button" className={styles.signOut} onClick={() => signOut({ callbackUrl: "/login" })}>
             Sign out

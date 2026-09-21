@@ -208,7 +208,6 @@ export default function DashboardClient({
   const [filterProperty, setFilterProperty] = useState("");
   const [filterType, setFilterType] = useState("");
   const [query, setQuery] = useState("");
-  const [propertyQuery, setPropertyQuery] = useState("");
 
   const [pendingProof, setPendingProof] = useState<File[]>([]);
   const proofInput = useRef<HTMLInputElement>(null);
@@ -486,27 +485,6 @@ export default function DashboardClient({
       .filter(({ status }) => status.kind === "ending" || status.kind === "expired")
       .sort((a, b) => (a.status.days ?? 0) - (b.status.days ?? 0));
   }, [tenants, visibleIds, now]);
-
-  // Narrows the grid only. visibleProperties also feeds visibleIds, the
-  // charts, the KPI totals and the record form's target list — filtering that
-  // would make typing in this box quietly change the month's numbers.
-  const propertySearch = propertyQuery.trim().toLowerCase();
-  const shownProperties = useMemo(() => {
-    if (!propertySearch) return visibleProperties;
-    return visibleProperties.filter((p) => {
-      const haystack = [
-        p.name,
-        p.address,
-        companies.find((c) => c.id === p.companyId)?.name ?? "",
-        // What someone actually remembers: the tenant, or the unit.
-        ...unitsForProperty(p.id).map((u) => u.name),
-        ...tenants.filter((t) => t.propertyId === p.id).map((t) => t.name),
-      ]
-        .join(" ")
-        .toLowerCase();
-      return haystack.includes(propertySearch);
-    });
-  }, [visibleProperties, propertySearch, companies, units, tenants]);
 
   const search = query.trim().toLowerCase();
 
@@ -1532,39 +1510,14 @@ export default function DashboardClient({
           <section className={styles.block}>
             <div className={styles.blockHead}>
               <h2>Properties</h2>
-              <div className={styles.headTools}>
-                <span className={styles.count}>
-                  {propertySearch && shownProperties.length !== visibleProperties.length
-                    ? `${shownProperties.length} of ${visibleProperties.length}`
-                    : visibleProperties.length
-                      ? `${visibleProperties.length} ${visibleProperties.length === 1 ? "property" : "properties"}`
-                      : ""}
-                </span>
-                {visibleProperties.length > 3 && (
-                  <div className={styles.searchField}>
-                    <input
-                      type="search"
-                      value={propertyQuery}
-                      onChange={(e) => setPropertyQuery(e.target.value)}
-                      placeholder="Find a property…"
-                      aria-label="Search properties by name, address, unit, tenant or LLC"
-                    />
-                    {propertySearch && (
-                      <button
-                        type="button"
-                        className={styles.searchClear}
-                        onClick={() => setPropertyQuery("")}
-                        aria-label="Clear property search"
-                      >
-                        ×
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
+              <span className={styles.count}>
+                {visibleProperties.length
+                  ? `${visibleProperties.length} ${visibleProperties.length === 1 ? "property" : "properties"}`
+                  : ""}
+              </span>
             </div>
             <div className={styles.properties}>
-              {shownProperties.map((p) => {
+              {visibleProperties.map((p) => {
                 const ids = new Set([p.id]);
                 const t = totalsFor(ids, inScopeTransactions);
                 const propUnits = unitsForProperty(p.id);
@@ -1853,14 +1806,6 @@ export default function DashboardClient({
                 </button>
               )}
             </div>
-            {propertySearch && shownProperties.length === 0 && (
-              <div className={styles.ledgerWrap}>
-                <div className={styles.emptyState}>
-                  No property matches &ldquo;{propertyQuery.trim()}&rdquo;. This searches the name,
-                  address, units, tenants and the owning LLC.
-                </div>
-              </div>
-            )}
           </section>
 
           <section className={styles.block}>
