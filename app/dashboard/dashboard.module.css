@@ -242,6 +242,9 @@
 .checkboxField input {
   width: 16px;
   height: 16px;
+  /* .inlineForm sets a 200px min-width for its text boxes; without this the
+     checkbox inherits it and sits 200px away from the word it labels. */
+  min-width: 0;
 }
 
 .linkCell {
@@ -1397,6 +1400,77 @@ tr:hover .rowDel {
     order: 4;
     margin-top: 2px;
     text-align: right;
+  }
+
+  /* The units table has the same problem once a row carries a "Record rent"
+     button: at 390px the buttons fall off the right edge and you have to
+     swipe the table sideways to reach them. Same treatment — name and rent
+     on top, the actions on their own line underneath. */
+  .unitTable {
+    min-width: 0;
+  }
+
+  .unitTable thead {
+    display: none;
+  }
+
+  .unitTable,
+  .unitTable tbody {
+    display: block;
+  }
+
+  .unitTable tbody tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 6px 10px;
+    padding: 13px 14px;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .unitTable tbody tr:last-child {
+    border-bottom: none;
+  }
+
+  .unitTable td {
+    display: block;
+    border: none;
+    padding: 0;
+    min-width: 0;
+  }
+
+  /* Unit name */
+  .unitTable td:nth-child(1) {
+    grid-column: 1;
+    order: 1;
+    font-weight: 600;
+    font-size: 14px;
+  }
+  /* Monthly rent */
+  .unitTable td:nth-child(2) {
+    grid-column: 2;
+    order: 1;
+    text-align: right !important;
+  }
+  /* Record / Edit */
+  .unitTable td:nth-child(3) {
+    grid-column: 1;
+    order: 2;
+    text-align: left !important;
+  }
+  .unitTable td:nth-child(3) .rowActions {
+    justify-content: flex-start;
+  }
+  /* Remove, pushed to the far edge so it never reads as the main action */
+  .unitTable td:nth-child(4) {
+    grid-column: 2;
+    order: 2;
+    text-align: right !important;
+  }
+  /* The inline edit form takes the whole card. */
+  .unitTable td[colspan] {
+    grid-column: 1 / -1;
+    order: 0;
   }
 }
 

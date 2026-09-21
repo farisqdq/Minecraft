@@ -10,7 +10,7 @@ import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money } from "@/lib/money";
-import { historyFor, type RentChangeDTO } from "@/lib/rent";
+import { historyFor, rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, smsHref, telHref } from "@/lib/lease";
 
@@ -51,6 +51,11 @@ function ordinal(n: number) {
   const tens = n % 100;
   if (tens >= 11 && tens <= 13) return `${n}th`;
   return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
+/** An amount box starts empty rather than at "0", which you'd have to clear. */
+function amountField(n: number) {
+  return n > 0 ? String(n) : "";
 }
 
 const EMPTY_TENANT = {
@@ -387,6 +392,72 @@ export default function PropertyManageClient({
     setEntryOpen(true);
   }
 
+  /** What this month's rent should be for a unit, or for the whole house. */
+  function expectedRent(unitId: string) {
+    const unit = unitId ? units.find((u) => u.id === unitId) : null;
+    if (unitId && !unit) return 0;
+    if (unit ? unit.vacant : property.vacant) return 0;
+    return rentForMonth(
+      rentChanges,
+      property.id,
+      unitId || null,
+      todayKey.slice(0, 7),
+      unit ? unit.monthlyRent : property.monthlyRent
+    );
+  }
+
+  /** Who is renting that unit right now, for the "Paid by" line. */
+  function tenantFor(unitId: string) {
+    const match = tenants.find((t) => t.active && (t.unitId ?? "") === unitId);
+    return match?.name ?? "";
+  }
+
+  /**
+   * A blank entry, opened straight from this page so recording rent doesn't
+   * mean going back to the dashboard and finding the property again. Rent
+   * almost always arrives at the figure on the lease, so it starts there and
+   * a short payment is typed over it.
+   */
+  function openNewEntry(prefill?: { type?: "rent" | "expense"; unitId?: string; detail?: string }) {
+    const type = prefill?.type ?? "rent";
+    const unitId = prefill?.unitId ?? "";
+    setError("");
+    setEntry({
+      id: "",
+      type,
+      unitId,
+      date: todayKey,
+      amount: type === "rent" ? amountField(expectedRent(unitId)) : "",
+      detail: type === "rent" ? (prefill?.detail ?? tenantFor(unitId)) : "",
+      note: "",
+      category: "",
+    });
+    setEntryOpen(true);
+  }
+
+  /** Switching the toggle on a blank entry re-guesses; an edit is left alone. */
+  function setEntryType(type: "rent" | "expense") {
+    setEntry((f) =>
+      f.id
+        ? { ...f, type }
+        : {
+            ...f,
+            type,
+            amount: type === "rent" ? amountField(expectedRent(f.unitId)) : "",
+            detail: type === "rent" ? tenantFor(f.unitId) : "",
+          }
+    );
+  }
+
+  /** Changing the unit on a blank rent entry re-guesses too. */
+  function setEntryUnit(unitId: string) {
+    setEntry((f) =>
+      f.id || f.type !== "rent"
+        ? { ...f, unitId }
+        : { ...f, unitId, amount: amountField(expectedRent(unitId)), detail: tenantFor(unitId) }
+    );
+  }
+
   async function saveEntry(e: React.FormEvent) {
     e.preventDefault();
     const amount = parseFloat(entry.amount);
@@ -398,8 +469,9 @@ export default function PropertyManageClient({
     setEntrySaving(true);
     setError("");
 
-    const res = await fetch(`/api/transactions/${entry.id}`, {
-      method: "PATCH",
+    const isNew = !entry.id;
+    const res = await fetch(isNew ? "/api/transactions" : `/api/transactions/${entry.id}`, {
+      method: isNew ? "POST" : "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         propertyId: property.id,
@@ -415,7 +487,17 @@ export default function PropertyManageClient({
     const data = await res.json().catch(() => ({}));
     setEntrySaving(false);
     if (!res.ok) {
-      setError(data?.error || "Couldn't save that entry.");
+      setError(data?.error || (isNew ? "Couldn't record that." : "Couldn't save that entry."));
+      return;
+    }
+
+    if (isNew) {
+      setTransactions((prev) =>
+        [{ ...data, proofCount: 0 } as LedgerEntry, ...prev].sort((a, b) => b.date.localeCompare(a.date))
+      );
+      setEntryOpen(false);
+      push(entry.type === "rent" ? `Rent of ${money(amount)} recorded.` : `Expense of ${money(amount)} recorded.`);
+      router.refresh();
       return;
     }
 
@@ -535,9 +617,18 @@ export default function PropertyManageClient({
       tagline={[property.address, companyName].filter(Boolean).join(" · ") || "Units, tenants and bills"}
       back={{ href: "/dashboard", label: "All properties" }}
       actions={
-        <button type="button" className={`${styles.btn} ${styles.accent}`} onClick={() => openTenant()}>
-          + Add a tenant
-        </button>
+        <>
+          <button type="button" className={styles.btn} onClick={() => openTenant()}>
+            + Add a tenant
+          </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.accent}`}
+            onClick={() => openNewEntry()}
+          >
+            + Record a payment
+          </button>
+        </>
       }
     >
 
@@ -670,6 +761,17 @@ export default function PropertyManageClient({
                   {t.note && <div className={styles.note}>{t.note}</div>}
 
                   <div className={styles.propActions}>
+                    {/* The commonest reason to be looking at a tenant: they
+                        paid. Their unit and name fill themselves in. */}
+                    {t.active && (
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                        onClick={() => openNewEntry({ unitId: t.unitId ?? "", detail: t.name })}
+                      >
+                        Record rent
+                      </button>
+                    )}
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.small} ${styles.quiet}`}
@@ -723,7 +825,7 @@ export default function PropertyManageClient({
           </div>
         ) : (
         <div className={styles.ledgerWrap}>
-          <table className={styles.ledger}>
+          <table className={`${styles.ledger} ${styles.unitTable}`}>
             <thead>
               <tr>
                 <th>Unit</th>
@@ -785,13 +887,22 @@ export default function PropertyManageClient({
                       <RentTrail unitId={u.id} />
                     </td>
                     <td style={{ textAlign: "right" }}>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.small}`}
-                        onClick={() => startEditUnit(u)}
-                      >
-                        Edit
-                      </button>
+                      <div className={styles.rowActions}>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                          onClick={() => openNewEntry({ unitId: u.id })}
+                        >
+                          Record rent
+                        </button>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small}`}
+                          onClick={() => startEditUnit(u)}
+                        >
+                          Edit
+                        </button>
+                      </div>
                     </td>
                     <td style={{ textAlign: "right" }}>
                       {canManage && (
@@ -1020,16 +1131,33 @@ export default function PropertyManageClient({
       <section className={styles.block}>
         <div className={styles.blockHead}>
           <h2>Recent activity</h2>
-          <span className={styles.count}>
-            {transactions.length
-              ? `${transactions.length} ${transactions.length === 1 ? "entry" : "entries"} all time`
-              : ""}
-          </span>
+          <div className={styles.headTools}>
+            <span className={styles.count}>
+              {transactions.length
+                ? `${transactions.length} ${transactions.length === 1 ? "entry" : "entries"} all time`
+                : ""}
+            </span>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.small}`}
+              onClick={() => openNewEntry({ type: "expense" })}
+            >
+              + Expense
+            </button>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.small} ${styles.primary}`}
+              onClick={() => openNewEntry()}
+            >
+              + Rent
+            </button>
+          </div>
         </div>
         {recentEntries.length === 0 ? (
           <div className={styles.ledgerWrap}>
             <div className={styles.emptyState}>
-              Nothing recorded against this property yet.
+              Nothing recorded against this property yet — record the first payment and the
+              numbers above start filling in.
             </div>
           </div>
         ) : (
@@ -1103,8 +1231,12 @@ export default function PropertyManageClient({
 
       <Modal
         open={entryOpen}
-        title="Edit this entry"
-        subtitle="Correct any of it. Proof already attached to this entry stays put."
+        title={entry.id ? "Edit this entry" : "Record a payment"}
+        subtitle={
+          entry.id
+            ? "Correct any of it. Proof already attached to this entry stays put."
+            : `Goes straight onto ${property.name}. Rent or a repair — the toggle decides which.`
+        }
         onClose={() => setEntryOpen(false)}
       >
         <form onSubmit={saveEntry}>
@@ -1112,14 +1244,14 @@ export default function PropertyManageClient({
             <button
               type="button"
               className={entry.type === "rent" ? `${styles.active} ${styles.rent}` : ""}
-              onClick={() => setEntry((f) => ({ ...f, type: "rent" }))}
+              onClick={() => setEntryType("rent")}
             >
               Rent payment
             </button>
             <button
               type="button"
               className={entry.type === "expense" ? `${styles.active} ${styles.expense}` : ""}
-              onClick={() => setEntry((f) => ({ ...f, type: "expense" }))}
+              onClick={() => setEntryType("expense")}
             >
               Repair / expense
             </button>
@@ -1131,7 +1263,7 @@ export default function PropertyManageClient({
                 <select
                   id="e-unit"
                   value={entry.unitId}
-                  onChange={(e) => setEntry((f) => ({ ...f, unitId: e.target.value }))}
+                  onChange={(e) => setEntryUnit(e.target.value)}
                 >
                   <option value="">Whole property</option>
                   {units.map((u) => (
@@ -1209,7 +1341,13 @@ export default function PropertyManageClient({
               Cancel
             </button>
             <button type="submit" className={`${styles.btn} ${styles.accent}`} disabled={entrySaving}>
-              {entrySaving ? "Saving\u2026" : "Save changes"}
+              {entrySaving
+                ? "Saving\u2026"
+                : entry.id
+                  ? "Save changes"
+                  : entry.type === "rent"
+                    ? "Record payment"
+                    : "Record expense"}
             </button>
           </div>
         </form>
