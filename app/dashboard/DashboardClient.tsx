@@ -5,6 +5,7 @@ import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money } from "@/lib/money";
+import { STATUS_LABEL, ago, type RequestDTO } from "@/lib/maintenance";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref } from "@/lib/lease";
@@ -165,6 +166,7 @@ function defaultDateFor(month: string, today: string) {
 
 export default function DashboardClient({
   openRepairs,
+  initialRepairs,
   userLabel,
   storageReady,
   serverToday,
@@ -178,6 +180,8 @@ export default function DashboardClient({
 }: {
   /** Repairs waiting on you, for the nav badge. */
   openRepairs?: number;
+  /** Open repair reports, newest trouble first, for Needs attention. */
+  initialRepairs: RequestDTO[];
   userLabel: string;
   storageReady: boolean;
   serverToday: string;
@@ -1154,7 +1158,12 @@ export default function DashboardClient({
       : 0;
   const collectDone = collection.expected > 0 && collection.collected >= collection.expected;
 
-  const attentionCount = unpaidThisMonth.length + leaseAlerts.length + dueRecurring.length;
+  // Repairs the tenants can see but you can't dismiss from here: this is a
+  // pointer at the queue, not a second place to work them, because a repair
+  // needs a status and a reply, not a one-tap clear.
+  const repairAlerts = initialRepairs.filter((r) => visibleIds.has(r.propertyId));
+  const attentionCount =
+    repairAlerts.length + unpaidThisMonth.length + leaseAlerts.length + dueRecurring.length;
 
   return (
     <AppShell
@@ -1442,10 +1451,37 @@ export default function DashboardClient({
                   <span className={styles.allClearMark} aria-hidden="true">
                     ✓
                   </span>
-                  Every unit has paid, every recurring bill is logged, and no lease is running out.
+                  Every unit has paid, every recurring bill is logged, nothing is waiting to be
+                  fixed, and no lease is running out.
                 </div>
               ) : (
                 <div className={styles.attnList}>
+                  {repairAlerts.map((r) => (
+                    <div key={`r-${r.id}`} className={styles.attnRow}>
+                      <div className={styles.attnMain}>
+                        <div className={styles.attnLabel}>
+                          {r.title}{" "}
+                          <span
+                            className={`${styles.pill} ${r.urgency === "urgent" ? styles.bill : styles.owed}`}
+                          >
+                            {r.urgency === "urgent" ? "Urgent repair" : STATUS_LABEL[r.status].landlord}
+                          </span>
+                        </div>
+                        <div className={styles.attnSub}>
+                          {[r.propertyName, r.unitName].filter(Boolean).join(" — ")} ·{" "}
+                          {r.tenantName || "a tenant"} · {ago(r.createdAt)}
+                        </div>
+                      </div>
+                      <div className={styles.attnActions}>
+                        <Link
+                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                          href="/dashboard/repairs"
+                        >
+                          Work it
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
                   {unpaidThisMonth.map(({ target, expected, paid, tenant, late }) => (
                     <div key={`u-${target.key}`} className={styles.attnRow}>
                       <div className={styles.attnMain}>

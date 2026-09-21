@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import AppShell from "../../../components/AppShell";
 import CashFlowChart from "../../../components/CashFlowChart";
 import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
@@ -14,6 +15,7 @@ import { historyFor, rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { formatJoinCode } from "@/lib/codes";
 import { NO_ACCESS, type PortalAccess } from "@/lib/portal";
+import { STATUS_LABEL, ago, isOpen, type RequestDTO } from "@/lib/maintenance";
 import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 
 type Property = { id: string; name: string; address: string; monthlyRent: number; vacant: boolean };
@@ -78,6 +80,7 @@ export default function PropertyManageClient({
   rentChanges,
   transactions: initialTransactions,
   initialPortal,
+  initialRequests,
 }: {
   /** Repairs waiting on you, for the nav badge. */
   openRepairs?: number;
@@ -93,6 +96,8 @@ export default function PropertyManageClient({
   transactions: LedgerEntry[];
   /** Portal access per tenant id, so the cards render it without a round trip. */
   initialPortal: Record<string, PortalAccess>;
+  /** What's been reported on this property, urgent first. */
+  initialRequests: RequestDTO[];
 }) {
   const router = useRouter();
 
@@ -371,6 +376,25 @@ export default function PropertyManageClient({
       // in-app browsers; the code is on screen either way.
       push("Couldn't copy — read it off the card instead.", "bad");
     }
+  }
+
+  /** Forgotten password: kill the login, hand out a fresh code, keep history. */
+  function resetPortal(t: TenantDTO) {
+    setConfirming({
+      title: "Send a new code?",
+      body: `${t.name} won't be able to sign in with their old password. You'll get a fresh code to give them, and everything they've reported stays exactly where it is.`,
+      confirmLabel: "Make a new code",
+      onConfirm: async () => {
+        const res = await fetch(`/api/tenants/${t.id}/portal`, { method: "PUT" });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          push(data?.error || "Couldn't do that.", "bad");
+          return;
+        }
+        setPortal((prev) => ({ ...prev, [t.id]: data }));
+        push(`New code ready for ${t.name}.`);
+      },
+    });
   }
 
   function revokePortal(t: TenantDTO) {
@@ -830,6 +854,13 @@ export default function PropertyManageClient({
                           <button
                             type="button"
                             className={styles.portalLink}
+                            onClick={() => resetPortal(t)}
+                          >
+                            Forgot password
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.portalLink}
                             onClick={() => revokePortal(t)}
                           >
                             Remove
@@ -925,6 +956,86 @@ export default function PropertyManageClient({
           </button>
         </div>
       </section>
+
+      {initialRequests.length > 0 && (
+        <section className={styles.block}>
+          <div className={styles.blockHead}>
+            <h2>Reported problems</h2>
+            <div className={styles.headTools}>
+              <span className={styles.count}>
+                {(() => {
+                  const open = initialRequests.filter((r) => isOpen(r.status)).length;
+                  return open > 0 ? `${open} still open` : "all closed out";
+                })()}
+              </span>
+              <Link href="/dashboard/repairs" className={`${styles.btn} ${styles.small}`}>
+                Open the queue
+              </Link>
+            </div>
+          </div>
+          <div className={styles.ledgerWrap}>
+            <table className={`${styles.ledger} ${styles.txnTable}`}>
+              {/* Column order matters: below 640px these rows become cards and
+                  the second column is what gets the headline, so the problem
+                  sits there rather than the address it's at. */}
+              <thead>
+                <tr>
+                  <th>Reported</th>
+                  <th>Problem</th>
+                  <th>Status</th>
+                  <th>Where &amp; who</th>
+                  <th></th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {initialRequests.map((r) => (
+                  <tr key={r.id}>
+                    <td>{ago(r.createdAt)}</td>
+                    <td>
+                      {r.title}
+                      {r.urgency === "urgent" && isOpen(r.status) && (
+                        <span className={styles.urgentTag}>Urgent</span>
+                      )}
+                    </td>
+                    <td>
+                      <span
+                        className={`${styles.tag} ${
+                          isOpen(r.status) ? styles.expense : styles.rent
+                        }`}
+                      >
+                        {STATUS_LABEL[r.status].landlord}
+                      </span>
+                    </td>
+                    <td>
+                      {[r.unitName || "Whole property", r.category, r.place]
+                        .filter(Boolean)
+                        .join(" · ")}
+                      <div className={styles.note}>
+                        {r.tenantName || "a tenant"}
+                        {r.photos.length > 0
+                          ? ` · ${r.photos.length} ${r.photos.length === 1 ? "photo" : "photos"}`
+                          : ""}
+                      </div>
+                    </td>
+                    <td></td>
+                    <td>
+                      <div className={styles.rowActions}>
+                        <Link
+                          href="/dashboard/repairs"
+                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                        >
+                          Work it
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className={styles.block}>
         <div className={styles.blockHead}>

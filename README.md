@@ -2,14 +2,15 @@
 
 A profit tracker for rental properties: log rent payments and repair/expense
 costs per property, and see rent collected, expenses paid, and net profit at
-a glance. Ships with email/password login, so each account only sees its own
+a glance. Tenants get their own login to report a problem and watch it get
+fixed. Ships with email/password login, so each account only sees its own
 data — safe to deploy publicly on Vercel.
 
 ## Stack
 
 - **Next.js** (App Router) — pages and API routes
 - **NextAuth (Auth.js) v4** — email/password authentication, session cookies
-- **Prisma + PostgreSQL** — users, properties, tenants, and transactions
+- **Prisma + PostgreSQL** — users, properties, tenants, repairs, transactions
 - **Vercel Blob** (optional) — proof photos and receipts
 
 ## Local setup
@@ -102,6 +103,68 @@ expiring is a vacancy waiting to happen.
 Someone who moves out is kept as a **past tenant** rather than deleted, so
 their history and their old ledger entries still make sense and the next
 tenant is a new record rather than an overwrite.
+
+## The tenant portal
+
+A tenant can be given a login of their own at `/portal`. From their card on a
+property page, **Invite to the portal** issues a code (`HKTM-9R4P`) that you
+send them however you already talk to them. They redeem it at
+`/portal/signup`, pick a password, and they're in.
+
+A code names **one tenant**, is single use, expires in 14 days, and is retired
+the moment you issue a replacement. There is no form anywhere that lets
+someone choose which unit they live in — the code decides, which is why
+self-signup isn't possible.
+
+Signed in, a tenant sees their own place, their lease, their deposit, and
+nothing else. Not your other properties, not your ledger, not your contact
+details. **Remove** takes the login away without touching their lease,
+deposit or ledger history; **Forgot password** kills the old login and hands
+you a fresh code, and everything they ever reported is still there when they
+sign back in.
+
+### Why tenants are a separate table
+
+`User` is the landlord side: a `User` belongs to companies, and every query in
+the app reaches data by walking user → company → property. A tenant must never
+touch that walk, so they get `TenantAccount`, their own credentials provider,
+and an explicit `kind` on the session token. `getCurrentUserId()` fails
+closed — anything that isn't literally `kind: "user"` comes back null — and
+`proxy.ts` blocks each side from the other's routes before a request reaches
+any handler.
+
+A role column on a shared `User` table would put the two one missed `if`
+apart. This way there is no check to miss, because the landlord queries never
+join to the tenant table at all.
+
+## Repairs
+
+A tenant reports what's wrong, where it is, how urgent, and up to six photos.
+Categories cover storefronts as well as houses — parking lot, signage, common
+area — because a laundromat's problems aren't a duplex's.
+
+Each status reads differently on the two sides of the same row. The tenant
+sees "Your landlord has seen this"; you see "Seen". Replies and status changes
+land in **one timeline** rather than a conversation beside a history, because
+the tenant is asking one question: is anyone doing anything.
+
+The **Repairs** tab carries a count of what's waiting, on every page. Open
+repairs also head up "Needs attention" on the Overview, above unpaid rent — a
+tenant with no hot water outranks a late cheque — and each property page lists
+its own.
+
+**Log what it cost** books a finished repair into the ledger against the right
+property and unit, marks it done, and records the transaction id so the same
+repair can't be booked twice. Your tenant sees that it was fixed and never
+what it cost.
+
+A tenant replying to a closed report reopens it, because the alternative is a
+reply nobody is looking at.
+
+Urgency is two buttons, not a dropdown: how hard it is to claim urgency
+decides whether the word keeps any meaning. The form says to call rather than
+type for no heat, no water, gas or fire — a web form is not an emergency line
+and shouldn't pretend to be.
 
 ## Rent changes
 
@@ -218,9 +281,18 @@ Dark mode follows the system setting.
 ## Backups
 
 The **Backup** page downloads a single JSON file with every LLC, property,
-unit, tenant, recurring expense, rent change and ledger entry you can see,
-and restores one back into the app. Proof files are referenced by link rather
-than copied into the file.
+unit, tenant, recurring expense, rent change, repair report and ledger entry
+you can see, and restores one back into the app. Proof files and repair
+photos are referenced by link rather than copied into the file.
+
+Repairs carry their reporter as a **name** rather than an id, because ids from
+the old database mean nothing in a fresh one — on restore each repair is
+re-linked to the tenant that came back alongside it.
+
+Tenants' portal logins are deliberately **not** in the file. It lands in your
+downloads and gets emailed around, and password hashes have no business in
+it. After a restore you invite them again from their card, and everything
+they reported is already there.
 
 Restoring only ever **adds**. Each LLC in the file comes back as a new LLC you
 own; if the name is already taken, the restored copy is renamed (e.g.

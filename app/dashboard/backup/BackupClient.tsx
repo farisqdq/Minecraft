@@ -12,6 +12,7 @@ type Counts = {
   recurring: number;
   transactions: number;
   tenants: number;
+  requests: number;
 };
 
 export default function BackupClient({
@@ -39,6 +40,7 @@ export default function BackupClient({
     if (counts.units) parts.push(plural(counts.units, "unit", "units"));
     if (counts.tenants) parts.push(plural(counts.tenants, "tenant", "tenants"));
     if (counts.recurring) parts.push(plural(counts.recurring, "recurring expense", "recurring expenses"));
+    if (counts.requests) parts.push(plural(counts.requests, "repair report", "repair reports"));
     parts.push(plural(counts.transactions, "ledger entry", "ledger entries"));
     return parts.length > 1
       ? `${parts.slice(0, -1).join(", ")} and ${parts[parts.length - 1]}`
@@ -75,6 +77,9 @@ export default function BackupClient({
         parts.push(`${data.recurring} recurring ${data.recurring === 1 ? "expense" : "expenses"}`);
       }
       if (data.tenants) parts.push(`${data.tenants} ${data.tenants === 1 ? "tenant" : "tenants"}`);
+      if (data.requests) {
+        parts.push(`${data.requests} repair ${data.requests === 1 ? "report" : "reports"}`);
+      }
       parts.push(`${data.attachments} ${data.attachments === 1 ? "proof" : "proofs"}`);
       setResult(`Restored ${parts.join(", ")}.`);
       router.refresh();
@@ -104,6 +109,12 @@ export default function BackupClient({
           <p className={styles.helpText} style={{ marginTop: 0 }}>
             Saves {summary} to a single file on your computer. Keep it somewhere
             safe — it&apos;s a full copy of your records.
+          </p>
+          <p className={styles.helpText}>
+            Tenants&apos; portal logins are deliberately left out. The file lands in your downloads
+            and gets emailed around, and passwords have no business in it — after a restore you
+            invite them again from their card, and everything they ever reported is already there
+            waiting.
           </p>
           <div className={styles.formFoot} style={{ justifyContent: "flex-start", marginTop: 14 }}>
             <a className={`${styles.btn} ${styles.primary}`} href="/api/backup" download>

@@ -4,7 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 4;
+export const BACKUP_VERSION = 5;
 
 type TxnRow = {
   type: string;
@@ -92,6 +92,63 @@ function serializeRentChanges(rows: { effectiveFrom: Date; amount: number }[]) {
   }));
 }
 
+type RequestRow = {
+  title: string;
+  detail: string;
+  category: string;
+  place: string | null;
+  urgency: string;
+  status: string;
+  createdAt: Date;
+  seenAt: Date | null;
+  resolvedAt: Date | null;
+  tenant: { name: string } | null;
+  photos: { url: string; filename: string; contentType: string; size: number }[];
+  updates: { authorName: string; body: string; statusTo: string | null; createdAt: Date }[];
+};
+
+/**
+ * Repairs go out with the thread and the photo links, but the tenant is
+ * carried as a name rather than an id: ids don't survive a restore into a
+ * fresh database, and the name is what re-links it to the tenant row that
+ * comes back alongside it.
+ */
+function serializeRequests(rows: RequestRow[]) {
+  return rows.map((r) => ({
+    title: r.title,
+    detail: r.detail,
+    category: r.category,
+    place: r.place ?? "",
+    urgency: r.urgency,
+    status: r.status,
+    tenantName: r.tenant?.name ?? "",
+    createdAt: r.createdAt.toISOString(),
+    seenAt: r.seenAt ? r.seenAt.toISOString() : "",
+    resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : "",
+    photos: r.photos.map((p) => ({
+      url: p.url,
+      filename: p.filename,
+      contentType: p.contentType,
+      size: p.size,
+    })),
+    updates: r.updates.map((u) => ({
+      authorName: u.authorName,
+      body: u.body,
+      statusTo: u.statusTo ?? "",
+      createdAt: u.createdAt.toISOString(),
+    })),
+  }));
+}
+
+const REQUEST_INCLUDE = {
+  orderBy: { createdAt: "asc" },
+  include: {
+    tenant: { select: { name: true } },
+    photos: { orderBy: { createdAt: "asc" } },
+    updates: { orderBy: { createdAt: "asc" } },
+  },
+} as const;
+
 export async function GET() {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -111,6 +168,7 @@ export async function GET() {
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
           tenants: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
+          requests: { ...REQUEST_INCLUDE, where: { unitId: null } },
           units: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -121,6 +179,7 @@ export async function GET() {
               recurringExpenses: { orderBy: { createdAt: "asc" } },
               tenants: { orderBy: { createdAt: "asc" } },
               rentChanges: { orderBy: { effectiveFrom: "asc" } },
+              requests: REQUEST_INCLUDE,
             },
           },
         },
@@ -144,6 +203,7 @@ export async function GET() {
         recurringExpenses: serializeRecurring(p.recurringExpenses),
         tenants: serializeTenants(p.tenants),
         rentChanges: serializeRentChanges(p.rentChanges),
+        requests: serializeRequests(p.requests),
         units: p.units.map((u) => ({
           name: u.name,
           monthlyRent: u.monthlyRent,
@@ -152,6 +212,7 @@ export async function GET() {
           recurringExpenses: serializeRecurring(u.recurringExpenses),
           tenants: serializeTenants(u.tenants),
           rentChanges: serializeRentChanges(u.rentChanges),
+          requests: serializeRequests(u.requests),
         })),
       })),
     })),

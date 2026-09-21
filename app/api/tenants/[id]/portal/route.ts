@@ -83,6 +83,46 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
 }
 
 /**
+ * Start them over with a new code when they've forgotten their password.
+ *
+ * There is no "email me a reset link" here because there is no mail being
+ * sent — you hand out the code the same way you did the first one. Deleting
+ * the account is safe: everything they reported hangs off their tenant row,
+ * not off the login, so the history is all still there when they sign back
+ * in under a new password.
+ */
+export async function PUT(_req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const userId = await getCurrentUserId();
+  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+
+  const { id } = await params;
+  const tenant = await requireTenant(userId, id);
+  if (!tenant) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  if (!tenant.active) {
+    return NextResponse.json(
+      { error: "That tenant has moved out. Mark them back in first." },
+      { status: 400 }
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.tenantAccount.deleteMany({ where: { tenantId: id } }),
+    prisma.tenantInvite.deleteMany({ where: { tenantId: id } }),
+    prisma.tenantInvite.create({
+      data: {
+        tenantId: id,
+        code: generateJoinCode(),
+        invitedById: userId,
+        expiresAt: inviteExpiry(),
+      },
+    }),
+  ]);
+
+  return NextResponse.json(await readAccess(id));
+}
+
+/**
  * Take portal access away: deletes the account and any unused code. Their
  * tenant record, lease and ledger history are untouched — this is only the
  * login.

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { BACKUP_FORMAT } from "../route";
 import { normalizeCategory } from "@/lib/categories";
+import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
 
 type Tx = Prisma.TransactionClient;
 
@@ -14,6 +15,8 @@ const MAX_TRANSACTIONS = 50000;
 const MAX_RECURRING = 5000;
 const MAX_TENANTS = 5000;
 const MAX_RENT_CHANGES = 20000;
+const MAX_REQUESTS = 20000;
+const MAX_REQUEST_UPDATES = 100000;
 
 type CleanAttachment = { url: string; filename: string; contentType: string; size: number };
 type CleanTransaction = {
@@ -47,6 +50,26 @@ type CleanTenant = {
   note: string | null;
 };
 type CleanRentChange = { effectiveFrom: Date; amount: number };
+type CleanRequestUpdate = {
+  authorName: string;
+  body: string;
+  statusTo: string | null;
+  createdAt: Date;
+};
+type CleanRequest = {
+  title: string;
+  detail: string;
+  category: string;
+  place: string | null;
+  urgency: string;
+  status: string;
+  tenantName: string;
+  createdAt: Date;
+  seenAt: Date | null;
+  resolvedAt: Date | null;
+  photos: CleanAttachment[];
+  updates: CleanRequestUpdate[];
+};
 type CleanUnit = {
   name: string;
   monthlyRent: number;
@@ -55,6 +78,7 @@ type CleanUnit = {
   recurringExpenses: CleanRecurring[];
   tenants: CleanTenant[];
   rentChanges: CleanRentChange[];
+  requests: CleanRequest[];
 };
 type CleanProperty = {
   name: string;
@@ -65,6 +89,7 @@ type CleanProperty = {
   recurringExpenses: CleanRecurring[];
   tenants: CleanTenant[];
   rentChanges: CleanRentChange[];
+  requests: CleanRequest[];
   units: CleanUnit[];
 };
 type CleanCompany = { name: string; properties: CleanProperty[] };
@@ -78,6 +103,12 @@ const bool = (v: unknown) => v === true;
 const day = (v: unknown) => {
   if (typeof v !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return null;
   const d = new Date(`${v}T00:00:00.000Z`);
+  return isNaN(d.getTime()) ? null : d;
+};
+
+const stamp = (v: unknown) => {
+  if (typeof v !== "string" || !v) return null;
+  const d = new Date(v);
   return isNaN(d.getTime()) ? null : d;
 };
 
@@ -97,6 +128,8 @@ function parseBackup(raw: unknown) {
   let recurringTotal = 0;
   let tenantTotal = 0;
   let rentChangeTotal = 0;
+  let requestTotal = 0;
+  let requestUpdateTotal = 0;
 
   function parseTransactions(raw: unknown): CleanTransaction[] {
     const out: CleanTransaction[] = [];
@@ -198,6 +231,65 @@ function parseBackup(raw: unknown) {
     return out;
   }
 
+  function parseRequests(raw: unknown): CleanRequest[] {
+    const out: CleanRequest[] = [];
+    for (const rawR of Array.isArray(raw) ? raw : []) {
+      const r = (rawR ?? {}) as Record<string, unknown>;
+      const title = str(r.title, 120);
+      const category = normalizeRequestCategory(r.category);
+      // A report with no words is not a report; an unknown category is
+      // salvageable, so it lands in "Other" rather than being dropped.
+      if (!title) continue;
+      if (++requestTotal > MAX_REQUESTS) throw new Error("That backup is too large to import.");
+
+      const photos: CleanAttachment[] = [];
+      for (const rawPhoto of Array.isArray(r.photos) ? r.photos : []) {
+        const a = (rawPhoto ?? {}) as Record<string, unknown>;
+        const url = str(a.url, 1000);
+        if (!/^https:\/\//i.test(url)) continue;
+        photos.push({
+          url,
+          filename: str(a.filename, 200) || "photo",
+          contentType: str(a.contentType, 100) || "image/jpeg",
+          size: Math.round(num(a.size)),
+        });
+      }
+
+      const updates: CleanRequestUpdate[] = [];
+      for (const rawUpdate of Array.isArray(r.updates) ? r.updates : []) {
+        const u = (rawUpdate ?? {}) as Record<string, unknown>;
+        const body = str(u.body, 2000);
+        const statusTo = normalizeStatus(u.statusTo);
+        if (!body && !statusTo) continue;
+        if (++requestUpdateTotal > MAX_REQUEST_UPDATES) {
+          throw new Error("That backup is too large to import.");
+        }
+        updates.push({
+          authorName: str(u.authorName, 120) || "Someone",
+          body,
+          statusTo,
+          createdAt: stamp(u.createdAt) ?? new Date(),
+        });
+      }
+
+      out.push({
+        title,
+        detail: str(r.detail, 4000),
+        category: category ?? "Other",
+        place: str(r.place, 80) || null,
+        urgency: r.urgency === "urgent" ? "urgent" : "normal",
+        status: normalizeStatus(r.status) ?? "open",
+        tenantName: str(r.tenantName, 120),
+        createdAt: stamp(r.createdAt) ?? new Date(),
+        seenAt: stamp(r.seenAt),
+        resolvedAt: stamp(r.resolvedAt),
+        photos,
+        updates,
+      });
+    }
+    return out;
+  }
+
   const companies: CleanCompany[] = [];
   for (const rawCompany of body.companies) {
     const c = (rawCompany ?? {}) as Record<string, unknown>;
@@ -226,6 +318,7 @@ function parseBackup(raw: unknown) {
           recurringExpenses: parseRecurring(u.recurringExpenses),
           tenants: parseTenants(u.tenants),
           rentChanges: parseRentChanges(u.rentChanges),
+          requests: parseRequests(u.requests),
         });
       }
 
@@ -238,6 +331,7 @@ function parseBackup(raw: unknown) {
         recurringExpenses: parseRecurring(p.recurringExpenses),
         tenants: parseTenants(p.tenants),
         rentChanges: parseRentChanges(p.rentChanges),
+        requests: parseRequests(p.requests),
         units,
       });
     }
@@ -254,6 +348,7 @@ function parseBackup(raw: unknown) {
     recurringTotal,
     tenantTotal,
     rentChangeTotal,
+    requestTotal,
   };
 }
 
@@ -299,6 +394,7 @@ export async function POST(req: Request) {
     recurring: 0,
     tenants: 0,
     rentChanges: 0,
+    requests: 0,
   };
 
   async function createTransactions(
@@ -365,17 +461,85 @@ export async function POST(req: Request) {
     created.recurring += templates.length;
   }
 
+  /**
+   * Returns a name -> id map for the tenants just written, which is how a
+   * repair finds its reporter again: the backup carries the tenant's name,
+   * because ids from the old database mean nothing in this one.
+   *
+   * Created one at a time rather than with createMany for that reason —
+   * createMany doesn't hand back ids.
+   */
   async function createTenants(
     tx: Tx,
     propertyId: string,
     unitId: string | null,
     tenants: CleanTenant[]
   ) {
-    if (tenants.length === 0) return;
-    await tx.tenant.createMany({
-      data: tenants.map((t) => ({ ...t, propertyId, unitId, createdById: userId })),
-    });
-    created.tenants += tenants.length;
+    const byName = new Map<string, string>();
+    for (const t of tenants) {
+      const row = await tx.tenant.create({
+        data: { ...t, propertyId, unitId, createdById: userId },
+      });
+      created.tenants += 1;
+      // First one wins: two tenants of the same name in one unit is a
+      // coincidence, and guessing between them is worse than picking one.
+      if (!byName.has(row.name)) byName.set(row.name, row.id);
+    }
+    return byName;
+  }
+
+  async function createRequests(
+    tx: Tx,
+    propertyId: string,
+    unitId: string | null,
+    requests: CleanRequest[],
+    tenantsByName: Map<string, string>
+  ) {
+    for (const r of requests) {
+      const row = await tx.maintenanceRequest.create({
+        data: {
+          propertyId,
+          unitId,
+          // A repair whose reporter is gone keeps its place in the history
+          // with a null tenant rather than being dropped.
+          tenantId: tenantsByName.get(r.tenantName) ?? null,
+          title: r.title,
+          detail: r.detail,
+          category: r.category,
+          place: r.place,
+          urgency: r.urgency,
+          status: r.status,
+          createdAt: r.createdAt,
+          seenAt: r.seenAt,
+          resolvedAt: r.resolvedAt,
+        },
+      });
+      created.requests += 1;
+
+      if (r.photos.length > 0) {
+        await tx.maintenancePhoto.createMany({
+          data: r.photos.map((a) => ({
+            requestId: row.id,
+            url: a.url,
+            pathname: new URL(a.url).pathname.replace(/^\//, ""),
+            filename: a.filename,
+            contentType: a.contentType,
+            size: a.size,
+          })),
+        });
+      }
+      if (r.updates.length > 0) {
+        await tx.maintenanceUpdate.createMany({
+          data: r.updates.map((u) => ({
+            requestId: row.id,
+            authorName: u.authorName,
+            body: u.body,
+            statusTo: u.statusTo,
+            createdAt: u.createdAt,
+          })),
+        });
+      }
+    }
   }
 
   async function createRentChanges(
@@ -413,8 +577,9 @@ export async function POST(req: Request) {
 
         await createTransactions(tx, prop.id, null, property.transactions);
         await createRecurring(tx, prop.id, null, property.recurringExpenses);
-        await createTenants(tx, prop.id, null, property.tenants);
+        const propertyTenants = await createTenants(tx, prop.id, null, property.tenants);
         await createRentChanges(tx, prop.id, null, property.rentChanges);
+        await createRequests(tx, prop.id, null, property.requests, propertyTenants);
 
         for (const unit of property.units) {
           const u = await tx.unit.create({
@@ -429,8 +594,9 @@ export async function POST(req: Request) {
 
           await createTransactions(tx, prop.id, u.id, unit.transactions);
           await createRecurring(tx, prop.id, u.id, unit.recurringExpenses);
-          await createTenants(tx, prop.id, u.id, unit.tenants);
+          const unitTenants = await createTenants(tx, prop.id, u.id, unit.tenants);
           await createRentChanges(tx, prop.id, u.id, unit.rentChanges);
+          await createRequests(tx, prop.id, u.id, unit.requests, unitTenants);
         }
       }
     }

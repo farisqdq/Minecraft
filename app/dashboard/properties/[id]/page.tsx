@@ -1,12 +1,17 @@
 import { redirect, notFound } from "next/navigation";
 import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { openRepairCount } from "@/lib/requests";
+import { openRepairCount, requestInclude, serializeRequest } from "@/lib/requests";
+import { isOpen } from "@/lib/maintenance";
 import { requireProperty } from "@/lib/access";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
 import PropertyManageClient from "./PropertyManageClient";
+
+// Enough to see the shape of a place's troubles without turning the page
+// into a second copy of the Repairs queue.
+const PROPERTY_REQUEST_LIMIT = 12;
 
 export default async function PropertyManagePage({ params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -23,7 +28,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
     select: { role: true },
   });
 
-  const [company, units, recurring, tenants, rentChanges, transactions] = await Promise.all([
+  const [company, units, recurring, tenants, rentChanges, transactions, requests] = await Promise.all([
     prisma.company.findUnique({ where: { id: property.companyId }, select: { name: true } }),
     prisma.unit.findMany({ where: { propertyId: id }, orderBy: { createdAt: "asc" } }),
     prisma.recurringExpense.findMany({ where: { propertyId: id }, orderBy: { createdAt: "asc" } }),
@@ -48,6 +53,11 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       where: { propertyId: id },
       orderBy: { date: "desc" },
       include: { attachments: { orderBy: { createdAt: "asc" } } },
+    }),
+    prisma.maintenanceRequest.findMany({
+      where: { propertyId: id },
+      include: requestInclude,
+      orderBy: { createdAt: "desc" },
     }),
   ]);
 
@@ -85,6 +95,19 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         active: r.active,
       }))}
       initialTenants={tenants.map(serializeTenant)}
+      initialRequests={requests
+        .map(serializeRequest)
+        // Anything still open comes first — a finished urgent repair from
+        // March must not sit above a leak reported this morning — then
+        // urgent before normal, then newest. Sorted here rather than in the
+        // query because "open" is three statuses, not a column.
+        .sort(
+          (a, b) =>
+            Number(isOpen(b.status)) - Number(isOpen(a.status)) ||
+            Number(b.urgency === "urgent") - Number(a.urgency === "urgent") ||
+            b.createdAt.localeCompare(a.createdAt)
+        )
+        .slice(0, PROPERTY_REQUEST_LIMIT)}
       initialPortal={Object.fromEntries(
         tenants.map((t) => [
           t.id,

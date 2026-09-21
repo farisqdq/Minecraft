@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { openRepairCount } from "@/lib/requests";
+import { openRepairCount, requestInclude, serializeRequest } from "@/lib/requests";
 import { blobConfigured } from "@/lib/blob";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
@@ -21,7 +21,7 @@ export default async function DashboardPage() {
   });
   const companyIds = memberships.map((m) => m.companyId);
 
-  const [properties, units, recurring, rentChanges, tenants, transactions] = await Promise.all([
+  const [properties, units, recurring, rentChanges, tenants, transactions, openRequests] = await Promise.all([
     prisma.property.findMany({
       where: { companyId: { in: companyIds } },
       orderBy: { createdAt: "asc" },
@@ -47,11 +47,22 @@ export default async function DashboardPage() {
       orderBy: { date: "desc" },
       include: { attachments: { orderBy: { createdAt: "asc" } } },
     }),
+    // What tenants are waiting on. Urgent first, then oldest, matching the
+    // Repairs queue so the two never disagree about what's most pressing.
+    prisma.maintenanceRequest.findMany({
+      where: {
+        property: { companyId: { in: companyIds } },
+        status: { in: ["open", "seen", "scheduled"] },
+      },
+      include: requestInclude,
+      orderBy: [{ urgency: "desc" }, { createdAt: "asc" }],
+    }),
   ]);
 
   return (
     <DashboardClient
       openRepairs={openRepairs}
+      initialRepairs={openRequests.map(serializeRequest)}
       userLabel={me.name || me.email || "you"}
       storageReady={blobConfigured()}
       serverToday={isoDay(new Date())}
