@@ -189,3 +189,365 @@
     padding: 20px 16px 48px;
   }
 }
+
+/* ---------- Reporting a problem ---------- */
+
+.cardHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.cardHead h2 {
+  margin-bottom: 0;
+}
+
+.cardAction {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.cardAction:hover {
+  border-color: var(--ink);
+}
+
+.reportForm {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.fieldRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+
+.field label {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 500;
+}
+
+.field input,
+.field select,
+.field textarea {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  width: 100%;
+  resize: vertical;
+}
+
+.field input:focus,
+.field select:focus,
+.field textarea:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  background: var(--surface);
+}
+
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* Two buttons rather than a dropdown: the choice is small, and how hard it is
+   to say "this is urgent" decides whether the word keeps any meaning. */
+.urgencyRow {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 4px;
+  background: var(--surface-3);
+  border-radius: 999px;
+}
+
+.urgencyRow button {
+  border: 0;
+  background: none;
+  border-radius: 999px;
+  padding: 9px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--muted);
+  min-height: 40px;
+}
+
+.urgencyOn {
+  background: var(--surface);
+  color: var(--ink) !important;
+  font-weight: 600 !important;
+  box-shadow: var(--shadow-sm);
+}
+
+.urgentOn {
+  color: var(--expense) !important;
+}
+
+.formError {
+  background: var(--expense-soft);
+  border: 1px solid var(--expense);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  font-size: 13px;
+  color: var(--ink);
+}
+
+.formFoot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btnPrimary {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  border-radius: var(--radius-sm);
+  padding: 11px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 44px;
+}
+
+.btnPrimary[disabled] {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btnQuiet {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  border-radius: var(--radius-sm);
+  padding: 11px 16px;
+  font-size: 13.5px;
+  font-weight: 500;
+  min-height: 44px;
+}
+
+.btnQuiet[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.requestList {
+  margin-top: 18px;
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.listHead {
+  font-size: 12.5px;
+  color: var(--muted);
+  margin-bottom: 10px;
+}
+
+.request {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+/* The tenant's status labels are sentences ("Someone's booked to come out"),
+   not the one-word ones the landlord sees, so they get their own line rather
+   than squeezing the title into three at phone width. */
+.requestHead {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  width: 100%;
+  text-align: left;
+  border: 0;
+  background: none;
+  padding: 13px 14px;
+}
+
+.requestHead:hover {
+  background: var(--surface-2);
+}
+
+.requestTitle {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.urgentTag {
+  display: inline-block;
+  margin-left: 7px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--expense-soft);
+  color: var(--expense);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  vertical-align: 2px;
+}
+
+.statusTag {
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.s_open {
+  background: var(--surface-3);
+  color: var(--ink-2, var(--muted));
+}
+
+.s_seen,
+.s_scheduled {
+  background: var(--gold-soft, var(--accent-soft));
+  color: var(--gold);
+}
+
+.s_done {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.s_declined {
+  background: var(--expense-soft);
+  color: var(--expense);
+}
+
+.requestMeta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.requestBody {
+  padding: 0 14px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.requestDetail {
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--ink);
+  margin: 12px 0 0;
+  white-space: pre-wrap;
+}
+
+.photoRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.photo {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  display: block;
+}
+
+.thread {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.threadItem {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+
+/* A reply from the landlord reads as the other side of a conversation. */
+.threadThem {
+  background: var(--accent-soft);
+  border-color: transparent;
+}
+
+/* A status change is the app talking, not a person. */
+.threadSystem {
+  background: none;
+  border: 0;
+  border-left: 2px solid var(--line-strong);
+  border-radius: 0;
+  padding: 2px 0 2px 11px;
+}
+
+.threadWho {
+  font-size: 11.5px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.threadBody {
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+
+.replyRow {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.replyRow input {
+  flex: 1;
+  min-width: 0;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.replyRow input:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+  background: var(--surface);
+}
+
+@media (max-width: 560px) {
+  .fieldRow {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { openRepairCount } from "@/lib/requests";
 import BackupClient from "./BackupClient";
 
 export default async function BackupPage() {
   const userId = await getCurrentUserId();
   if (!userId) redirect("/login");
+  const openRepairs = await openRepairCount(userId);
   const companyIds = (
     await prisma.companyMember.findMany({ where: { userId }, select: { companyId: true } })
   ).map((m) => m.companyId);
@@ -20,6 +22,6 @@ export default async function BackupPage() {
   ]);
 
   return (
-    <BackupClient counts={{ companies, properties, units, recurring, transactions, tenants }} />
+    <BackupClient openRepairs={openRepairs} counts={{ companies, properties, units, recurring, transactions, tenants }} />
   );
 }

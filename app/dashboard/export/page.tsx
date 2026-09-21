@@ -1,11 +1,13 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { openRepairCount } from "@/lib/requests";
 import ExportClient from "./ExportClient";
 
 export default async function ExportPage() {
   const userId = await getCurrentUserId();
   if (!userId) redirect("/login");
+  const openRepairs = await openRepairCount(userId);
   const memberships = await prisma.companyMember.findMany({
     where: { userId },
     include: { company: { select: { id: true, name: true } } },
@@ -20,5 +22,5 @@ export default async function ExportPage() {
     select: { date: true },
   });
 
-  return <ExportClient companies={companies} earliestYear={earliest?.date.getFullYear() ?? null} />;
+  return <ExportClient openRepairs={openRepairs} companies={companies} earliestYear={earliest?.date.getFullYear() ?? null} />;
 }

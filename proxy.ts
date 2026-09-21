@@ -33,6 +33,7 @@ export const config = {
     "/api/export/:path*",
     "/api/properties/:path*",
     "/api/recurring/:path*",
+    "/api/requests/:path*",
     "/api/search",
     "/api/tenants/:path*",
     "/api/transactions/:path*",

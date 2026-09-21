@@ -67,6 +67,7 @@ const EMPTY_TENANT = {
 };
 
 export default function PropertyManageClient({
+  openRepairs,
   companyName,
   canManage,
   serverToday,
@@ -78,6 +79,8 @@ export default function PropertyManageClient({
   transactions: initialTransactions,
   initialPortal,
 }: {
+  /** Repairs waiting on you, for the nav badge. */
+  openRepairs?: number;
   companyName: string;
   /** Owners can remove units; members record against them. */
   canManage: boolean;
@@ -664,6 +667,7 @@ export default function PropertyManageClient({
 
   return (
     <AppShell
+      openRepairs={openRepairs}
       title={property.name}
       tagline={[property.address, companyName].filter(Boolean).join(" · ") || "Units, tenants and bills"}
       back={{ href: "/dashboard", label: "All properties" }}

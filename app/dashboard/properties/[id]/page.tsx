@@ -1,6 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { openRepairCount } from "@/lib/requests";
 import { requireProperty } from "@/lib/access";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
@@ -10,6 +11,7 @@ import PropertyManageClient from "./PropertyManageClient";
 export default async function PropertyManagePage({ params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
   if (!userId) redirect("/login");
+  const openRepairs = await openRepairCount(userId);
 
   const { id } = await params;
 
@@ -51,6 +53,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
 
   return (
     <PropertyManageClient
+      openRepairs={openRepairs}
       companyName={company?.name ?? ""}
       canManage={membership?.role === "owner"}
       serverToday={isoDay(new Date())}

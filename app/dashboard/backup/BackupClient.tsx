@@ -14,7 +14,14 @@ type Counts = {
   tenants: number;
 };
 
-export default function BackupClient({ counts }: { counts: Counts }) {
+export default function BackupClient({
+  counts,
+  openRepairs,
+}: {
+  counts: Counts;
+  /** Repairs waiting on you, for the nav badge. */
+  openRepairs?: number;
+}) {
   const router = useRouter();
   const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
@@ -81,6 +88,7 @@ export default function BackupClient({ counts }: { counts: Counts }) {
 
   return (
     <AppShell
+      openRepairs={openRepairs}
       title="Backup"
       tagline="Download a copy of everything, or restore one back into the app."
     >

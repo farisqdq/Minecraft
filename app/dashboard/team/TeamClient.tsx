@@ -20,9 +20,12 @@ type Company = {
 };
 
 export default function TeamClient({
+  openRepairs,
   currentUserId,
   companies: initialCompanies,
 }: {
+  /** Repairs waiting on you, for the nav badge. */
+  openRepairs?: number;
   currentUserId: string;
   companies: Company[];
 }) {
@@ -163,6 +166,7 @@ export default function TeamClient({
 
   return (
     <AppShell
+      openRepairs={openRepairs}
       title="Team"
       tagline="Each LLC has its own team — invite partners to one without giving access to the others."
     >

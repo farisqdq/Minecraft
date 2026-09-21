@@ -7,9 +7,12 @@ import styles from "../dashboard.module.css";
 type Company = { id: string; name: string };
 
 export default function ExportClient({
+  openRepairs,
   companies,
   earliestYear,
 }: {
+  /** Repairs waiting on you, for the nav badge. */
+  openRepairs?: number;
   companies: Company[];
   earliestYear: number | null;
 }) {
@@ -24,6 +27,7 @@ export default function ExportClient({
 
   return (
     <AppShell
+      openRepairs={openRepairs}
       title="Export"
       tagline="Download a year of one LLC's ledger, ready for taxes."
     >

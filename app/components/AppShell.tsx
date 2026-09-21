@@ -41,6 +41,16 @@ function IconBackup(props: { className?: string }) {
   );
 }
 
+function IconRepairs(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M14.1 6.5a3.9 3.9 0 0 0 5 5l-8.3 8.3a2 2 0 0 1-2.8 0l-2.2-2.2a2 2 0 0 1 0-2.8Z" />
+      <path d="M14.1 6.5 17 3.6a4.4 4.4 0 0 1 3.4 3.4l-2.3 4.5" />
+    </svg>
+  );
+}
+
 function IconExport(props: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
@@ -54,6 +64,7 @@ function IconExport(props: { className?: string }) {
 
 const NAV = [
   { href: "/dashboard", label: "Overview", short: "Home", Icon: IconHome },
+  { href: "/dashboard/repairs", label: "Repairs", short: "Repairs", Icon: IconRepairs, badge: true },
   { href: "/dashboard/team", label: "Team", short: "Team", Icon: IconTeam },
   { href: "/dashboard/backup", label: "Backup", short: "Backup", Icon: IconBackup },
   { href: "/dashboard/export", label: "Export", short: "Export", Icon: IconExport },
@@ -70,6 +81,7 @@ export default function AppShell({
   actions,
   back,
   userLabel,
+  openRepairs = 0,
   children,
 }: {
   title: string;
@@ -77,6 +89,8 @@ export default function AppShell({
   actions?: ReactNode;
   back?: { href: string; label: string };
   userLabel?: string;
+  /** Unresolved repair requests, shown as a count on the Repairs tab. */
+  openRepairs?: number;
   children: ReactNode;
 }) {
   const pathname = usePathname() ?? "";
@@ -98,10 +112,11 @@ export default function AppShell({
           </Link>
 
           <nav className={styles.nav} aria-label="Sections">
-            {NAV.map(({ href, label, Icon }) => (
+            {NAV.map(({ href, label, Icon, badge }) => (
               <Link key={href} href={href} className={`${styles.navLink} ${isOn(href) ? styles.on : ""}`}>
                 <Icon className={styles.navIcon} />
                 {label}
+                {badge && openRepairs > 0 && <span className={styles.badge}>{openRepairs}</span>}
               </Link>
             ))}
           </nav>
@@ -132,14 +147,17 @@ export default function AppShell({
       </main>
 
       <nav className={styles.tabBar} aria-label="Sections">
-        {NAV.map(({ href, short, Icon }) => (
+        {NAV.map(({ href, short, Icon, badge }) => (
           <Link
             key={href}
             href={href}
             className={`${styles.tab} ${isOn(href) ? styles.on : ""}`}
             aria-current={isOn(href) ? "page" : undefined}
           >
-            <Icon className={styles.tabIcon} />
+            <span className={styles.tabIconWrap}>
+              <Icon className={styles.tabIcon} />
+              {badge && openRepairs > 0 && <span className={styles.tabBadge}>{openRepairs}</span>}
+            </span>
             {short}
           </Link>
         ))}

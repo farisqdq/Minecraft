@@ -1,12 +1,14 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { openRepairCount } from "@/lib/requests";
 import { formatJoinCode } from "@/lib/codes";
 import TeamClient from "./TeamClient";
 
 export default async function TeamPage() {
   const userId = await getCurrentUserId();
   if (!userId) redirect("/login");
+  const openRepairs = await openRepairCount(userId);
 
   const memberships = await prisma.companyMember.findMany({
     where: { userId },
@@ -42,6 +44,7 @@ export default async function TeamPage() {
 
   return (
     <TeamClient
+      openRepairs={openRepairs}
       currentUserId={userId}
       companies={memberships.map((m) => ({
         id: m.company.id,

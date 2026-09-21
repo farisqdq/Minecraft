@@ -23,6 +23,8 @@ model User {
   createdTenants      Tenant[]
   RentChange          RentChange[]
   tenantInvitesSent   TenantInvite[]     @relation("TenantInviteSender")
+  requestUpdates      MaintenanceUpdate[]
+  requestPhotos       MaintenancePhoto[]
 }
 
 model Company {
@@ -82,6 +84,7 @@ model Property {
   recurringExpenses RecurringExpense[]
   tenants           Tenant[]
   rentChanges       RentChange[]
+  requests          MaintenanceRequest[]
 
   @@index([companyId])
 }
@@ -102,6 +105,7 @@ model Unit {
   recurringExpenses RecurringExpense[]
   tenants           Tenant[]
   rentChanges       RentChange[]
+  requests          MaintenanceRequest[]
 
   @@index([propertyId])
 }
@@ -154,8 +158,9 @@ model Tenant {
   createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
 
-  account TenantAccount?
-  invites TenantInvite[]
+  account  TenantAccount?
+  invites  TenantInvite[]
+  requests MaintenanceRequest[]
 
   @@index([propertyId])
   @@index([unitId])
@@ -268,4 +273,92 @@ model Attachment {
   createdAt     DateTime    @default(now())
 
   @@index([transactionId])
+}
+
+// Something the tenant needs fixed.
+//
+// The status is the whole point of the thing: a tenant who can see that you
+// have read it and called someone stops ringing every morning, and a landlord
+// with a queue stops finding out about the leak when the ceiling comes down.
+model MaintenanceRequest {
+  id         String    @id @default(cuid())
+  propertyId String
+  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  unitId     String?
+  unit       Unit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  // Who reported it. Kept even after they move out, so the history of a place
+  // survives its tenants.
+  tenantId   String?
+  tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+
+  title       String
+  detail      String
+  category    String
+  // "normal" | "urgent" — an emergency is a phone call, not a web form, and
+  // the portal says so rather than offering a third level nobody agrees on.
+  urgency     String    @default("normal")
+  // "open" | "seen" | "scheduled" | "done" | "declined"
+  status      String    @default("open")
+  // Where the tenant says the problem is, in their words: "kitchen sink".
+  place       String?
+  // Set when the status first leaves "open", so response time is measurable.
+  seenAt      DateTime?
+  resolvedAt  DateTime?
+  // Filled in when a finished repair is logged into the ledger, so the same
+  // repair can't be booked as an expense twice.
+  transactionId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  updates MaintenanceUpdate[]
+  photos  MaintenancePhoto[]
+
+  @@index([propertyId])
+  @@index([unitId])
+  @@index([tenantId])
+  @@index([status])
+}
+
+// One entry in the back-and-forth: a note from either side, or the record of
+// a status change. Both live in one table so the tenant reads a single
+// timeline instead of a comment list beside a history list.
+model MaintenanceUpdate {
+  id        String             @id @default(cuid())
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  // Exactly one of these is set, and which one decides how the row is shown
+  // and who is allowed to have written it.
+  authorUserId   String?
+  authorUser     User?         @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorTenantId String?
+  // The name to print, frozen at the time of writing so a deleted account
+  // doesn't turn the thread into a row of blanks.
+  authorName String
+  body       String
+  // Set instead of a body when this row is a status change.
+  statusTo   String?
+  createdAt  DateTime @default(now())
+
+  @@index([requestId])
+}
+
+// A photo of the problem. Separate from Attachment, which hangs off a
+// Transaction — loosening that model's foreign key to serve two masters is
+// how a proof file ends up attached to nothing.
+model MaintenancePhoto {
+  id        String             @id @default(cuid())
+  requestId String
+  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  url         String
+  pathname    String
+  filename    String
+  contentType String
+  size        Int
+  // Null when the tenant uploaded it; tenants are not Users.
+  uploadedById String?
+  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime @default(now())
+
+  @@index([requestId])
 }

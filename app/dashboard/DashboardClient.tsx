@@ -164,6 +164,7 @@ function defaultDateFor(month: string, today: string) {
 }
 
 export default function DashboardClient({
+  openRepairs,
   userLabel,
   storageReady,
   serverToday,
@@ -175,6 +176,8 @@ export default function DashboardClient({
   initialTenants,
   initialTransactions,
 }: {
+  /** Repairs waiting on you, for the nav badge. */
+  openRepairs?: number;
   userLabel: string;
   storageReady: boolean;
   serverToday: string;
@@ -1155,6 +1158,7 @@ export default function DashboardClient({
 
   return (
     <AppShell
+      openRepairs={openRepairs}
       title="Overview"
       tagline="Rent collected, repairs paid, and the profit left over — by property."
       userLabel={userLabel}

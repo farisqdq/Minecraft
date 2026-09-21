@@ -498,3 +498,39 @@
     display: inline;
   }
 }
+
+/* A count of repairs waiting on you, on the Repairs tab. */
+.badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--expense);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  flex: none;
+}
+
+.tabIconWrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.tabBadge {
+  position: absolute;
+  top: -5px;
+  left: 11px;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--expense);
+  color: #fff;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 15px;
+  text-align: center;
+}

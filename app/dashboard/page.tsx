@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { openRepairCount } from "@/lib/requests";
 import { blobConfigured } from "@/lib/blob";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
@@ -11,6 +12,7 @@ export default async function DashboardPage() {
   const me = await getCurrentUser();
   if (!me) redirect("/login");
   const userId = me.id;
+  const openRepairs = await openRepairCount(userId);
 
   const memberships = await prisma.companyMember.findMany({
     where: { userId },
@@ -49,6 +51,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
+      openRepairs={openRepairs}
       userLabel={me.name || me.email || "you"}
       storageReady={blobConfigured()}
       serverToday={isoDay(new Date())}

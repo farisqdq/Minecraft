@@ -1,9 +1,12 @@
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
-import { isoDay, leaseRange, leaseStatus, ordinal, telHref } from "@/lib/lease";
+import { blobConfigured } from "@/lib/blob";
+import { isoDay, leaseRange, leaseStatus, ordinal } from "@/lib/lease";
 import { money } from "@/lib/money";
+import { requestInclude, serializeRequest } from "@/lib/requests";
 import PortalShell from "./PortalShell";
+import PortalRequests from "./PortalRequests";
 import styles from "./portal.module.css";
 
 export const dynamic = "force-dynamic";
@@ -16,12 +19,11 @@ export default async function PortalHome() {
 
   const { tenant, property, unit } = me;
 
-  // Who to shout at when the roof leaks: an owner of the LLC that holds the
-  // property. Members can record payments but aren't the people to call.
-  const landlord = await prisma.companyMember.findFirst({
-    where: { company: { properties: { some: { id: property.id } } }, role: "owner" },
-    orderBy: { createdAt: "asc" },
-    select: { user: { select: { name: true, email: true } } },
+  // Only this tenant's own reports, scoped by the session.
+  const requests = await prisma.maintenanceRequest.findMany({
+    where: { tenantId: tenant.id },
+    include: requestInclude,
+    orderBy: { createdAt: "desc" },
   });
 
   const status = leaseStatus(
@@ -38,14 +40,18 @@ export default async function PortalHome() {
     <PortalShell who={tenant.name}>
       <div className={styles.head}>
         <h1>{property.name}</h1>
-        <p>
-          {[unit?.name, property.address].filter(Boolean).join(" · ") ||
-            `Managed by ${property.company.name}`}
-        </p>
+        <p>{[unit?.name, property.address].filter(Boolean).join(" · ")}</p>
         <span className={`${styles.pill} ${status.kind === "ending" ? styles.warn : ""}`}>
           {status.label}
         </span>
       </div>
+
+      {/* Reporting first. It is the reason a tenant has this login at all, and
+          burying it under the lease details would make them scroll for it. */}
+      <PortalRequests
+        initial={requests.map(serializeRequest)}
+        storageReady={blobConfigured()}
+      />
 
       <section className={styles.card}>
         <h2>Your lease</h2>
@@ -68,41 +74,6 @@ export default async function PortalHome() {
             <span className={styles.factValue}>{money(tenant.deposit)}</span>
           </div>
         </div>
-      </section>
-
-      <section className={styles.card}>
-        <h2>Who to contact</h2>
-        <div className={styles.facts} style={{ marginBottom: 14 }}>
-          <div className={styles.fact}>
-            <span className={styles.factLabel}>Managed by</span>
-            <span className={styles.factValue}>{property.company.name}</span>
-          </div>
-          {landlord?.user.name && (
-            <div className={styles.fact}>
-              <span className={styles.factLabel}>Your landlord</span>
-              <span className={styles.factValue}>{landlord.user.name}</span>
-            </div>
-          )}
-        </div>
-        <div className={styles.contactRow}>
-          {landlord?.user.email && (
-            <a className={styles.contactBtn} href={`mailto:${landlord.user.email}`}>
-              Email {landlord.user.email}
-            </a>
-          )}
-          {tenant.phone && telHref(tenant.phone) && (
-            <span className={styles.contactBtn}>We have you on {tenant.phone}</span>
-          )}
-        </div>
-      </section>
-
-      <section className={styles.card}>
-        <h2>Report a problem</h2>
-        <p className={styles.soon}>
-          Reporting a repair from here — with photos, and a status you can watch — is the next
-          thing being built. Until it lands, call or email{" "}
-          {landlord?.user.name ?? property.company.name} using the details above.
-        </p>
       </section>
     </PortalShell>
   );
