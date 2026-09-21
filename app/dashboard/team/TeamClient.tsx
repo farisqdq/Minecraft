@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "../../components/AppShell";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
+import { formatPhone } from "@/lib/lease";
 import styles from "../dashboard.module.css";
 
 type Member = { userId: string; email: string; name: string; role: "owner" | "member" };
@@ -12,6 +13,9 @@ type Invite = { id: string; role: "owner" | "member"; code: string; expiresAt: s
 type Company = {
   id: string;
   name: string;
+  /** What tenants of this LLC see under "Who to contact". */
+  contactPhone: string;
+  contactEmail: string;
   role: "owner" | "member";
   propertyCount: number;
   transactionCount: number;
@@ -39,6 +43,47 @@ export default function TeamClient({
   const [deleting, setDeleting] = useState(false);
   const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
   const { toasts, push, dismiss } = useToasts();
+
+  // Contact fields are edited in place; the draft is keyed by LLC so two
+  // cards never share a half-typed number.
+  const [contactDrafts, setContactDrafts] = useState<Record<string, { phone: string; email: string }>>({});
+  const [contactSaving, setContactSaving] = useState("");
+
+  function contactDraft(company: Company) {
+    return contactDrafts[company.id] ?? { phone: company.contactPhone, email: company.contactEmail };
+  }
+
+  async function saveContact(e: React.FormEvent, company: Company) {
+    e.preventDefault();
+    const draft = contactDraft(company);
+    setContactSaving(company.id);
+    const res = await fetch(`/api/companies/${company.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ contactPhone: draft.phone, contactEmail: draft.email }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setContactSaving("");
+    if (!res.ok) {
+      push(data?.error || "Couldn't save that.", "bad");
+      return;
+    }
+    setCompanies((prev) =>
+      prev.map((c) =>
+        c.id === company.id ? { ...c, contactPhone: data.contactPhone, contactEmail: data.contactEmail } : c
+      )
+    );
+    setContactDrafts((prev) => {
+      const next = { ...prev };
+      delete next[company.id];
+      return next;
+    });
+    push(
+      data.contactPhone || data.contactEmail
+        ? "Saved. Tenants on this LLC's properties see it now."
+        : "Cleared. Tenants see no contact details for this LLC."
+    );
+  }
 
   function draftFor(companyId: string) {
     return drafts[companyId] ?? { role: "member" as const };
@@ -278,6 +323,69 @@ export default function TeamClient({
                 </tbody>
               </table>
             </div>
+
+            {isOwner && (
+              <form className={styles.contactForm} onSubmit={(e) => saveContact(e, company)}>
+                <div className={styles.contactHead}>
+                  <strong>What tenants see under &ldquo;Who to contact&rdquo;</strong>
+                  <span className={styles.helpText} style={{ margin: 0 }}>
+                    A dispatch line or an office inbox — never anyone&apos;s personal number. This is also
+                    the number the portal tells them to call for an emergency. Leave both blank and the
+                    portal shows no contact card at all.
+                  </span>
+                </div>
+                <div className={styles.contactFields}>
+                  <div className={styles.field}>
+                    <label htmlFor={`contact-phone-${company.id}`}>Phone</label>
+                    <input
+                      id={`contact-phone-${company.id}`}
+                      type="tel"
+                      inputMode="tel"
+                      autoComplete="off"
+                      placeholder="(555) 010-4477"
+                      value={contactDraft(company).phone}
+                      onChange={(e) =>
+                        setContactDrafts((prev) => ({
+                          ...prev,
+                          [company.id]: { ...contactDraft(company), phone: e.target.value },
+                        }))
+                      }
+                    />
+                  </div>
+                  <div className={styles.field}>
+                    <label htmlFor={`contact-email-${company.id}`}>Email</label>
+                    <input
+                      id={`contact-email-${company.id}`}
+                      type="email"
+                      autoComplete="off"
+                      placeholder="repairs@example.com"
+                      value={contactDraft(company).email}
+                      onChange={(e) =>
+                        setContactDrafts((prev) => ({
+                          ...prev,
+                          [company.id]: { ...contactDraft(company), email: e.target.value },
+                        }))
+                      }
+                    />
+                  </div>
+                  <button
+                    type="submit"
+                    className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                    disabled={contactSaving === company.id}
+                  >
+                    {contactSaving === company.id ? "Saving\u2026" : "Save"}
+                  </button>
+                </div>
+                {(company.contactPhone || company.contactEmail) && !contactDrafts[company.id] && (
+                  <span className={styles.helpText} style={{ margin: 0 }}>
+                    Showing tenants:{" "}
+                    {[company.contactPhone && formatPhone(company.contactPhone), company.contactEmail]
+                      .filter(Boolean)
+                      .join(" · ")}
+                  </span>
+                )}
+              </form>
+            )}
 
             {isOwner && (
               <form className={styles.inviteForm} onSubmit={(e) => createCode(e, company.id)}>

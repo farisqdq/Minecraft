@@ -111,6 +111,22 @@ export function ordinal(n: number) {
   return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
 }
 
+/**
+ * "8596844729" is what gets typed; "(859) 684-4729" is what gets read.
+ * Only a bare ten-digit US number is reshaped — anything already punctuated,
+ * international, or an extension is left exactly as entered.
+ */
+export function formatPhone(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  if (/^\d{10}$/.test(phone.trim())) {
+    return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
+  }
+  if (/^1\d{10}$/.test(phone.trim())) {
+    return `(${digits.slice(1, 4)}) ${digits.slice(4, 7)}-${digits.slice(7)}`;
+  }
+  return phone.trim();
+}
+
 /** A phone number reduced to what a tel: link accepts. */
 export function telHref(phone: string) {
   const cleaned = phone.replace(/[^\d+]/g, "");

@@ -21,7 +21,14 @@ export async function requireTenantSession() {
     include: {
       tenant: {
         include: {
-          property: { select: { id: true, name: true, address: true, company: { select: { name: true } } } },
+          property: {
+            select: {
+              id: true,
+              name: true,
+              address: true,
+              company: { select: { name: true, contactPhone: true, contactEmail: true } },
+            },
+          },
           unit: { select: { id: true, name: true } },
         },
       },

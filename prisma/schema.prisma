@@ -30,6 +30,11 @@ model User {
 model Company {
   id        String   @id @default(cuid())
   name      String
+  // What tenants of this LLC's properties see under "Who to contact" — a
+  // dispatch line or an office inbox, never a person's own number. Both are
+  // optional and the portal shows nothing at all until one is filled in.
+  contactPhone String?
+  contactEmail String?
   createdAt DateTime @default(now())
 
   members    CompanyMember[]

@@ -194,6 +194,8 @@ export async function GET() {
     exportedAt: new Date().toISOString(),
     companies: companies.map((c) => ({
       name: c.name,
+      contactPhone: c.contactPhone ?? "",
+      contactEmail: c.contactEmail ?? "",
       properties: c.properties.map((p) => ({
         name: p.name,
         address: p.address ?? "",

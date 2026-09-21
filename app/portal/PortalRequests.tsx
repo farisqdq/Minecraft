@@ -10,6 +10,7 @@ import {
   type RequestDTO,
 } from "@/lib/maintenance";
 import { useNow } from "../components/useNow";
+import { formatPhone, telHref } from "@/lib/lease";
 import styles from "./portal.module.css";
 
 const EMPTY = {
@@ -31,11 +32,14 @@ export default function PortalRequests({
   initial,
   storageReady,
   serverNow,
+  emergencyPhone,
 }: {
   initial: RequestDTO[];
   storageReady: boolean;
   /** When the server rendered, so the first client render agrees. */
   serverNow: string;
+  /** The LLC's published line, so "call, don't type" names a number. */
+  emergencyPhone: string;
 }) {
   const [requests, setRequests] = useState(initial);
   const [form, setForm] = useState(EMPTY);
@@ -196,8 +200,15 @@ export default function PortalRequests({
             </button>
           </div>
           <p className={styles.soon}>
-            No water, no heat, gas, or anything on fire — call, don&apos;t type. This form is checked
-            when someone gets to it.
+            No water, no heat, gas, or anything on fire —{" "}
+            {emergencyPhone && telHref(emergencyPhone) ? (
+              <>
+                call <a href={telHref(emergencyPhone)}>{formatPhone(emergencyPhone)}</a>
+              </>
+            ) : (
+              "call"
+            )}
+            , don&apos;t type. This form is checked when someone gets to it.
           </p>
 
           {storageReady && (

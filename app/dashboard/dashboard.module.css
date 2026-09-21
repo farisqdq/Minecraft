@@ -2117,3 +2117,35 @@ tr:hover .rowDel {
   letter-spacing: 0.02em;
   vertical-align: 2px;
 }
+
+/* ---------- Tenant-facing contact, on the Team page ---------- */
+.contactForm {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  margin-top: 14px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+
+.contactHead {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13.5px;
+}
+
+.contactFields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  gap: 10px;
+  align-items: end;
+}
+
+@media (max-width: 640px) {
+  .contactFields {
+    grid-template-columns: 1fr;
+  }
+}

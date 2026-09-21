@@ -92,7 +92,12 @@ type CleanProperty = {
   requests: CleanRequest[];
   units: CleanUnit[];
 };
-type CleanCompany = { name: string; properties: CleanProperty[] };
+type CleanCompany = {
+  name: string;
+  contactPhone: string | null;
+  contactEmail: string | null;
+  properties: CleanProperty[];
+};
 
 const str = (v: unknown, max: number) => (typeof v === "string" ? v.trim().slice(0, max) : "");
 const num = (v: unknown) => {
@@ -336,7 +341,12 @@ function parseBackup(raw: unknown) {
       });
     }
 
-    companies.push({ name, properties });
+    companies.push({
+      name,
+      contactPhone: str(c.contactPhone, 40) || null,
+      contactEmail: str(c.contactEmail, 200) || null,
+      properties,
+    });
   }
 
   if (companies.length === 0) throw new Error("That backup has no LLCs in it.");
@@ -558,7 +568,12 @@ export async function POST(req: Request) {
   await prisma.$transaction(async (tx) => {
     for (const company of parsed.companies) {
       const record = await tx.company.create({
-        data: { name: uniqueName(company.name), members: { create: { userId, role: "owner" } } },
+        data: {
+          name: uniqueName(company.name),
+          contactPhone: company.contactPhone,
+          contactEmail: company.contactEmail,
+          members: { create: { userId, role: "owner" } },
+        },
       });
       created.companies += 1;
 

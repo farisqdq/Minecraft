@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
 import { blobConfigured } from "@/lib/blob";
-import { isoDay, leaseRange, leaseStatus, ordinal } from "@/lib/lease";
+import { formatPhone, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 import { money } from "@/lib/money";
 import { requestInclude, serializeRequest } from "@/lib/requests";
 import PortalShell from "./PortalShell";
@@ -18,6 +18,11 @@ export default async function PortalHome() {
   if (!me) redirect("/portal/login");
 
   const { tenant, property, unit } = me;
+  // A dispatch line or an office inbox the LLC chose to publish — never a
+  // person's own details. Either can be blank; both blank and there is no
+  // card at all.
+  const contactPhone = property.company.contactPhone ?? "";
+  const contactEmail = property.company.contactEmail ?? "";
 
   // Only this tenant's own reports, scoped by the session.
   const requests = await prisma.maintenanceRequest.findMany({
@@ -52,7 +57,37 @@ export default async function PortalHome() {
         initial={requests.map(serializeRequest)}
         storageReady={blobConfigured()}
         serverNow={new Date().toISOString()}
+        emergencyPhone={contactPhone}
       />
+
+      {(contactPhone || contactEmail) && (
+        <section className={styles.card}>
+          <h2>Who to contact</h2>
+          <div className={styles.facts} style={{ marginBottom: 14 }}>
+            <div className={styles.fact}>
+              <span className={styles.factLabel}>Managed by</span>
+              <span className={styles.factValue}>{property.company.name}</span>
+            </div>
+          </div>
+          <div className={styles.contactRow}>
+            {contactPhone && telHref(contactPhone) && (
+              <>
+                <a className={styles.contactBtn} href={telHref(contactPhone)}>
+                  Call {formatPhone(contactPhone)}
+                </a>
+                <a className={styles.contactBtn} href={smsHref(contactPhone)}>
+                  Text
+                </a>
+              </>
+            )}
+            {contactEmail && (
+              <a className={styles.contactBtn} href={`mailto:${contactEmail}`}>
+                Email {contactEmail}
+              </a>
+            )}
+          </div>
+        </section>
+      )}
 
       <section className={styles.card}>
         <h2>Your lease</h2>

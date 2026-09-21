@@ -49,6 +49,8 @@ export default async function TeamPage() {
       companies={memberships.map((m) => ({
         id: m.company.id,
         name: m.company.name,
+        contactPhone: m.company.contactPhone ?? "",
+        contactEmail: m.company.contactEmail ?? "",
         role: m.role as "owner" | "member",
         propertyCount: impact.get(m.companyId)?.properties ?? 0,
         transactionCount: impact.get(m.companyId)?.transactions ?? 0,

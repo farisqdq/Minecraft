@@ -11,6 +11,7 @@ import {
   smsHref,
   isoDay,
   dateFromISO,
+  formatPhone,
 } from "../lib/lease.ts";
 
 const at = (y: number, m: number, d: number) => new Date(y, m - 1, d);
@@ -95,4 +96,16 @@ test("phone links strip the formatting people type", () => {
   assert.equal(smsHref("+1 555 010 4477"), "sms:+15550104477");
   assert.equal(telHref(""), "", "no number means no link");
   assert.equal(telHref("n/a"), "", "nothing dialable means no link");
+});
+
+test("a bare ten-digit number is shaped for reading; anything else is left alone", () => {
+  assert.equal(formatPhone("8596844729"), "(859) 684-4729");
+  assert.equal(formatPhone(" 8596844729 "), "(859) 684-4729");
+  assert.equal(formatPhone("18596844729"), "(859) 684-4729");
+  // Already punctuated, or not a plain US number: not ours to reshape.
+  assert.equal(formatPhone("(859) 684-4729"), "(859) 684-4729");
+  assert.equal(formatPhone("859-684-4729"), "859-684-4729");
+  assert.equal(formatPhone("+44 20 7946 0958"), "+44 20 7946 0958");
+  assert.equal(formatPhone("8596844729 ext 4"), "8596844729 ext 4");
+  assert.equal(formatPhone(""), "");
 });
