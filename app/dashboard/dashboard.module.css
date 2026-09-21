@@ -873,6 +873,57 @@
   padding: 11px 16px;
   border-bottom: 1px solid var(--line);
 }
+
+/* A sortable column header. It keeps the plain header's look until you point
+   at it, so the row still reads as labels rather than a strip of buttons. */
+.sortHead {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: -4px -7px;
+  padding: 4px 7px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  letter-spacing: inherit;
+  cursor: pointer;
+  transition: color var(--fast), background var(--fast);
+}
+
+.sortHead:hover {
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.sortHead.sortRight {
+  flex-direction: row-reverse;
+}
+
+/* The sorted column keeps a tint of its own so you can see which one is in
+   use without having to hover over the row to find out. */
+.sortHead.sortOn {
+  color: var(--ink);
+  background: var(--accent-soft);
+}
+
+/* The idle ↕ stays faint so only the column actually in use reads as active. */
+.sortArrow {
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0.35;
+}
+
+.sortOn .sortArrow {
+  opacity: 1;
+  color: var(--accent);
+}
+
+/* Desktop sorts from the header row; this picker is the phone's version. */
+.sortPicker {
+  display: none;
+}
 .ledger td {
   padding: 12px 16px;
   font-size: 13.5px;
@@ -1324,6 +1375,10 @@ tr:hover .rowDel {
    becomes a small card instead: property and type on top, date and amount
    underneath, details below that. Same markup, no duplicate DOM. */
 @media (max-width: 640px) {
+  .sortPicker {
+    display: inline-block;
+  }
+
   .txnTable {
     min-width: 0;
   }

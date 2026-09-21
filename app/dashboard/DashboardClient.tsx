@@ -88,6 +88,53 @@ const fmtDate = (iso: string) =>
   new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 type PeriodKind = "month" | "year" | "all";
 
+/* ---------- Sorting the ledger ---------- */
+
+type SortKey = "date" | "property" | "type" | "details" | "amount";
+type SortDir = "asc" | "desc";
+
+const SORT_LABEL: Record<SortKey, string> = {
+  date: "Date",
+  property: "Property",
+  type: "Type",
+  details: "Details",
+  amount: "Amount",
+};
+
+// Which way a column reads best on the first click: newest and biggest first
+// for the date and the money, A to Z for the word columns.
+const FIRST_DIR: Record<SortKey, SortDir> = {
+  date: "desc",
+  property: "asc",
+  type: "asc",
+  details: "asc",
+  amount: "desc",
+};
+
+// Every ordering the phone's picker offers, in the order it lists them. The
+// headers are hidden at that width, so this is the only way to sort there.
+const SORT_CHOICES: { key: SortKey; dir: SortDir; label: string }[] = [
+  { key: "date", dir: "desc", label: "Newest first" },
+  { key: "date", dir: "asc", label: "Oldest first" },
+  { key: "amount", dir: "desc", label: "Biggest amount" },
+  { key: "amount", dir: "asc", label: "Smallest amount" },
+  { key: "property", dir: "asc", label: "Property A–Z" },
+  { key: "property", dir: "desc", label: "Property Z–A" },
+  { key: "type", dir: "desc", label: "Rent first" },
+  { key: "type", dir: "asc", label: "Expenses first" },
+  { key: "details", dir: "asc", label: "Details A–Z" },
+  { key: "details", dir: "desc", label: "Details Z–A" },
+];
+
+// numeric so "Apt 2" lands before "Apt 10", and case-blind so a stray
+// capital doesn't drop a property to the bottom of the list.
+const compareText = (a: string, b: string) =>
+  a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+
+/** The words the Details column actually shows, which is what it sorts on. */
+const detailsText = (t: Transaction) =>
+  [t.category, t.detail, t.note].filter(Boolean).join(" ");
+
 const STORAGE_HINT =
   "Proof uploads need file storage. In Vercel, open this project's Storage tab, add Blob, then redeploy.";
 
@@ -208,6 +255,8 @@ export default function DashboardClient({
   const [filterProperty, setFilterProperty] = useState("");
   const [filterType, setFilterType] = useState("");
   const [query, setQuery] = useState("");
+  const [sortKey, setSortKey] = useState<SortKey>("date");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   const [pendingProof, setPendingProof] = useState<File[]>([]);
   const proofInput = useRef<HTMLInputElement>(null);
@@ -511,8 +560,31 @@ export default function DashboardClient({
         return haystack.includes(search);
       })
       .slice()
-      .sort((a, b) => b.date.localeCompare(a.date));
-  }, [scopedTransactions, visibleTransactions, filterProperty, filterType, search]);
+      .sort((a, b) => {
+        const by = sortDir === "asc" ? 1 : -1;
+        let first = 0;
+        switch (sortKey) {
+          case "property":
+            first = compareText(targetLabel(a), targetLabel(b));
+            break;
+          case "type":
+            // "expense" sorts before "rent", so ascending is expenses first.
+            first = compareText(a.type, b.type);
+            break;
+          case "details":
+            first = compareText(detailsText(a), detailsText(b));
+            break;
+          case "amount":
+            first = a.amount - b.amount;
+            break;
+          default:
+            first = a.date.localeCompare(b.date);
+        }
+        // Ties fall back to newest first, then the id, so the order never
+        // shuffles between renders of the same data.
+        return by * first || b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
+      });
+  }, [scopedTransactions, visibleTransactions, filterProperty, filterType, search, sortKey, sortDir]);
 
   const searchTotals = useMemo(() => totalsFor(null, rows), [rows]);
 
@@ -523,10 +595,45 @@ export default function DashboardClient({
   const [ledgerLimit, setLedgerLimit] = useState(LEDGER_PAGE);
   useEffect(() => {
     setLedgerLimit(LEDGER_PAGE);
-  }, [search, filterProperty, filterType, scopeKey, selectedCompany]);
+  }, [search, filterProperty, filterType, scopeKey, selectedCompany, sortKey, sortDir]);
 
   const visibleRows = rows.slice(0, ledgerLimit);
   const hiddenRows = rows.length - visibleRows.length;
+
+  /** Click a column to sort by it; click the same one again to flip it. */
+  function toggleSort(key: SortKey) {
+    setSortDir((prev) => (sortKey === key ? (prev === "asc" ? "desc" : "asc") : FIRST_DIR[key]));
+    setSortKey(key);
+  }
+
+  // A plain function rather than a component: a component declared in here
+  // would be a new type every render, so React would tear the button down and
+  // rebuild it on each click and the keyboard focus would go with it.
+  function sortHead(key: SortKey, right = false) {
+    const on = sortKey === key;
+    return (
+      <th
+        aria-sort={on ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+        style={right ? { textAlign: "right" } : undefined}
+      >
+        <button
+          type="button"
+          className={`${styles.sortHead} ${on ? styles.sortOn : ""} ${right ? styles.sortRight : ""}`}
+          onClick={() => toggleSort(key)}
+          title={
+            on
+              ? `Sorted by ${SORT_LABEL[key].toLowerCase()} — click to reverse`
+              : `Sort by ${SORT_LABEL[key].toLowerCase()}`
+          }
+        >
+          {SORT_LABEL[key]}
+          <span className={styles.sortArrow} aria-hidden="true">
+            {on ? (sortDir === "asc" ? "\u2191" : "\u2193") : "\u2195"}
+          </span>
+        </button>
+      </th>
+    );
+  }
 
   const activeCompany = companies.find((c) => c.id === selectedCompany) ?? null;
 
@@ -1852,6 +1959,24 @@ export default function DashboardClient({
                   <option value="rent">Rent only</option>
                   <option value="expense">Expenses only</option>
                 </select>
+                {/* Below 640px the rows become cards and the header row is
+                    hidden, so this is the only way to sort on a phone. */}
+                <select
+                  className={styles.sortPicker}
+                  value={`${sortKey}:${sortDir}`}
+                  onChange={(e) => {
+                    const [key, dir] = e.target.value.split(":") as [SortKey, SortDir];
+                    setSortKey(key);
+                    setSortDir(dir);
+                  }}
+                  aria-label="Sort the ledger"
+                >
+                  {SORT_CHOICES.map((c) => (
+                    <option key={`${c.key}:${c.dir}`} value={`${c.key}:${c.dir}`}>
+                      {c.label}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
             {search && rows.length > 0 && (
@@ -1882,11 +2007,11 @@ export default function DashboardClient({
                 <table className={`${styles.ledger} ${styles.txnTable}`}>
                   <thead>
                     <tr>
-                      <th>Date</th>
-                      <th>Property</th>
-                      <th>Type</th>
-                      <th>Details</th>
-                      <th style={{ textAlign: "right" }}>Amount</th>
+                      {sortHead("date")}
+                      {sortHead("property")}
+                      {sortHead("type")}
+                      {sortHead("details")}
+                      {sortHead("amount", true)}
                       <th></th>
                     </tr>
                   </thead>
