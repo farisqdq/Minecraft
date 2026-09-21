@@ -22,6 +22,7 @@ model User {
   createdRecurring    RecurringExpense[]
   createdTenants      Tenant[]
   RentChange          RentChange[]
+  tenantInvitesSent   TenantInvite[]     @relation("TenantInviteSender")
 }
 
 model Company {
@@ -153,8 +154,51 @@ model Tenant {
   createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
 
+  account TenantAccount?
+  invites TenantInvite[]
+
   @@index([propertyId])
   @@index([unitId])
+}
+
+// A tenant's own login for the portal, deliberately separate from User.
+//
+// User is the landlord side: a User belongs to companies, and every route in
+// the app reaches data by walking user -> company -> property. A tenant must
+// never touch that walk, so they get their own table, their own credentials
+// provider and their own "kind" on the session token rather than a role
+// column on User — one missed role check on a shared table is the whole
+// ledger, and there is no way to miss a check on a table the landlord
+// queries never join to.
+//
+// The row hangs off a Tenant, which is what carries the property and unit, so
+// deleting a tenant takes their login with it.
+model TenantAccount {
+  id           String    @id @default(cuid())
+  tenantId     String    @unique
+  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email        String    @unique
+  passwordHash String
+  createdAt    DateTime  @default(now())
+  lastLoginAt  DateTime?
+}
+
+// The only way a TenantAccount comes into existence. The landlord issues a
+// code for one named tenant; redeeming it binds the new account to that
+// tenant and nothing else. Without this there would be a public signup form
+// where a stranger picks which unit they live in.
+model TenantInvite {
+  id          String    @id @default(cuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  code        String    @unique
+  invitedById String?
+  invitedBy   User?     @relation("TenantInviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+
+  @@index([tenantId])
 }
 
 model Transaction {

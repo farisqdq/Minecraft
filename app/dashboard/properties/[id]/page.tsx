@@ -1,6 +1,5 @@
 import { redirect, notFound } from "next/navigation";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { requireProperty } from "@/lib/access";
 import { serializeTenant } from "@/lib/tenants";
@@ -9,11 +8,10 @@ import { monthKeyOf } from "@/lib/rent";
 import PropertyManageClient from "./PropertyManageClient";
 
 export default async function PropertyManagePage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) redirect("/login");
+  const userId = await getCurrentUserId();
+  if (!userId) redirect("/login");
 
   const { id } = await params;
-  const userId = session.user.id as string;
 
   const property = await requireProperty(userId, id);
   if (!property) notFound();
@@ -30,6 +28,15 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
     prisma.tenant.findMany({
       where: { propertyId: id },
       orderBy: [{ active: "desc" }, { createdAt: "asc" }],
+      include: {
+        account: { select: { email: true, createdAt: true, lastLoginAt: true } },
+        invites: {
+          where: { acceptedAt: null, expiresAt: { gt: new Date() } },
+          orderBy: { createdAt: "desc" },
+          take: 1,
+          select: { code: true, expiresAt: true },
+        },
+      },
     }),
     prisma.rentChange.findMany({
       where: { propertyId: id },
@@ -75,6 +82,18 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         active: r.active,
       }))}
       initialTenants={tenants.map(serializeTenant)}
+      initialPortal={Object.fromEntries(
+        tenants.map((t) => [
+          t.id,
+          {
+            inviteCode: t.invites[0]?.code ?? "",
+            inviteExpires: t.invites[0]?.expiresAt.toISOString() ?? "",
+            accountEmail: t.account?.email ?? "",
+            accountSince: t.account?.createdAt.toISOString() ?? "",
+            lastLoginAt: t.account?.lastLoginAt?.toISOString() ?? "",
+          },
+        ])
+      )}
       rentChanges={rentChanges.map((c) => ({
         id: c.id,
         propertyId: c.propertyId,

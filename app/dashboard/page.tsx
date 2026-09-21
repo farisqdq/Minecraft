@@ -1,6 +1,5 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { blobConfigured } from "@/lib/blob";
 import { serializeTenant } from "@/lib/tenants";
@@ -9,12 +8,9 @@ import { monthKeyOf } from "@/lib/rent";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
-
-  const userId = session.user.id as string;
+  const me = await getCurrentUser();
+  if (!me) redirect("/login");
+  const userId = me.id;
 
   const memberships = await prisma.companyMember.findMany({
     where: { userId },
@@ -53,7 +49,7 @@ export default async function DashboardPage() {
 
   return (
     <DashboardClient
-      userLabel={session.user.name || session.user.email || "you"}
+      userLabel={me.name || me.email || "you"}
       storageReady={blobConfigured()}
       serverToday={isoDay(new Date())}
       initialCompanies={memberships.map((m) => ({

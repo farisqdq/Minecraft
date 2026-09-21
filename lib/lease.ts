@@ -104,6 +104,13 @@ export function leaseRange(leaseStart: string, leaseEnd: string) {
   return "Not recorded";
 }
 
+/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th, 21st. */
+export function ordinal(n: number) {
+  const tens = n % 100;
+  if (tens >= 11 && tens <= 13) return `${n}th`;
+  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
+}
+
 /** A phone number reduced to what a tel: link accepts. */
 export function telHref(phone: string) {
   const cleaned = phone.replace(/[^\d+]/g, "");

@@ -1,16 +1,11 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import BackupClient from "./BackupClient";
 
 export default async function BackupPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
-
-  const userId = session.user.id as string;
+  const userId = await getCurrentUserId();
+  if (!userId) redirect("/login");
   const companyIds = (
     await prisma.companyMember.findMany({ where: { userId }, select: { companyId: true } })
   ).map((m) => m.companyId);

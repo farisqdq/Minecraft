@@ -12,7 +12,9 @@ import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money } from "@/lib/money";
 import { historyFor, rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
-import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, smsHref, telHref } from "@/lib/lease";
+import { formatJoinCode } from "@/lib/codes";
+import { NO_ACCESS, type PortalAccess } from "@/lib/portal";
+import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 
 type Property = { id: string; name: string; address: string; monthlyRent: number; vacant: boolean };
 type LedgerEntry = {
@@ -46,13 +48,6 @@ const MONTHS = [
   "July", "August", "September", "October", "November", "December",
 ];
 
-/** 1st, 2nd, 3rd, 4th … 11th, 12th, 13th, 21st. */
-function ordinal(n: number) {
-  const tens = n % 100;
-  if (tens >= 11 && tens <= 13) return `${n}th`;
-  return `${n}${["th", "st", "nd", "rd"][n % 10] ?? "th"}`;
-}
-
 /** An amount box starts empty rather than at "0", which you'd have to clear. */
 function amountField(n: number) {
   return n > 0 ? String(n) : "";
@@ -81,6 +76,7 @@ export default function PropertyManageClient({
   initialTenants,
   rentChanges,
   transactions: initialTransactions,
+  initialPortal,
 }: {
   companyName: string;
   /** Owners can remove units; members record against them. */
@@ -92,6 +88,8 @@ export default function PropertyManageClient({
   initialTenants: TenantDTO[];
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
+  /** Portal access per tenant id, so the cards render it without a round trip. */
+  initialPortal: Record<string, PortalAccess>;
 }) {
   const router = useRouter();
 
@@ -338,6 +336,59 @@ export default function PropertyManageClient({
     setTenantOpen(false);
     push(editing ? "Tenant updated." : `${data.name} added.`);
     router.refresh();
+  }
+
+  const [portal, setPortal] = useState<Record<string, PortalAccess>>(initialPortal);
+  const [portalBusy, setPortalBusy] = useState("");
+  const accessFor = (tenantId: string) => portal[tenantId] ?? NO_ACCESS;
+
+  /**
+   * Hand a tenant a code for the portal. The code is theirs alone — redeeming
+   * it can only ever produce a login for this one tenant's unit.
+   */
+  async function invitePortal(t: TenantDTO) {
+    setPortalBusy(t.id);
+    const res = await fetch(`/api/tenants/${t.id}/portal`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setPortalBusy("");
+    if (!res.ok) {
+      push(data?.error || "Couldn't create that code.", "bad");
+      return;
+    }
+    setPortal((prev) => ({ ...prev, [t.id]: data }));
+    push(`Code ready for ${t.name}. Send it over.`);
+  }
+
+  async function copyCode(code: string) {
+    try {
+      await navigator.clipboard.writeText(formatJoinCode(code));
+      push("Code copied.");
+    } catch {
+      // Clipboard access is blocked outside a secure context and on some
+      // in-app browsers; the code is on screen either way.
+      push("Couldn't copy — read it off the card instead.", "bad");
+    }
+  }
+
+  function revokePortal(t: TenantDTO) {
+    const has = accessFor(t.id);
+    setConfirming({
+      title: has.accountEmail ? "Remove portal access?" : "Cancel this code?",
+      body: has.accountEmail
+        ? `${t.name} won't be able to sign in with ${has.accountEmail} any more. Their lease, deposit and every payment on the books stay exactly as they are — this is only the login.`
+        : `The code you gave ${t.name} stops working. You can issue a new one any time.`,
+      confirmLabel: has.accountEmail ? "Remove access" : "Cancel code",
+      danger: true,
+      onConfirm: async () => {
+        const res = await fetch(`/api/tenants/${t.id}/portal`, { method: "DELETE" });
+        if (!res.ok) {
+          push("Couldn't do that.", "bad");
+          return;
+        }
+        setPortal((prev) => ({ ...prev, [t.id]: NO_ACCESS }));
+        push(has.accountEmail ? "Portal access removed." : "Code cancelled.");
+      },
+    });
   }
 
   async function setTenantActive(t: TenantDTO, active: boolean) {
@@ -759,6 +810,70 @@ export default function PropertyManageClient({
                   </div>
 
                   {t.note && <div className={styles.note}>{t.note}</div>}
+
+                  {t.active && (() => {
+                    const access = accessFor(t.id);
+                    if (access.accountEmail) {
+                      return (
+                        <div className={styles.portalRow}>
+                          <span className={styles.portalOn}>Portal access</span>
+                          <span className={styles.portalWho}>
+                            {access.accountEmail}
+                            {access.lastLoginAt
+                              ? ` · last in ${formatDay(access.lastLoginAt.slice(0, 10))}`
+                              : " · not signed in yet"}
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.portalLink}
+                            onClick={() => revokePortal(t)}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      );
+                    }
+                    if (access.inviteCode) {
+                      return (
+                        <div className={styles.portalRow}>
+                          <span className={styles.portalCode}>{formatJoinCode(access.inviteCode)}</span>
+                          <span className={styles.portalWho}>
+                            Send this to {t.name}. Good until{" "}
+                            {formatDay(access.inviteExpires.slice(0, 10))}.
+                          </span>
+                          <button
+                            type="button"
+                            className={styles.portalLink}
+                            onClick={() => copyCode(access.inviteCode)}
+                          >
+                            Copy
+                          </button>
+                          <button
+                            type="button"
+                            className={styles.portalLink}
+                            onClick={() => revokePortal(t)}
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      );
+                    }
+                    return (
+                      <div className={styles.portalRow}>
+                        <span className={styles.portalWho}>
+                          No portal login yet — they can&apos;t report a problem online.
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.portalLink}
+                          disabled={portalBusy === t.id}
+                          onClick={() => invitePortal(t)}
+                        >
+                          {portalBusy === t.id ? "Making a code\u2026" : "Invite to the portal"}
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   <div className={styles.propActions}>
                     {/* The commonest reason to be looking at a tenant: they

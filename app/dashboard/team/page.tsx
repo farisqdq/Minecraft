@@ -1,17 +1,12 @@
 import { redirect } from "next/navigation";
-import { getServerSession } from "next-auth/next";
-import { authOptions } from "@/lib/auth";
+import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { formatJoinCode } from "@/lib/codes";
 import TeamClient from "./TeamClient";
 
 export default async function TeamPage() {
-  const session = await getServerSession(authOptions);
-  if (!session?.user?.id) {
-    redirect("/login");
-  }
-
-  const userId = session.user.id as string;
+  const userId = await getCurrentUserId();
+  if (!userId) redirect("/login");
 
   const memberships = await prisma.companyMember.findMany({
     where: { userId },

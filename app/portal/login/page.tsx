@@ -2,13 +2,11 @@
 
 import { Suspense, useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 
-function LoginForm() {
+function PortalLoginForm() {
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -18,17 +16,15 @@ function LoginForm() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const result = await signIn("credentials", {
-      email,
-      password,
-      redirect: false,
-    });
+    // The "tenant" provider, not "credentials" — a landlord's password will
+    // not get you in here, and this one will not get you into the dashboard.
+    const result = await signIn("tenant", { email, password, redirect: false });
     setLoading(false);
     if (result?.error) {
       setError("Incorrect email or password.");
       return;
     }
-    router.push(callbackUrl);
+    router.push("/portal");
     router.refresh();
   }
 
@@ -38,8 +34,8 @@ function LoginForm() {
         <span className="authMark" aria-hidden="true">
           R
         </span>
-        <h1>Rent Roll</h1>
-        <p>Rent collected, repairs paid, and the profit left over.</p>
+        <h1>Tenant portal</h1>
+        <p>Your place, your lease, and anything that needs fixing.</p>
       </div>
       <form className="authCard" onSubmit={onSubmit}>
         {error && <div className="authError">{error}</div>}
@@ -70,19 +66,18 @@ function LoginForm() {
         </button>
       </form>
       <div className="authFoot">
-        Don&apos;t have an account?{" "}
-        <Link href={`/signup?callbackUrl=${encodeURIComponent(callbackUrl)}`}>Create one</Link>
+        Got a code from your landlord? <Link href="/portal/signup">Set up your account</Link>
         <br />
-        Renting one of these places? <Link href="/portal/login">Tenant sign in</Link>
+        Manage properties instead? <Link href="/login">Landlord sign in</Link>
       </div>
     </div>
   );
 }
 
-export default function LoginPage() {
+export default function PortalLoginPage() {
   return (
     <Suspense>
-      <LoginForm />
+      <PortalLoginForm />
     </Suspense>
   );
 }

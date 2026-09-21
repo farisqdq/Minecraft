@@ -1537,6 +1537,70 @@ tr:hover .rowDel {
   }
 }
 
+/* ---------- Portal access on a tenant card ---------- */
+.portalRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.portalOn {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 999px;
+  padding: 3px 9px;
+  flex: none;
+}
+
+/* The code itself is the thing being read off a screen and typed on a phone,
+   so it gets the monospace treatment and room to breathe. */
+.portalCode {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  background: var(--surface-3);
+  border-radius: 8px;
+  padding: 4px 10px;
+  flex: none;
+}
+
+.portalWho {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.45;
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.portalLink {
+  border: 0;
+  background: none;
+  padding: 4px 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--gold);
+  flex: none;
+}
+
+.portalLink:hover {
+  text-decoration: underline;
+}
+
+.portalLink[disabled] {
+  color: var(--muted);
+  cursor: default;
+  text-decoration: none;
+}
+
 /* ---------- Tenant cards ---------- */
 .tenantGrid {
   display: grid;
