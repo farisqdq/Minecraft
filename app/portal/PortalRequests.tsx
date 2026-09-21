@@ -128,6 +128,13 @@ export default function PortalRequests({
         )}
       </div>
 
+      {/* Always on screen, form open or not. Someone with a fire shouldn't
+          have to find a button to be told not to use this page. */}
+      <p className={styles.emergency}>
+        <strong>Fire, a gas smell, or anyone in danger — call 911.</strong> Not this form, not the
+        office.
+      </p>
+
       {open && (
         <form onSubmit={submit} className={styles.reportForm}>
           <div className={styles.field}>
@@ -200,15 +207,15 @@ export default function PortalRequests({
             </button>
           </div>
           <p className={styles.soon}>
-            No water, no heat, gas, or anything on fire —{" "}
+            No water, no heat, a lock that won&apos;t open —{" "}
             {emergencyPhone && telHref(emergencyPhone) ? (
               <>
                 call <a href={telHref(emergencyPhone)}>{formatPhone(emergencyPhone)}</a>
               </>
             ) : (
-              "call"
-            )}
-            , don&apos;t type. This form is checked when someone gets to it.
+              "call the office"
+            )}{" "}
+            rather than typing here. This form is checked when someone gets to it.
           </p>
 
           {storageReady && (

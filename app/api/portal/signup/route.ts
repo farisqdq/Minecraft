@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { normalizeJoinCode } from "@/lib/codes";
 import { emailProblem, passwordProblem } from "@/lib/portal";
+import { MAX_PER_IP, clientIp, ipKey, isThrottled, pauseMessage, recordFailure } from "@/lib/throttle";
 
 /**
  * Redeem a landlord-issued code into a tenant login.
@@ -26,13 +27,18 @@ export async function POST(req: Request) {
   const passwordError = passwordProblem(password);
   if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
+  const addressKey = ipKey(clientIp(req.headers));
+  const paused = await isThrottled([addressKey]);
+  if (paused) return NextResponse.json({ error: pauseMessage(paused) }, { status: 429 });
+
   const invite = await prisma.tenantInvite.findUnique({
     where: { code },
     include: { tenant: { select: { id: true, name: true, active: true } } },
   });
   // One message for every way a code can fail, so this can't be used to probe
-  // which codes exist.
+  // which codes exist — and each miss counts against the address.
   if (!invite || invite.acceptedAt || invite.expiresAt < new Date() || !invite.tenant.active) {
+    await recordFailure([{ key: addressKey, max: MAX_PER_IP }]);
     return NextResponse.json(
       { error: "That code isn't valid — it may have been used already or expired. Ask your landlord for a new one." },
       { status: 404 }

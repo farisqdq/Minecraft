@@ -4,6 +4,7 @@ import { Suspense, useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { pauseMessage } from "@/lib/throttle-rules";
 
 function LoginForm() {
   const router = useRouter();
@@ -25,7 +26,16 @@ function LoginForm() {
     });
     setLoading(false);
     if (result?.error) {
-      setError("Incorrect email or password.");
+      // A paused account gets the same refusal as a wrong password from the
+      // server. Ask which it was, so a right password isn't called wrong.
+      const status = await fetch("/api/auth/lock-status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: "user", email }),
+      })
+        .then((r) => r.json())
+        .catch(() => null);
+      setError(status?.lockedForSeconds > 0 ? pauseMessage(status.lockedForSeconds) : "Incorrect email or password.");
       return;
     }
     router.push(callbackUrl);

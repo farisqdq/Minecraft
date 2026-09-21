@@ -219,6 +219,22 @@
   border-color: var(--ink);
 }
 
+/* The 911 line. Red edge so the eye lands on it before the form does. */
+.emergency {
+  margin: 0 0 14px;
+  padding: 10px 12px;
+  border-left: 3px solid var(--expense);
+  background: var(--expense-soft);
+  border-radius: 0 10px 10px 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.emergency strong {
+  color: var(--expense);
+}
+
 .reportForm {
   display: flex;
   flex-direction: column;

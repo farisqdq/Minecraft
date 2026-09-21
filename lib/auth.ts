@@ -2,6 +2,16 @@ import type { AuthOptions } from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
+import {
+  MAX_PER_ACCOUNT,
+  MAX_PER_IP,
+  accountKey,
+  clearFailures,
+  clientIp,
+  ipKey,
+  isThrottled,
+  recordFailure,
+} from "@/lib/throttle";
 
 /**
  * Who a session belongs to. Two different kinds of person sign in here and
@@ -31,17 +41,31 @@ export const authOptions: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const email = credentials?.email?.trim().toLowerCase();
         const password = credentials?.password;
         if (!email || !password) return null;
 
+        // Paused accounts and addresses get the same answer as a wrong
+        // password. The login page asks separately whether it's a pause, so
+        // the person sees "try again in 12 minutes" rather than being told
+        // their right password is wrong.
+        const keys = [accountKey("user", email), ipKey(clientIp(req?.headers))];
+        if (await isThrottled(keys)) return null;
+
         const user = await prisma.user.findUnique({ where: { email } });
-        if (!user) return null;
+        // A miss on an unknown email counts too, so failure counts can't be
+        // used to learn which emails have accounts.
+        const valid = user ? await bcrypt.compare(password, user.passwordHash) : false;
+        if (!user || !valid) {
+          await recordFailure([
+            { key: keys[0], max: MAX_PER_ACCOUNT },
+            { key: keys[1], max: MAX_PER_IP },
+          ]);
+          return null;
+        }
 
-        const valid = await bcrypt.compare(password, user.passwordHash);
-        if (!valid) return null;
-
+        await clearFailures(keys[0]!);
         return { id: user.id, email: user.email, name: user.name ?? undefined, kind: "user" };
       },
     }),
@@ -52,25 +76,33 @@ export const authOptions: AuthOptions = {
         email: { label: "Email", type: "email" },
         password: { label: "Password", type: "password" },
       },
-      async authorize(credentials) {
+      async authorize(credentials, req) {
         const email = credentials?.email?.trim().toLowerCase();
         const password = credentials?.password;
         if (!email || !password) return null;
+
+        const keys = [accountKey("tenant", email), ipKey(clientIp(req?.headers))];
+        if (await isThrottled(keys)) return null;
 
         const account = await prisma.tenantAccount.findUnique({
           where: { email },
           include: { tenant: { select: { id: true, name: true, active: true } } },
         });
-        if (!account) return null;
-
-        const valid = await bcrypt.compare(password, account.passwordHash);
-        if (!valid) return null;
+        const valid = account ? await bcrypt.compare(password, account.passwordHash) : false;
+        if (!account || !valid) {
+          await recordFailure([
+            { key: keys[0], max: MAX_PER_ACCOUNT },
+            { key: keys[1], max: MAX_PER_IP },
+          ]);
+          return null;
+        }
 
         // A tenant who has moved out keeps their record for the ledger's sake
         // but loses the portal — otherwise last year's tenant still sees the
-        // place they left.
+        // place they left. Not counted as a failure: the password was right.
         if (!account.tenant.active) return null;
 
+        await clearFailures(keys[0]!);
         await prisma.tenantAccount.update({
           where: { id: account.id },
           data: { lastLoginAt: new Date() },

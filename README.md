@@ -123,6 +123,26 @@ deposit or ledger history; **Forgot password** kills the old login and hands
 you a fresh code, and everything they ever reported is still there when they
 sign back in.
 
+### Sign-in throttling
+
+Ten wrong passwords for one account inside fifteen minutes pauses that
+account for fifteen minutes; forty wrong passwords from one address inside
+fifteen minutes, across any accounts, pauses the address. A right password
+clears the account's count. Both signup forms count a bad code against the
+address the same way, so a short code can't be walked through.
+
+The pause is enforced inside `authorize()`, where it can't be skipped. The
+login page separately asks `/api/auth/lock-status` whether a refusal was a
+pause, so someone typing their *right* password sees "Try again in 12
+minutes" rather than being told it's wrong. A miss on an email that has no
+account is counted too, so the counts can't be used to learn which emails
+exist.
+
+Pausing by account is a deliberate trade: someone who knows your email can
+pause your sign-in on purpose. The pause is short for exactly that reason,
+and the door stays shut to guessing meanwhile, which is the outcome that
+matters. A stuck tenant can be handed a fresh code from their card.
+
 ### Why tenants are a separate table
 
 `User` is the landlord side: a `User` belongs to companies, and every query in
@@ -162,9 +182,11 @@ A tenant replying to a closed report reopens it, because the alternative is a
 reply nobody is looking at.
 
 Urgency is two buttons, not a dropdown: how hard it is to claim urgency
-decides whether the word keeps any meaning. The form says to call rather than
-type for no heat, no water, gas or fire — a web form is not an emergency line
-and shouldn't pretend to be.
+decides whether the word keeps any meaning. A line that stays on screen
+whether or not the form is open says **fire, a gas smell, or anyone in
+danger — call 911**, and the form itself says to call the LLC's line rather
+than type for no heat, no water or a lock that won't open. A web form is not
+an emergency line and shouldn't pretend to be.
 
 ## Rent changes
 

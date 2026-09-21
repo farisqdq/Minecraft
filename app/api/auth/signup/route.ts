@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { normalizeJoinCode } from "@/lib/codes";
+import { MAX_PER_IP, clientIp, ipKey, isThrottled, pauseMessage, recordFailure } from "@/lib/throttle";
 
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
@@ -12,6 +13,10 @@ export async function POST(req: Request) {
 
   // A live LLC join code also gets you through the signup gate, otherwise
   // gating signups would block the very people you handed a code to.
+  const addressKey = ipKey(clientIp(req.headers));
+  const paused = await isThrottled([addressKey]);
+  if (paused) return NextResponse.json({ error: pauseMessage(paused) }, { status: 429 });
+
   const requiredCode = process.env.SIGNUP_CODE;
   if (requiredCode && code !== requiredCode) {
     const invite = await prisma.invite.findUnique({
@@ -19,6 +24,7 @@ export async function POST(req: Request) {
     });
     const validJoinCode = Boolean(invite && !invite.acceptedAt && invite.expiresAt > new Date());
     if (!validJoinCode) {
+      await recordFailure([{ key: addressKey, max: MAX_PER_IP }]);
       return NextResponse.json({ error: "Invalid signup code." }, { status: 403 });
     }
   }

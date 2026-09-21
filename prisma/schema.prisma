@@ -367,3 +367,19 @@ model MaintenancePhoto {
 
   @@index([requestId])
 }
+
+// Failed sign-in counts, so a password can't be guessed by brute force.
+//
+// It lives in the database rather than in memory because the app runs on
+// serverless functions — memory is per-instance and gone between requests.
+// One row per key; keys are "user:<email>", "tenant:<email>" and "ip:<addr>".
+// The email keys stop a single account being hammered; the ip key stops one
+// machine trying a thousand accounts. Rows are only ever written on failure
+// and cleared on success, and stale ones are swept on the next success.
+model LoginThrottle {
+  key         String    @id
+  failures    Int       @default(0)
+  windowStart DateTime  @default(now())
+  lockedUntil DateTime?
+  updatedAt   DateTime  @updatedAt
+}
