@@ -81,3 +81,14 @@ export async function requireVendor(userId: string, vendorId: string, role: Role
   const membership = await requireCompany(userId, vendor.companyId, role);
   return membership ? vendor : null;
 }
+
+/**
+ * A document in one of the user's companies. Deleting one destroys the only
+ * copy of the file, so it takes an owner, like the other destructive actions.
+ */
+export async function requireDocument(userId: string, documentId: string, role: Role = "member") {
+  const doc = await prisma.document.findUnique({ where: { id: documentId } });
+  if (!doc) return null;
+  const membership = await requireCompany(userId, doc.companyId, role);
+  return membership ? doc : null;
+}

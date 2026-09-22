@@ -10,6 +10,7 @@ import { chasedRecently, remindedAgo } from "@/lib/notices";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref } from "@/lib/lease";
+import { byUrgency, expiryLabel, expiryState, type DocumentDTO } from "@/lib/documents";
 import AppShell from "../components/AppShell";
 import CashFlowChart from "../components/CashFlowChart";
 import CategoryBars from "../components/CategoryBars";
@@ -171,6 +172,7 @@ function defaultDateFor(month: string, today: string) {
 export default function DashboardClient({
   openRepairs,
   initialRepairs,
+  expiringDocs,
   initialChases,
   userLabel,
   storageReady,
@@ -188,6 +190,8 @@ export default function DashboardClient({
   openRepairs?: number;
   /** Open repair reports, newest trouble first, for Needs attention. */
   initialRepairs: RequestDTO[];
+  /** Documents that have run out or will within SOON_DAYS. */
+  expiringDocs: DocumentDTO[];
   /** The last rent chase per tenant id, so a row can say when you last asked. */
   initialChases: Record<string, { at: string; month: string; read: boolean }>;
   userLabel: string;
@@ -1223,8 +1227,22 @@ export default function DashboardClient({
   // pointer at the queue, not a second place to work them, because a repair
   // needs a status and a reply, not a one-tap clear.
   const repairAlerts = initialRepairs.filter((r) => visibleIds.has(r.propertyId));
+  // Scoped to the LLC chip like everything else. Vendor paperwork has no
+  // property, so it's matched on the company.
+  const docAlerts = byUrgency(
+    expiringDocs.filter(
+      (d) =>
+        (selectedCompany === "all" || d.companyId === selectedCompany) &&
+        expiryState(d.expiresOn, todayKey) !== "ok"
+    ),
+    todayKey
+  );
   const attentionCount =
-    repairAlerts.length + unpaidThisMonth.length + leaseAlerts.length + dueRecurring.length;
+    repairAlerts.length +
+    unpaidThisMonth.length +
+    leaseAlerts.length +
+    dueRecurring.length +
+    docAlerts.length;
 
   return (
     <AppShell
@@ -1677,6 +1695,47 @@ export default function DashboardClient({
                       </div>
                     </div>
                   ))}
+
+                  {docAlerts.map((d) => {
+                    const state = expiryState(d.expiresOn, todayKey);
+                    return (
+                      <div key={`d-${d.id}`} className={styles.attnRow}>
+                        <div className={styles.attnMain}>
+                          <div className={styles.attnLabel}>
+                            {d.title}{" "}
+                            <span className={`${styles.pill} ${state === "expired" ? styles.bill : styles.owed}`}>
+                              {expiryLabel(d.expiresOn, todayKey, formatDay)}
+                            </span>
+                          </div>
+                          <div className={styles.attnSub}>
+                            {d.kind} · {d.ownerLabel}
+                          </div>
+                        </div>
+                        <div className={styles.attnActions}>
+                          <a
+                            className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                            href={d.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                          >
+                            View
+                          </a>
+                          <Link
+                            href={
+                              d.vendorId
+                                ? "/dashboard/repairs/vendors"
+                                : d.propertyId
+                                  ? `/dashboard/properties/${d.propertyId}`
+                                  : "/dashboard"
+                            }
+                            className={`${styles.btn} ${styles.small}`}
+                          >
+                            Replace
+                          </Link>
+                        </div>
+                      </div>
+                    );
+                  })}
 
                   {dueRecurring.map((r) => (
                     <div key={`r-${r.id}`} className={styles.attnRow}>

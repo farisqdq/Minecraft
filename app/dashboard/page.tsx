@@ -2,6 +2,8 @@ import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { openRepairCount, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
+import { expiringDocuments } from "@/lib/documents-db";
+import { SOON_DAYS } from "@/lib/documents";
 import { blobConfigured } from "@/lib/blob";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
@@ -71,6 +73,7 @@ export default async function DashboardPage() {
     <DashboardClient
       openRepairs={openRepairs}
       initialRepairs={openRequests.map(serializeRequestForLandlord)}
+      expiringDocs={await expiringDocuments(companyIds, new Date(Date.now() + (SOON_DAYS + 1) * 86_400_000))}
       initialChases={Object.fromEntries(
         // findMany came back newest first, so the first entry per tenant wins.
         allNotices.reduce((seen, n) => {

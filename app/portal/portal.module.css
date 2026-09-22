@@ -685,3 +685,29 @@
   color: var(--muted);
   line-height: 1.4;
 }
+
+.docList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.docList li {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.docList a {
+  font-size: 14.5px;
+  font-weight: 600;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.docList a:hover {
+  color: var(--gold);
+}

@@ -8,6 +8,8 @@ import { requireProperty } from "@/lib/access";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
+import { documentsWhere } from "@/lib/documents-db";
+import { blobConfigured } from "@/lib/blob";
 import PropertyManageClient from "./PropertyManageClient";
 
 // Enough to see the shape of a place's troubles without turning the page
@@ -63,6 +65,8 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   ]);
 
   const balances = await balancesForTenants(tenants.map((t) => t.id));
+  // The property's own documents and its tenants' — both carry its id.
+  const documents = await documentsWhere({ propertyId: property.id });
 
   return (
     <PropertyManageClient
@@ -100,6 +104,8 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       }))}
       initialTenants={tenants.map(serializeTenant)}
       initialBalances={balances}
+      initialDocuments={documents}
+      storageReady={blobConfigured()}
       initialRequests={requests
         .map(serializeRequestForLandlord)
         // Anything still open comes first — a finished urgent repair from

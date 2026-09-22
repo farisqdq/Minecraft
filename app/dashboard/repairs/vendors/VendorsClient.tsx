@@ -10,6 +10,8 @@ import styles from "../../dashboard.module.css";
 import { money } from "@/lib/money";
 import { formatDay, formatPhone, smsHref, telHref } from "@/lib/lease";
 import { TRADES, type VendorDTO } from "@/lib/vendors";
+import DocumentsPanel from "../../../components/DocumentsPanel";
+import type { DocumentDTO } from "@/lib/documents";
 
 type Company = { id: string; name: string };
 
@@ -20,12 +22,18 @@ export default function VendorsClient({
   initial,
   openRepairs,
   ownerOf,
+  documents,
+  storageReady,
+  serverToday,
 }: {
   companies: Company[];
   initial: VendorDTO[];
   openRepairs: number;
   /** LLCs where you're an owner — only an owner can delete from the book. */
   ownerOf: string[];
+  documents: DocumentDTO[];
+  storageReady: boolean;
+  serverToday: string;
 }) {
   const { toasts, push, dismiss } = useToasts();
   const [vendors, setVendors] = useState(initial);
@@ -264,6 +272,30 @@ export default function VendorsClient({
             </div>
           </section>
         ))
+      )}
+
+      {vendors.length > 0 && (
+        <section className={styles.block}>
+          <div className={styles.blockHead}>
+            <h2>Their paperwork</h2>
+          </div>
+          <p className={styles.helpText} style={{ marginTop: -6 }}>
+            Certificates of insurance and W-9s. A contractor whose insurance lapsed is your
+            liability the day they fall off a ladder, so the expiry date matters here.
+          </p>
+          <DocumentsPanel
+            initial={documents}
+            targets={vendors.map((v) => ({
+              key: `vendor:${v.id}`,
+              label: companies.length > 1 ? `${v.name} — ${companyName(v.companyId)}` : v.name,
+            }))}
+            today={serverToday}
+            canDelete={ownerOf.length > 0}
+            storageReady={storageReady}
+            onToast={(m, tone) => push(m, tone)}
+            emptyText="No certificates or W-9s on file."
+          />
+        </section>
       )}
 
       <p className={styles.helpText} style={{ marginTop: 24 }}>

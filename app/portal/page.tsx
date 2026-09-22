@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
 import { blobConfigured } from "@/lib/blob";
-import { formatPhone, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
+import { formatDay, formatPhone, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 import { money } from "@/lib/money";
 import { requestInclude, serializeRequest } from "@/lib/requests";
 import { statementForTenant } from "@/lib/statements";
@@ -47,6 +47,14 @@ export default async function PortalHome() {
   const showAccount = Boolean(
     account && account.grounded && !account.problem && account.statement.rows.length > 0
   );
+
+  // Only documents filed against this tenant AND switched on for the portal.
+  // Both conditions are in the query — nothing is fetched and then hidden.
+  const sharedDocs = await prisma.document.findMany({
+    where: { tenantId: tenant.id, shared: true },
+    select: { id: true, title: true, kind: true, url: true, expiresOn: true },
+    orderBy: { createdAt: "desc" },
+  });
 
   const status = leaseStatus(
     {
@@ -215,6 +223,25 @@ export default async function PortalHome() {
           </div>
         </div>
       </section>
+
+      {sharedDocs.length > 0 && (
+        <section className={styles.card}>
+          <h2>Your documents</h2>
+          <ul className={styles.docList}>
+            {sharedDocs.map((d) => (
+              <li key={d.id}>
+                <a href={d.url} target="_blank" rel="noopener noreferrer">
+                  {d.title}
+                </a>
+                <span className={styles.factLabel}>
+                  {d.kind}
+                  {d.expiresOn ? ` · valid through ${formatDay(d.expiresOn.toISOString().slice(0, 10))}` : ""}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
     </PortalShell>
   );
 }

@@ -8,6 +8,8 @@ import CashFlowChart from "../../../components/CashFlowChart";
 import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
 import Modal from "../../../components/Modal";
 import StatementPanel from "../../../components/StatementPanel";
+import DocumentsPanel from "../../../components/DocumentsPanel";
+import type { DocumentDTO } from "@/lib/documents";
 import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
 import { useNow } from "../../../components/useNow";
@@ -82,6 +84,8 @@ export default function PropertyManageClient({
   initialRecurring,
   initialTenants,
   initialBalances,
+  initialDocuments,
+  storageReady,
   rentChanges,
   transactions: initialTransactions,
   initialPortal,
@@ -101,6 +105,9 @@ export default function PropertyManageClient({
   initialTenants: TenantDTO[];
   /** What each tenant owes, worked out on the server so the cards render with it. */
   initialBalances: Record<string, { balance: number; behindSince: string; problem: string }>;
+  /** Leases, certificates and the like for this property and its tenants. */
+  initialDocuments: DocumentDTO[];
+  storageReady: boolean;
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
   /** Portal access per tenant id, so the cards render it without a round trip. */
@@ -1012,6 +1019,31 @@ export default function PropertyManageClient({
             + Add a tenant
           </button>
         </div>
+      </section>
+
+      <section className={styles.block}>
+        <div className={styles.blockHead}>
+          <h2>Documents</h2>
+        </div>
+        <p className={styles.helpText} style={{ marginTop: -6 }}>
+          Leases, insurance certificates, licences and inspections — with the date each runs
+          out. Anything expiring in the next 30 days shows on the overview.
+        </p>
+        <DocumentsPanel
+          initial={initialDocuments}
+          targets={[
+            { key: `property:${property.id}`, label: `${property.name} (the property)` },
+            ...currentTenants.map((t) => ({
+              key: `tenant:${t.id}`,
+              label: `${t.name}${t.unitId ? ` — ${unitLabel(t.unitId)}` : ""}`,
+            })),
+          ]}
+          today={todayKey}
+          canDelete={canManage}
+          storageReady={storageReady}
+          onToast={(m, tone) => push(m, tone)}
+          emptyText="Nothing filed for this property yet."
+        />
       </section>
 
       {initialRequests.length > 0 && (

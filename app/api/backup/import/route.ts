@@ -5,6 +5,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { BACKUP_FORMAT } from "../route";
 import { normalizeCategory } from "@/lib/categories";
 import { normalizeTrade } from "@/lib/vendors";
+import { normalizeKind } from "@/lib/documents";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
 
 type Tx = Prisma.TransactionClient;
@@ -127,7 +128,22 @@ type CleanProperty = {
   tenants: CleanTenant[];
   rentChanges: CleanRentChange[];
   requests: CleanRequest[];
+  documents: CleanDocument[];
   units: CleanUnit[];
+};
+type CleanDocument = {
+  title: string;
+  kind: string;
+  url: string;
+  pathname: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  expiresOn: Date | null;
+  note: string | null;
+  shared: boolean;
+  tenantName: string;
+  vendorName: string;
 };
 type CleanVendor = {
   name: string;
@@ -141,6 +157,7 @@ type CleanCompany = {
   contactPhone: string | null;
   contactEmail: string | null;
   vendors: CleanVendor[];
+  documents: CleanDocument[];
   properties: CleanProperty[];
 };
 
@@ -355,6 +372,34 @@ function parseBackup(raw: unknown) {
     return out;
   }
 
+  let documentTotal = 0;
+  function parseDocuments(raw: unknown): CleanDocument[] {
+    const out: CleanDocument[] = [];
+    for (const rawD of Array.isArray(raw) ? raw : []) {
+      const d = (rawD ?? {}) as Record<string, unknown>;
+      const url = str(d.url, 1000);
+      // Same rule as receipts: only files still served over https come back.
+      if (!/^https:\/\//i.test(url)) continue;
+      if (++documentTotal > 5000) throw new Error("That backup is too large to import.");
+      const exp = str(d.expiresOn, 10);
+      out.push({
+        title: str(d.title, 120) || "Document",
+        kind: normalizeKind(d.kind),
+        url,
+        pathname: str(d.pathname, 500) || new URL(url).pathname.replace(/^\//, ""),
+        filename: str(d.filename, 200) || "document",
+        contentType: str(d.contentType, 100) || "application/pdf",
+        size: Math.max(0, Math.round(num(d.size))),
+        expiresOn: /^\d{4}-\d{2}-\d{2}$/.test(exp) ? new Date(`${exp}T00:00:00.000Z`) : null,
+        note: str(d.note, 500) || null,
+        shared: d.shared === true,
+        tenantName: str(d.tenantName, 120),
+        vendorName: str(d.vendorName, 120),
+      });
+    }
+    return out;
+  }
+
   function parseRequests(raw: unknown): CleanRequest[] {
     const out: CleanRequest[] = [];
     for (const rawR of Array.isArray(raw) ? raw : []) {
@@ -457,6 +502,7 @@ function parseBackup(raw: unknown) {
         tenants: parseTenants(p.tenants),
         rentChanges: parseRentChanges(p.rentChanges),
         requests: parseRequests(p.requests),
+        documents: parseDocuments(p.documents),
         units,
       });
     }
@@ -484,6 +530,7 @@ function parseBackup(raw: unknown) {
       contactPhone: str(c.contactPhone, 40) || null,
       contactEmail: str(c.contactEmail, 200) || null,
       vendors,
+      documents: parseDocuments(c.documents),
       properties,
     });
   }
@@ -545,6 +592,7 @@ export async function POST(req: Request) {
     charges: 0,
     rules: 0,
     vendors: 0,
+    documents: 0,
     rentChanges: 0,
     requests: 0,
   };
@@ -733,6 +781,31 @@ export async function POST(req: Request) {
     }
   }
 
+  async function createDocuments(
+    tx: Tx,
+    companyId: string,
+    propertyId: string | null,
+    docs: CleanDocument[],
+    tenantsByName: Map<string, string>
+  ) {
+    for (const { tenantName, vendorName, ...d } of docs) {
+      const tenantId = (tenantName && tenantsByName.get(tenantName)) || null;
+      await tx.document.create({
+        data: {
+          ...d,
+          companyId,
+          propertyId,
+          tenantId,
+          vendorId: (vendorName && vendorsByName.get(vendorName)) || null,
+          // A tenant who didn't come back can't have anything shared with them.
+          shared: d.shared && Boolean(tenantId),
+          uploadedById: userId,
+        },
+      });
+      created.documents += 1;
+    }
+  }
+
   async function createRentChanges(
     tx: Tx,
     propertyId: string,
@@ -787,6 +860,7 @@ export async function POST(req: Request) {
         const propertyTenants = await createTenants(tx, prop.id, null, property.tenants);
         await createRentChanges(tx, prop.id, null, property.rentChanges);
         await createRequests(tx, prop.id, null, property.requests, propertyTenants);
+        const everyTenant = new Map(propertyTenants);
 
         for (const unit of property.units) {
           const u = await tx.unit.create({
@@ -804,8 +878,12 @@ export async function POST(req: Request) {
           const unitTenants = await createTenants(tx, prop.id, u.id, unit.tenants);
           await createRentChanges(tx, prop.id, u.id, unit.rentChanges);
           await createRequests(tx, prop.id, u.id, unit.requests, unitTenants);
+          for (const [name, id] of unitTenants) if (!everyTenant.has(name)) everyTenant.set(name, id);
         }
+        // After the units, so a document for a tenant in Apt 2 can find them.
+        await createDocuments(tx, record.id, prop.id, property.documents, everyTenant);
       }
+      await createDocuments(tx, record.id, null, company.documents, new Map());
     }
   });
 

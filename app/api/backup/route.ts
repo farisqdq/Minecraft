@@ -4,7 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 9;
+export const BACKUP_VERSION = 10;
 
 type TxnRow = {
   type: string;
@@ -149,6 +149,47 @@ function serializeTenants(rows: TenantRow[]) {
   }));
 }
 
+type DocumentRow = {
+  title: string;
+  kind: string;
+  url: string;
+  pathname: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  expiresOn: Date | null;
+  note: string | null;
+  shared: boolean;
+  tenant: { name: string } | null;
+  vendor: { name: string } | null;
+};
+
+/**
+ * Links to the stored files, like receipts — the files stay in blob storage.
+ * What each is attached to goes by name, because ids don't survive a restore.
+ */
+function serializeDocuments(rows: DocumentRow[]) {
+  return rows.map((d) => ({
+    title: d.title,
+    kind: d.kind,
+    url: d.url,
+    pathname: d.pathname,
+    filename: d.filename,
+    contentType: d.contentType,
+    size: d.size,
+    expiresOn: d.expiresOn ? d.expiresOn.toISOString().slice(0, 10) : "",
+    note: d.note ?? "",
+    shared: d.shared,
+    tenantName: d.tenant?.name ?? "",
+    vendorName: d.vendor?.name ?? "",
+  }));
+}
+
+const DOCUMENT_INCLUDE = {
+  orderBy: { createdAt: "asc" },
+  include: { tenant: { select: { name: true } }, vendor: { select: { name: true } } },
+} as const;
+
 function serializeRentChanges(rows: { effectiveFrom: Date; amount: number }[]) {
   return rows.map((c) => ({
     effectiveFrom: c.effectiveFrom.toISOString().slice(0, 10),
@@ -225,6 +266,9 @@ export async function GET() {
     where: { id: { in: companyIds } },
     include: {
       vendors: { orderBy: { createdAt: "asc" } },
+      // Paperwork not tied to a property: a vendor's insurance, an LLC's own
+      // licence. Property and tenant documents travel with their property.
+      documents: { ...DOCUMENT_INCLUDE, where: { propertyId: null } },
       properties: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -245,6 +289,7 @@ export async function GET() {
           },
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
           requests: { ...REQUEST_INCLUDE, where: { unitId: null } },
+          documents: DOCUMENT_INCLUDE,
           units: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -287,6 +332,7 @@ export async function GET() {
         email: v.email ?? "",
         note: v.note ?? "",
       })),
+      documents: serializeDocuments(c.documents),
       properties: c.properties.map((p) => ({
         name: p.name,
         address: p.address ?? "",
@@ -297,6 +343,7 @@ export async function GET() {
         tenants: serializeTenants(p.tenants),
         rentChanges: serializeRentChanges(p.rentChanges),
         requests: serializeRequests(p.requests),
+        documents: serializeDocuments(p.documents),
         units: p.units.map((u) => ({
           name: u.name,
           monthlyRent: u.monthlyRent,

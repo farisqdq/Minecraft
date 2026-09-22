@@ -83,6 +83,9 @@ export default function BackupClient({
       if (data.charges) {
         parts.push(`${data.charges} ${data.charges === 1 ? "charge" : "charges"}`);
       }
+      if (data.documents) {
+        parts.push(`${data.documents} ${data.documents === 1 ? "document" : "documents"}`);
+      }
       if (data.vendors) {
         parts.push(`${data.vendors} ${data.vendors === 1 ? "vendor" : "vendors"}`);
       }

@@ -2512,3 +2512,73 @@ tr:hover .rowDel {
   font-size: 12px;
   color: var(--muted);
 }
+
+/* ---------- Documents ---------- */
+
+.docList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  overflow: hidden;
+}
+
+.docList li {
+  display: flex;
+  align-items: center;
+  gap: 8px 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+}
+
+.docList li + li {
+  border-top: 1px solid var(--line);
+}
+
+.docMain {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  flex: 1 1 200px;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.docMain:hover .docTitle {
+  color: var(--gold);
+  text-decoration: underline;
+}
+
+.docTitle {
+  font-size: 14px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.docMeta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.docExpiry {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  white-space: nowrap;
+}
+
+.docSoon {
+  color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.docExpired {
+  color: var(--expense);
+  background: var(--expense-soft);
+}

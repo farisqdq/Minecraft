@@ -29,6 +29,7 @@ model User {
   chargesRaised       TenantCharge[]
   chargeRules         TenantChargeRule[]
   vendorsAdded        Vendor[]
+  documentsUploaded   Document[]
 }
 
 model Company {
@@ -45,6 +46,7 @@ model Company {
   properties Property[]
   invites    Invite[]
   vendors    Vendor[]
+  documents  Document[]
 }
 
 model CompanyMember {
@@ -95,6 +97,7 @@ model Property {
   tenants           Tenant[]
   rentChanges       RentChange[]
   requests          MaintenanceRequest[]
+  documents         Document[]
 
   @@index([companyId])
 }
@@ -168,12 +171,13 @@ model Tenant {
   createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
 
-  account  TenantAccount?
-  invites  TenantInvite[]
-  requests MaintenanceRequest[]
-  notices  TenantNotice[]
-  charges  TenantCharge[]
-  rules    TenantChargeRule[]
+  account   TenantAccount?
+  invites   TenantInvite[]
+  requests  MaintenanceRequest[]
+  notices   TenantNotice[]
+  charges   TenantCharge[]
+  rules     TenantChargeRule[]
+  documents Document[]
 
   // What they owed on the day you started keeping books here, and the first
   // month to charge rent for. Without these, a lease that began in 2023 and a
@@ -278,8 +282,53 @@ model Vendor {
 
   repairs      MaintenanceRequest[]
   transactions Transaction[]
+  documents    Document[]
 
   @@index([companyId])
+}
+
+// A file worth keeping with its expiry date: a lease, a commercial tenant's
+// certificate of insurance, a business licence, an inspection, a vendor's
+// W-9. The expiry is the point — an insurance certificate that lapsed in
+// March is only noticed after the claim, unless something says so first.
+//
+// Hangs off one LLC, and optionally a property, a tenant or a vendor inside
+// it, so the property page, the tenant card and the vendor book can each
+// show what belongs to them.
+model Document {
+  id           String    @id @default(cuid())
+  companyId    String
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  propertyId   String?
+  property     Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenantId     String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  vendorId     String?
+  vendor       Vendor?   @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  title        String
+  /// One of lib/documents.ts KINDS.
+  kind         String    @default("Other")
+  url          String
+  pathname     String
+  filename     String
+  contentType  String
+  size         Int
+  /// The day it stops being valid, if it ever does. Stored as a UTC midnight.
+  expiresOn    DateTime?
+  note         String?
+  /// Tenant documents only: whether it shows on that tenant's portal. Off
+  /// unless someone turns it on — a lease is theirs to read, the landlord's
+  /// notes on their application are not.
+  shared       Boolean   @default(false)
+  uploadedById String?
+  uploadedBy   User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime  @default(now())
+
+  @@index([companyId])
+  @@index([propertyId])
+  @@index([tenantId])
+  @@index([vendorId])
+  @@index([expiresOn])
 }
 
 // A template for a bill that repeats (mortgage, insurance, HOA). It never
