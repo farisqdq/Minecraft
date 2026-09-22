@@ -7,6 +7,6 @@ export async function GET() {
   const me = await requireTenantSession();
   if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const pulse = await repairPulse({ tenantId: me.tenant.id });
+  const pulse = await repairPulse({ tenantId: me.tenant.id }, me.tenant.id);
   return NextResponse.json({ pulse });
 }

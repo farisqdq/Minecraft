@@ -25,6 +25,7 @@ model User {
   tenantInvitesSent   TenantInvite[]     @relation("TenantInviteSender")
   requestUpdates      MaintenanceUpdate[]
   requestPhotos       MaintenancePhoto[]
+  noticesSent         TenantNotice[]
 }
 
 model Company {
@@ -166,6 +167,7 @@ model Tenant {
   account  TenantAccount?
   invites  TenantInvite[]
   requests MaintenanceRequest[]
+  notices  TenantNotice[]
 
   @@index([propertyId])
   @@index([unitId])
@@ -382,4 +384,34 @@ model LoginThrottle {
   windowStart DateTime  @default(now())
   lockedUntil DateTime?
   updatedAt   DateTime  @updatedAt
+}
+
+// A note the landlord puts in front of a tenant: nearly always "your rent is
+// short", occasionally something else.
+//
+// It exists as a row rather than as a text message and nothing else because
+// the record is half the point — you need to know you already chased someone
+// on Tuesday so you don't do it again on Wednesday, and if it ever goes to
+// eviction, when you asked and whether they read it is the question.
+//
+// Sending one does not move any money. It is a message about the ledger, not
+// an entry in it.
+model TenantNotice {
+  id         String   @id @default(cuid())
+  tenantId   String
+  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // "rent" for a rent chase, "note" for anything else.
+  kind       String   @default("rent")
+  // The month being chased, as YYYY-MM, and what was outstanding when the
+  // notice went out. Frozen at send time: a later payment shouldn't rewrite
+  // what you told them they owed.
+  month      String?
+  amount     Float?
+  body       String
+  sentById   String?
+  sentBy     User?    @relation(fields: [sentById], references: [id], onDelete: SetNull)
+  createdAt  DateTime @default(now())
+  readAt     DateTime?
+
+  @@index([tenantId])
 }

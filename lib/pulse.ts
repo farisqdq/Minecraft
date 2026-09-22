@@ -11,8 +11,12 @@ import { prisma } from "@/lib/prisma";
  * Two aggregates, no rows returned, so this is cheap enough to ask for every
  * few seconds.
  */
-export async function repairPulse(scope: Prisma.MaintenanceRequestWhereInput): Promise<string> {
-  const [requests, updates] = await Promise.all([
+export async function repairPulse(
+  scope: Prisma.MaintenanceRequestWhereInput,
+  /** Also watch this tenant's notices, for the portal's heartbeat. */
+  tenantId?: string
+): Promise<string> {
+  const [requests, updates, notices] = await Promise.all([
     prisma.maintenanceRequest.aggregate({
       where: scope,
       _count: { _all: true },
@@ -23,6 +27,13 @@ export async function repairPulse(scope: Prisma.MaintenanceRequestWhereInput): P
       _count: { _all: true },
       _max: { createdAt: true },
     }),
+    tenantId
+      ? prisma.tenantNotice.aggregate({
+          where: { tenantId },
+          _count: { _all: true },
+          _max: { createdAt: true },
+        })
+      : null,
   ]);
 
   return [
@@ -30,5 +41,7 @@ export async function repairPulse(scope: Prisma.MaintenanceRequestWhereInput): P
     requests._max.updatedAt?.getTime() ?? 0,
     updates._count._all,
     updates._max.createdAt?.getTime() ?? 0,
+    notices?._count._all ?? 0,
+    notices?._max.createdAt?.getTime() ?? 0,
   ].join(".");
 }

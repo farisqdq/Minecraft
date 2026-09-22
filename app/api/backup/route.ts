@@ -4,7 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 5;
+export const BACKUP_VERSION = 6;
 
 type TxnRow = {
   type: string;
@@ -60,6 +60,7 @@ function serializeRecurring(rows: RecurringRow[]) {
 }
 
 type TenantRow = {
+  notices?: { kind: string; month: string | null; amount: number | null; body: string; createdAt: Date; readAt: Date | null }[];
   name: string;
   email: string | null;
   phone: string | null;
@@ -82,6 +83,16 @@ function serializeTenants(rows: TenantRow[]) {
     dueDay: t.dueDay,
     active: t.active,
     note: t.note ?? "",
+    // When you chased them and whether they read it. Kept because that is
+    // the part a backup is for — the record, not the conversation.
+    notices: (t.notices ?? []).map((n) => ({
+      kind: n.kind,
+      month: n.month ?? "",
+      amount: n.amount ?? 0,
+      body: n.body,
+      createdAt: n.createdAt.toISOString(),
+      readAt: n.readAt ? n.readAt.toISOString() : "",
+    })),
   }));
 }
 
@@ -166,7 +177,11 @@ export async function GET() {
             include: { attachments: { orderBy: { createdAt: "asc" } } },
           },
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
-          tenants: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
+          tenants: {
+            where: { unitId: null },
+            orderBy: { createdAt: "asc" },
+            include: { notices: { orderBy: { createdAt: "asc" } } },
+          },
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
           requests: { ...REQUEST_INCLUDE, where: { unitId: null } },
           units: {
@@ -177,7 +192,7 @@ export async function GET() {
                 include: { attachments: { orderBy: { createdAt: "asc" } } },
               },
               recurringExpenses: { orderBy: { createdAt: "asc" } },
-              tenants: { orderBy: { createdAt: "asc" } },
+              tenants: { orderBy: { createdAt: "asc" }, include: { notices: { orderBy: { createdAt: "asc" } } } },
               rentChanges: { orderBy: { effectiveFrom: "asc" } },
               requests: REQUEST_INCLUDE,
             },

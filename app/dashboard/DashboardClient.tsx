@@ -6,6 +6,7 @@ import { shrinkImage } from "@/lib/shrinkImage";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money } from "@/lib/money";
 import { STATUS_LABEL, ago, type RequestDTO } from "@/lib/maintenance";
+import { chasedRecently, remindedAgo } from "@/lib/notices";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref } from "@/lib/lease";
@@ -170,6 +171,7 @@ function defaultDateFor(month: string, today: string) {
 export default function DashboardClient({
   openRepairs,
   initialRepairs,
+  initialChases,
   userLabel,
   storageReady,
   serverToday,
@@ -186,6 +188,8 @@ export default function DashboardClient({
   openRepairs?: number;
   /** Open repair reports, newest trouble first, for Needs attention. */
   initialRepairs: RequestDTO[];
+  /** The last rent chase per tenant id, so a row can say when you last asked. */
+  initialChases: Record<string, { at: string; month: string; read: boolean }>;
   userLabel: string;
   storageReady: boolean;
   serverToday: string;
@@ -220,6 +224,48 @@ export default function DashboardClient({
   // asking the server to render again is all this page needs. The ledger and
   // the forms are local state and are untouched by it.
   useLivePulse("/api/requests/pulse", () => router.refresh());
+
+  const [chases, setChases] = useState(initialChases);
+  const [chasing, setChasing] = useState("");
+
+  /**
+   * Chase a tenant for what's outstanding. Writes the notice to their portal
+   * and hands back a text with the message already in it — the app sends
+   * nothing itself, so it arrives from your own number rather than a service
+   * they don't recognise.
+   */
+  async function remind(
+    tenant: TenantDTO,
+    month: string,
+    expected: number,
+    paid: number,
+    label: string
+  ) {
+    setChasing(tenant.id);
+    const res = await fetch(`/api/tenants/${tenant.id}/notices`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind: "rent", month, expected, paid }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setChasing("");
+    if (!res.ok) {
+      push(data?.error || "Couldn't send that.", "bad");
+      return;
+    }
+    setChases((prev) => ({
+      ...prev,
+      [tenant.id]: { at: data.notice.createdAt, month, read: false },
+    }));
+    if (data.smsHref) {
+      // Opens the messaging app with the text already written. Same tab is
+      // correct: an sms: link doesn't navigate the page anywhere.
+      window.location.href = data.smsHref;
+      push(`Noted on ${label}'s portal. Your messages app has the text ready.`);
+    } else {
+      push(`Noted on ${label}'s portal. No phone number on file to text.`);
+    }
+  }
   const thisMonth = todayKey.slice(0, 7);
   const thisYear = todayKey.slice(0, 4);
 
@@ -1521,6 +1567,39 @@ export default function DashboardClient({
                         {money(expected - paid)}
                       </span>
                       <div className={styles.attnActions}>
+                        {tenant &&
+                          (() => {
+                            const chase = chases[tenant.id];
+                            // Only count a chase about *this* month: last
+                            // month's reminder says nothing about this one.
+                            const recent =
+                              chase?.month === barMonth && chasedRecently(chase.at);
+                            return (
+                              <button
+                                type="button"
+                                className={`${styles.btn} ${styles.small} ${
+                                  recent ? styles.quiet : styles.primary
+                                }`}
+                                disabled={chasing === tenant.id}
+                                title={
+                                  recent
+                                    ? `Reminded ${remindedAgo(chase.at, clock)}${
+                                        chase.read ? " · they've read it" : " · not read yet"
+                                      }`
+                                    : `Send ${tenant.name} a reminder`
+                                }
+                                onClick={() =>
+                                  remind(tenant, barMonth, expected, paid, tenant.name)
+                                }
+                              >
+                                {chasing === tenant.id
+                                  ? "Sending\u2026"
+                                  : recent
+                                    ? `Reminded ${remindedAgo(chase.at, clock)}`
+                                    : "Remind"}
+                              </button>
+                            );
+                          })()}
                         {tenant?.phone && (
                           <>
                             <a

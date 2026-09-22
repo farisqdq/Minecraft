@@ -7,6 +7,7 @@ import { money } from "@/lib/money";
 import { requestInclude, serializeRequest } from "@/lib/requests";
 import PortalShell from "./PortalShell";
 import PortalRequests from "./PortalRequests";
+import PortalNotices from "./PortalNotices";
 import styles from "./portal.module.css";
 
 export const dynamic = "force-dynamic";
@@ -23,6 +24,12 @@ export default async function PortalHome() {
   // card at all.
   const contactPhone = property.company.contactPhone ?? "";
   const contactEmail = property.company.contactEmail ?? "";
+
+  const notices = await prisma.tenantNotice.findMany({
+    where: { tenantId: tenant.id },
+    orderBy: { createdAt: "desc" },
+    take: 30,
+  });
 
   // Only this tenant's own reports, scoped by the session.
   const requests = await prisma.maintenanceRequest.findMany({
@@ -51,7 +58,24 @@ export default async function PortalHome() {
         </span>
       </div>
 
-      {/* Reporting first. It is the reason a tenant has this login at all, and
+      {/* Anything the landlord has asked for goes above everything else — a
+          rent chase is the one thing here that needs acting on today. */}
+      <PortalNotices
+        serverNow={new Date().toISOString()}
+        initial={notices.map((n) => ({
+          id: n.id,
+          kind: n.kind === "note" ? ("note" as const) : ("rent" as const),
+          month: n.month ?? "",
+          amount: n.amount ?? 0,
+          body: n.body,
+          // Never the landlord's name: the tenant deals with the company.
+          sentBy: "",
+          createdAt: n.createdAt.toISOString(),
+          readAt: n.readAt ? n.readAt.toISOString() : "",
+        }))}
+      />
+
+      {/* Reporting next. It is the reason a tenant has this login at all, and
           burying it under the lease details would make them scroll for it. */}
       <PortalRequests
         initial={requests.map(serializeRequest)}

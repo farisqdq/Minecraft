@@ -38,7 +38,16 @@ type CleanRecurring = {
   month: number | null;
   active: boolean;
 };
+type CleanNotice = {
+  kind: string;
+  month: string | null;
+  amount: number | null;
+  body: string;
+  createdAt: Date;
+  readAt: Date | null;
+};
 type CleanTenant = {
+  notices: CleanNotice[];
   name: string;
   email: string | null;
   phone: string | null;
@@ -206,7 +215,23 @@ function parseBackup(raw: unknown) {
       if (!name) continue;
       if (++tenantTotal > MAX_TENANTS) throw new Error("That backup is too large to import.");
 
+      const notices: CleanNotice[] = [];
+      for (const rawN of Array.isArray(t.notices) ? t.notices : []) {
+        const n = (rawN ?? {}) as Record<string, unknown>;
+        const text = str(n.body, 2000);
+        if (!text) continue;
+        notices.push({
+          kind: n.kind === "note" ? "note" : "rent",
+          month: /^\d{4}-\d{2}$/.test(str(n.month, 7)) ? str(n.month, 7) : null,
+          amount: num(n.amount) || null,
+          body: text,
+          createdAt: stamp(n.createdAt) ?? new Date(),
+          readAt: stamp(n.readAt),
+        });
+      }
+
       out.push({
+        notices,
         name,
         email: str(t.email, 200) || null,
         phone: str(t.phone, 40) || null,
@@ -487,9 +512,15 @@ export async function POST(req: Request) {
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
+      const { notices, ...fields } = t;
       const row = await tx.tenant.create({
-        data: { ...t, propertyId, unitId, createdById: userId },
+        data: { ...fields, propertyId, unitId, createdById: userId },
       });
+      if (notices.length > 0) {
+        await tx.tenantNotice.createMany({
+          data: notices.map((n) => ({ ...n, tenantId: row.id, sentById: userId })),
+        });
+      }
       created.tenants += 1;
       // First one wins: two tenants of the same name in one unit is a
       // coincidence, and guessing between them is worse than picking one.

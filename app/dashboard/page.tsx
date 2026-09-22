@@ -21,7 +21,8 @@ export default async function DashboardPage() {
   });
   const companyIds = memberships.map((m) => m.companyId);
 
-  const [properties, units, recurring, rentChanges, tenants, transactions, openRequests] = await Promise.all([
+  const [properties, units, recurring, rentChanges, tenants, transactions, allNotices, openRequests] =
+    await Promise.all([
     prisma.property.findMany({
       where: { companyId: { in: companyIds } },
       orderBy: { createdAt: "asc" },
@@ -47,6 +48,13 @@ export default async function DashboardPage() {
       orderBy: { date: "desc" },
       include: { attachments: { orderBy: { createdAt: "asc" } } },
     }),
+    // The latest chase per tenant, so a row can say "Reminded 3 days ago"
+    // instead of letting you do it twice before lunch.
+    prisma.tenantNotice.findMany({
+      where: { tenant: { property: { companyId: { in: companyIds } } } },
+      orderBy: { createdAt: "desc" },
+      select: { tenantId: true, month: true, createdAt: true, readAt: true },
+    }),
     // What tenants are waiting on. Urgent first, then oldest, matching the
     // Repairs queue so the two never disagree about what's most pressing.
     prisma.maintenanceRequest.findMany({
@@ -63,6 +71,19 @@ export default async function DashboardPage() {
     <DashboardClient
       openRepairs={openRepairs}
       initialRepairs={openRequests.map(serializeRequest)}
+      initialChases={Object.fromEntries(
+        // findMany came back newest first, so the first entry per tenant wins.
+        allNotices.reduce((seen, n) => {
+          if (!seen.has(n.tenantId)) {
+            seen.set(n.tenantId, {
+              at: n.createdAt.toISOString(),
+              month: n.month ?? "",
+              read: Boolean(n.readAt),
+            });
+          }
+          return seen;
+        }, new Map<string, { at: string; month: string; read: boolean }>())
+      )}
       userLabel={me.name || me.email || "you"}
       storageReady={blobConfigured()}
       serverToday={isoDay(new Date())}
