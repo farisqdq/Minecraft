@@ -4,7 +4,8 @@ import { getCurrentUser } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 import { isoDay } from "@/lib/lease";
 import { OPEN_STATUSES } from "@/lib/maintenance";
-import { requestInclude, serializeRequest } from "@/lib/requests";
+import { requestInclude, serializeRequestForLandlord } from "@/lib/requests";
+import { vendorsForCompanies } from "@/lib/vendors-db";
 import RepairsClient from "./RepairsClient";
 
 export default async function RepairsPage() {
@@ -20,7 +21,14 @@ export default async function RepairsPage() {
     orderBy: [{ urgency: "desc" }, { createdAt: "asc" }],
   });
 
-  const rows = requests.map(serializeRequest);
+  const rows = requests.map(serializeRequestForLandlord);
+  const [vendors, properties] = await Promise.all([
+    vendorsForCompanies(companyIds),
+    prisma.property.findMany({
+      where: { companyId: { in: companyIds } },
+      select: { id: true, companyId: true },
+    }),
+  ]);
 
   return (
     <RepairsClient
@@ -29,6 +37,8 @@ export default async function RepairsPage() {
       serverNow={new Date().toISOString()}
       initial={rows}
       openCount={rows.filter((r) => OPEN_STATUSES.includes(r.status)).length}
+      vendors={vendors}
+      companyOf={Object.fromEntries(properties.map((p) => [p.id, p.companyId]))}
     />
   );
 }

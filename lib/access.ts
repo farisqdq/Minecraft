@@ -67,3 +67,17 @@ export async function companyIdsForUser(userId: string) {
   });
   return memberships.map((m) => m.companyId);
 }
+
+/**
+ * A vendor in the book of one of the user's companies.
+ *
+ * Deleting one takes it off every repair and expense it was on, so that
+ * needs "owner" like the other destructive actions; adding and editing only
+ * need to be on the team.
+ */
+export async function requireVendor(userId: string, vendorId: string, role: Role = "member") {
+  const vendor = await prisma.vendor.findUnique({ where: { id: vendorId } });
+  if (!vendor) return null;
+  const membership = await requireCompany(userId, vendor.companyId, role);
+  return membership ? vendor : null;
+}

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
-import { requestForUser, requestInclude, serializeRequest } from "@/lib/requests";
+import { requestForUser, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
 
 /**
  * Remove one line from a repair's thread — a reply from either side, or a
@@ -35,5 +35,5 @@ export async function DELETE(
   }
 
   const fresh = await prisma.maintenanceRequest.findUnique({ where: { id }, include: requestInclude });
-  return NextResponse.json(serializeRequest(fresh!));
+  return NextResponse.json(serializeRequestForLandlord(fresh!));
 }

@@ -4,7 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 8;
+export const BACKUP_VERSION = 9;
 
 type TxnRow = {
   type: string;
@@ -14,6 +14,7 @@ type TxnRow = {
   note: string | null;
   category: string | null;
   attachments: { url: string; filename: string; contentType: string; size: number }[];
+  vendor: { name: string } | null;
 };
 
 function serializeTxns(txns: TxnRow[]) {
@@ -24,6 +25,8 @@ function serializeTxns(txns: TxnRow[]) {
     detail: t.detail ?? "",
     note: t.note ?? "",
     category: t.category ?? "",
+    // By name: ids don't survive a restore into a fresh database.
+    vendorName: t.vendor?.name ?? "",
     // Links to the stored files, not the files themselves — they stay in
     // blob storage and keep working as long as the app does.
     attachments: t.attachments.map((a) => ({
@@ -164,6 +167,7 @@ type RequestRow = {
   seenAt: Date | null;
   resolvedAt: Date | null;
   tenant: { name: string } | null;
+  vendor: { name: string } | null;
   photos: { url: string; filename: string; contentType: string; size: number }[];
   updates: { authorName: string; body: string; statusTo: string | null; createdAt: Date }[];
 };
@@ -183,6 +187,7 @@ function serializeRequests(rows: RequestRow[]) {
     urgency: r.urgency,
     status: r.status,
     tenantName: r.tenant?.name ?? "",
+    vendorName: r.vendor?.name ?? "",
     createdAt: r.createdAt.toISOString(),
     seenAt: r.seenAt ? r.seenAt.toISOString() : "",
     resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : "",
@@ -205,6 +210,7 @@ const REQUEST_INCLUDE = {
   orderBy: { createdAt: "asc" },
   include: {
     tenant: { select: { name: true } },
+    vendor: { select: { name: true } },
     photos: { orderBy: { createdAt: "asc" } },
     updates: { orderBy: { createdAt: "asc" } },
   },
@@ -218,13 +224,14 @@ export async function GET() {
   const companies = await prisma.company.findMany({
     where: { id: { in: companyIds } },
     include: {
+      vendors: { orderBy: { createdAt: "asc" } },
       properties: {
         orderBy: { createdAt: "asc" },
         include: {
           transactions: {
             where: { unitId: null },
             orderBy: { date: "asc" },
-            include: { attachments: { orderBy: { createdAt: "asc" } } },
+            include: { attachments: { orderBy: { createdAt: "asc" } }, vendor: { select: { name: true } } },
           },
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
           tenants: {
@@ -243,7 +250,7 @@ export async function GET() {
             include: {
               transactions: {
                 orderBy: { date: "asc" },
-                include: { attachments: { orderBy: { createdAt: "asc" } } },
+                include: { attachments: { orderBy: { createdAt: "asc" } }, vendor: { select: { name: true } } },
               },
               recurringExpenses: { orderBy: { createdAt: "asc" } },
               tenants: {
@@ -272,6 +279,14 @@ export async function GET() {
       name: c.name,
       contactPhone: c.contactPhone ?? "",
       contactEmail: c.contactEmail ?? "",
+      // The vendor book, so a restore brings back who did each repair.
+      vendors: c.vendors.map((v) => ({
+        name: v.name,
+        trade: v.trade,
+        phone: v.phone ?? "",
+        email: v.email ?? "",
+        note: v.note ?? "",
+      })),
       properties: c.properties.map((p) => ({
         name: p.name,
         address: p.address ?? "",

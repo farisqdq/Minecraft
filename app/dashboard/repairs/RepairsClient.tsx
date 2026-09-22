@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
@@ -10,6 +11,8 @@ import styles from "../dashboard.module.css";
 import { useNow } from "../../components/useNow";
 import { useLivePulse } from "../../components/useLivePulse";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
+import { formatPhone, smsHref, telHref } from "@/lib/lease";
+import { rankForRepair, type VendorDTO } from "@/lib/vendors";
 import {
   STATUSES,
   STATUS_LABEL,
@@ -21,19 +24,27 @@ import {
 
 type Filter = "open" | "urgent" | "all";
 
+/** The landlord's copy of a request carries who's on it; the tenant's doesn't. */
+type Repair = RequestDTO & { vendorId: string };
+
 export default function RepairsClient({
   userLabel,
   serverToday,
   serverNow,
   initial,
   openCount: initialOpen,
+  vendors,
+  companyOf,
 }: {
   userLabel: string;
   serverToday: string;
   /** When the server rendered, so the first client render agrees. */
   serverNow: string;
-  initial: RequestDTO[];
+  initial: Repair[];
   openCount: number;
+  vendors: VendorDTO[];
+  /** propertyId → companyId, so a repair only offers its own LLC's vendors. */
+  companyOf: Record<string, string>;
 }) {
   const router = useRouter();
   const { toasts, push, dismiss } = useToasts();
@@ -71,7 +82,7 @@ export default function RepairsClient({
 
   const current = requests.find((r) => r.id === openId) ?? null;
 
-  function merge(fresh: RequestDTO) {
+  function merge(fresh: Repair) {
     setRequests((prev) => prev.map((r) => (r.id === fresh.id ? fresh : r)));
   }
 
@@ -91,6 +102,24 @@ export default function RepairsClient({
     merge(fresh);
     push(`Marked ${STATUS_LABEL[status].landlord.toLowerCase()}. ${r.tenantName || "The tenant"} can see it.`);
     router.refresh();
+  }
+
+  async function setVendor(r: Repair, vendorId: string) {
+    setBusy(true);
+    const res = await fetch(`/api/requests/${r.id}/vendor`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ vendorId: vendorId || null }),
+    });
+    const fresh = await res.json().catch(() => null);
+    setBusy(false);
+    if (!res.ok || !fresh) {
+      push(fresh?.error || "Couldn't change that.", "bad");
+      return;
+    }
+    merge(fresh);
+    const who = vendors.find((v) => v.id === vendorId);
+    push(who ? `${who.name} is on it.` : "Nobody assigned.");
   }
 
   async function sendReply(r: RequestDTO) {
@@ -219,6 +248,11 @@ export default function RepairsClient({
       tagline="What your tenants have reported, oldest and most urgent first."
       userLabel={userLabel}
       openRepairs={openCount}
+      actions={
+        <Link href="/dashboard/repairs/vendors" className={styles.btn}>
+          Vendors
+        </Link>
+      }
     >
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
@@ -333,6 +367,55 @@ export default function RepairsClient({
                 </button>
               ))}
             </div>
+
+            {(() => {
+              // Only this LLC's book, best match for the category first.
+              const pool = rankForRepair(
+                vendors.filter((v) => v.companyId === companyOf[current.propertyId]),
+                current.category
+              );
+              const on = vendors.find((v) => v.id === current.vendorId);
+              return (
+                <div className={styles.vendorPick}>
+                  <label htmlFor="repair-vendor">Who&apos;s fixing it</label>
+                  {pool.length === 0 ? (
+                    <span className={styles.vendorPickNote} style={{ flexBasis: "auto" }}>
+                      No vendors in this LLC&apos;s book yet.{" "}
+                      <Link href="/dashboard/repairs/vendors">Add one</Link>
+                    </span>
+                  ) : (
+                    <select
+                      id="repair-vendor"
+                      value={current.vendorId}
+                      disabled={busy}
+                      onChange={(e) => setVendor(current, e.target.value)}
+                    >
+                      <option value="">Nobody yet</option>
+                      {pool.map((v) => (
+                        <option key={v.id} value={v.id}>
+                          {v.name} — {v.trade}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  {on?.phone && telHref(on.phone) && (
+                    <>
+                      <a className={styles.contactBtn} href={telHref(on.phone)}>
+                        Call {formatPhone(on.phone)}
+                      </a>
+                      <a className={styles.contactBtn} href={smsHref(on.phone)}>
+                        Text
+                      </a>
+                    </>
+                  )}
+                  <span className={styles.vendorPickNote}>
+                    {on
+                      ? "Their cost goes to their total when you log this repair on the books. The tenant isn't told who."
+                      : "The tenant isn't told who you send."}
+                  </span>
+                </div>
+              );
+            })()}
 
             <ol className={styles.thread}>
               {current.updates.map((u) => (

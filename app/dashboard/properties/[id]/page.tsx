@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { openRepairCount, requestInclude, serializeRequest } from "@/lib/requests";
+import { openRepairCount, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
 import { isOpen } from "@/lib/maintenance";
 import { balancesForTenants } from "@/lib/statements";
 import { requireProperty } from "@/lib/access";
@@ -101,7 +101,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       initialTenants={tenants.map(serializeTenant)}
       initialBalances={balances}
       initialRequests={requests
-        .map(serializeRequest)
+        .map(serializeRequestForLandlord)
         // Anything still open comes first — a finished urgent repair from
         // March must not sit above a leak reported this morning — then
         // urgent before normal, then newest. Sorted here rather than in the

@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { blobConfigured } from "@/lib/blob";
 import { getCurrentUser } from "@/lib/session";
 import { normalizeStatus, STATUS_LABEL, text } from "@/lib/maintenance";
-import { addUpdate, requestForUser, requestInclude, serializeRequest } from "@/lib/requests";
+import { addUpdate, requestForUser, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
 
 /** Move a request along the queue, optionally with a note to the tenant. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -47,7 +47,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const fresh = await prisma.maintenanceRequest.findUnique({ where: { id }, include: requestInclude });
-  return NextResponse.json(serializeRequest(fresh!));
+  return NextResponse.json(serializeRequestForLandlord(fresh!));
 }
 
 /**

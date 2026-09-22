@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { BACKUP_FORMAT } from "../route";
 import { normalizeCategory } from "@/lib/categories";
+import { normalizeTrade } from "@/lib/vendors";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
 
 type Tx = Prisma.TransactionClient;
@@ -27,6 +28,8 @@ type CleanTransaction = {
   note: string | null;
   category: string | null;
   attachments: CleanAttachment[];
+  /** Who was paid, by name — re-linked to this LLC's restored vendor book. */
+  vendorName: string;
 };
 type CleanRecurring = {
   category: string;
@@ -97,6 +100,7 @@ type CleanRequest = {
   urgency: string;
   status: string;
   tenantName: string;
+  vendorName: string;
   createdAt: Date;
   seenAt: Date | null;
   resolvedAt: Date | null;
@@ -125,10 +129,18 @@ type CleanProperty = {
   requests: CleanRequest[];
   units: CleanUnit[];
 };
+type CleanVendor = {
+  name: string;
+  trade: string;
+  phone: string | null;
+  email: string | null;
+  note: string | null;
+};
 type CleanCompany = {
   name: string;
   contactPhone: string | null;
   contactEmail: string | null;
+  vendors: CleanVendor[];
   properties: CleanProperty[];
 };
 
@@ -202,6 +214,7 @@ function parseBackup(raw: unknown) {
         note: str(t.note, 500) || null,
         category: type === "expense" ? normalizeCategory(t.category) : null,
         attachments,
+        vendorName: type === "expense" ? str(t.vendorName, 120) : "",
       });
     }
     return out;
@@ -391,6 +404,7 @@ function parseBackup(raw: unknown) {
         urgency: r.urgency === "urgent" ? "urgent" : "normal",
         status: normalizeStatus(r.status) ?? "open",
         tenantName: str(r.tenantName, 120),
+        vendorName: str(r.vendorName, 120),
         createdAt: stamp(r.createdAt) ?? new Date(),
         seenAt: stamp(r.seenAt),
         resolvedAt: stamp(r.resolvedAt),
@@ -447,10 +461,29 @@ function parseBackup(raw: unknown) {
       });
     }
 
+    const vendors: CleanVendor[] = [];
+    const vendorNames = new Set<string>();
+    for (const rawV of (Array.isArray(c.vendors) ? c.vendors : []).slice(0, 200)) {
+      const v = (rawV ?? {}) as Record<string, unknown>;
+      const vName = str(v.name, 120);
+      // Names are how repairs and expenses find their vendor again, so a
+      // duplicate would make that ambiguous: the first one wins.
+      if (!vName || vendorNames.has(vName)) continue;
+      vendorNames.add(vName);
+      vendors.push({
+        name: vName,
+        trade: normalizeTrade(v.trade),
+        phone: str(v.phone, 40) || null,
+        email: str(v.email, 200) || null,
+        note: str(v.note, 500) || null,
+      });
+    }
+
     companies.push({
       name,
       contactPhone: str(c.contactPhone, 40) || null,
       contactEmail: str(c.contactEmail, 200) || null,
+      vendors,
       properties,
     });
   }
@@ -511,9 +544,13 @@ export async function POST(req: Request) {
     tenants: 0,
     charges: 0,
     rules: 0,
+    vendors: 0,
     rentChanges: 0,
     requests: 0,
   };
+
+  /** This company's vendors by name, reset as each company is written. */
+  let vendorsByName = new Map<string, string>();
 
   async function createTransactions(
     tx: Tx,
@@ -533,6 +570,7 @@ export async function POST(req: Request) {
           detail: t.detail,
           note: t.note,
           category: t.category,
+          vendorId: (t.vendorName && vendorsByName.get(t.vendorName)) || null,
         },
       });
       created.transactions += 1;
@@ -655,6 +693,7 @@ export async function POST(req: Request) {
           // A repair whose reporter is gone keeps its place in the history
           // with a null tenant rather than being dropped.
           tenantId: tenantsByName.get(r.tenantName) ?? null,
+          vendorId: (r.vendorName && vendorsByName.get(r.vendorName)) || null,
           title: r.title,
           detail: r.detail,
           category: r.category,
@@ -718,6 +757,17 @@ export async function POST(req: Request) {
         },
       });
       created.companies += 1;
+
+      // The book goes in before any property, so the repairs and expenses
+      // written below can name who did the work.
+      vendorsByName = new Map();
+      for (const v of company.vendors) {
+        const made = await tx.vendor.create({
+          data: { ...v, companyId: record.id, createdById: userId },
+        });
+        vendorsByName.set(made.name, made.id);
+        created.vendors += 1;
+      }
 
       for (const property of company.properties) {
         const prop = await tx.property.create({

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { text } from "@/lib/maintenance";
-import { addUpdate, requestForUser, requestInclude, serializeRequest } from "@/lib/requests";
+import { addUpdate, requestForUser, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
 
 /** A reply the tenant will see on their own thread. */
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -26,5 +26,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   const fresh = await prisma.maintenanceRequest.findUnique({ where: { id }, include: requestInclude });
-  return NextResponse.json(serializeRequest(fresh!));
+  return NextResponse.json(serializeRequestForLandlord(fresh!));
 }

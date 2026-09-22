@@ -59,6 +59,20 @@ export function serializeRequest(r: NonNullable<Row>): RequestDTO {
 }
 
 /**
+ * The landlord's view of a request: everything the tenant sees, plus who's
+ * been sent to fix it.
+ *
+ * Deliberately a separate function rather than a field on serializeRequest,
+ * which the portal uses too. The vendor is the landlord's business — a
+ * tenant calling the plumber directly is how a $90 visit becomes a $400 one
+ * — so it can't leak through a shared serializer by someone forgetting to
+ * strip it.
+ */
+export function serializeRequestForLandlord(r: NonNullable<Row>): RequestDTO & { vendorId: string } {
+  return { ...serializeRequest(r), vendorId: r.vendorId ?? "" };
+}
+
+/**
  * A request the signed-in tenant actually reported.
  *
  * Scoped by tenantId from the session rather than by anything in the URL, so

@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
-import { openRepairCount, requestInclude, serializeRequest } from "@/lib/requests";
+import { openRepairCount, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
 import { blobConfigured } from "@/lib/blob";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
@@ -70,7 +70,7 @@ export default async function DashboardPage() {
   return (
     <DashboardClient
       openRepairs={openRepairs}
-      initialRepairs={openRequests.map(serializeRequest)}
+      initialRepairs={openRequests.map(serializeRequestForLandlord)}
       initialChases={Object.fromEntries(
         // findMany came back newest first, so the first entry per tenant wins.
         allNotices.reduce((seen, n) => {

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
-import { requestInclude, serializeRequest } from "@/lib/requests";
+import { requestInclude, serializeRequestForLandlord } from "@/lib/requests";
 
 /**
  * Every repair this landlord's team can see, in the order the queue shows
@@ -19,5 +19,5 @@ export async function GET() {
     include: requestInclude,
     orderBy: [{ urgency: "desc" }, { createdAt: "asc" }],
   });
-  return NextResponse.json(requests.map(serializeRequest));
+  return NextResponse.json(requests.map(serializeRequestForLandlord));
 }

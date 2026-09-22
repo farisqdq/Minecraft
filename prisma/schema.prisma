@@ -28,6 +28,7 @@ model User {
   noticesSent         TenantNotice[]
   chargesRaised       TenantCharge[]
   chargeRules         TenantChargeRule[]
+  vendorsAdded        Vendor[]
 }
 
 model Company {
@@ -43,6 +44,7 @@ model Company {
   members    CompanyMember[]
   properties Property[]
   invites    Invite[]
+  vendors    Vendor[]
 }
 
 model CompanyMember {
@@ -245,10 +247,39 @@ model Transaction {
   attachments        Attachment[]
   recurringExpenseId String?
   recurringExpense   RecurringExpense? @relation(fields: [recurringExpenseId], references: [id], onDelete: SetNull)
+  // Who was paid, when an expense went to someone in the vendor book. It is
+  // what makes "what have I spent with this plumber this year?" a lookup.
+  vendorId           String?
+  vendor             Vendor?           @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
   @@index([propertyId])
   @@index([unitId])
   @@index([recurringExpenseId])
+  @@index([vendorId])
+}
+
+// Someone you call to fix things: a plumber, an HVAC company, the person who
+// does the parking lot. Kept per LLC, like everything else, so a teammate on
+// one company never sees another company's contractors.
+model Vendor {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  // One of lib/vendors.ts TRADES, so the book can be grouped and a repair's
+  // category can suggest the right person.
+  trade       String   @default("General")
+  phone       String?
+  email       String?
+  note        String?
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  repairs      MaintenanceRequest[]
+  transactions Transaction[]
+
+  @@index([companyId])
 }
 
 // A template for a bill that repeats (mortgage, insurance, HOA). It never
@@ -327,6 +358,10 @@ model MaintenanceRequest {
   // Filled in when a finished repair is logged into the ledger, so the same
   // repair can't be booked as an expense twice.
   transactionId String?
+  // Who's fixing it. Landlord-only: the portal never sees this, because a
+  // tenant ringing the plumber directly is how a $90 visit becomes $400.
+  vendorId      String?
+  vendor        Vendor?   @relation(fields: [vendorId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

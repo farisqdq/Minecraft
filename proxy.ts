@@ -36,6 +36,7 @@ export const config = {
     "/api/requests/:path*",
     "/api/search",
     "/api/tenants/:path*",
+    "/api/vendors/:path*",
     "/api/transactions/:path*",
     "/api/units/:path*",
     // The tenant side. The login and signup pages sit under /portal/login and

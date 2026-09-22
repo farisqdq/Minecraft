@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { normalizeCategory as normalizeExpenseCategory } from "@/lib/categories";
 import { text } from "@/lib/maintenance";
-import { addUpdate, requestForUser, requestInclude, serializeRequest } from "@/lib/requests";
+import { addUpdate, requestForUser, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
 
 /**
  * Book a finished repair into the ledger without retyping it.
@@ -48,6 +48,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
         detail,
         note: `Repair reported ${request.createdAt.toISOString().slice(0, 10)}`,
         category,
+        // Whoever did the job gets paid for it, so the vendor book's totals
+        // fill themselves in rather than being a second thing to maintain.
+        vendorId: request.vendorId,
       },
     });
     await tx.maintenanceRequest.update({
@@ -74,5 +77,5 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const fresh = await prisma.maintenanceRequest.findUnique({ where: { id }, include: requestInclude });
-  return NextResponse.json({ request: serializeRequest(fresh!), transactionId: transaction.id });
+  return NextResponse.json({ request: serializeRequestForLandlord(fresh!), transactionId: transaction.id });
 }
