@@ -26,6 +26,7 @@ model User {
   requestUpdates      MaintenanceUpdate[]
   requestPhotos       MaintenancePhoto[]
   noticesSent         TenantNotice[]
+  chargesRaised       TenantCharge[]
 }
 
 model Company {
@@ -168,6 +169,16 @@ model Tenant {
   invites  TenantInvite[]
   requests MaintenanceRequest[]
   notices  TenantNotice[]
+  charges  TenantCharge[]
+
+  // What they owed on the day you started keeping books here, and the first
+  // month to charge rent for. Without these, a lease that began in 2023 and a
+  // ledger that begins in 2025 would produce two years of invented arrears —
+  // the app would tell you a tenant who has never missed a month owes forty
+  // thousand dollars. Null means "start at the first month they actually paid
+  // something", which is the safe reading of no information.
+  openingBalance Float   @default(0)
+  balanceFrom    String?
 
   @@index([propertyId])
   @@index([unitId])
@@ -412,6 +423,33 @@ model TenantNotice {
   sentBy     User?    @relation(fields: [sentById], references: [id], onDelete: SetNull)
   createdAt  DateTime @default(now())
   readAt     DateTime?
+
+  @@index([tenantId])
+}
+
+// Anything a tenant owes that isn't the scheduled rent: a late fee, the lot
+// fee billed alongside rent, a repair they're liable for — or a credit going
+// the other way.
+//
+// Rent itself is deliberately NOT stored here. It's derived from the rent
+// history, which already knows what each place cost in each month and already
+// handles a raise mid-lease. Writing rent rows as well would mean two sources
+// for the same number and a backfill for every tenant on the books.
+model TenantCharge {
+  id        String   @id @default(cuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  // "fee" adds to what they owe; "credit" takes off it.
+  kind      String   @default("fee")
+  /// The YYYY-MM this belongs to, so it lands in the right row of a statement.
+  month     String
+  label     String
+  /// Always positive. Which direction it moves is `kind`, so a sign error
+  /// can't silently turn a charge into a credit.
+  amount    Float
+  raisedById String?
+  raisedBy   User?   @relation(fields: [raisedById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now())
 
   @@index([tenantId])
 }
