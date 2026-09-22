@@ -41,6 +41,18 @@ function IconBackup(props: { className?: string }) {
   );
 }
 
+function IconCalendar(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2.5" />
+      <path d="M3.5 10h17" />
+      <path d="M8 3v4M16 3v4" />
+      <path d="M8 14h2M14 14h2M8 17h2" />
+    </svg>
+  );
+}
+
 function IconRepairs(props: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
@@ -64,6 +76,7 @@ function IconExport(props: { className?: string }) {
 
 const NAV = [
   { href: "/dashboard", label: "Overview", short: "Home", Icon: IconHome },
+  { href: "/dashboard/calendar", label: "Calendar", short: "Calendar", Icon: IconCalendar },
   { href: "/dashboard/repairs", label: "Repairs", short: "Repairs", Icon: IconRepairs, badge: true },
   { href: "/dashboard/team", label: "Team", short: "Team", Icon: IconTeam },
   { href: "/dashboard/backup", label: "Backup", short: "Backup", Icon: IconBackup },
