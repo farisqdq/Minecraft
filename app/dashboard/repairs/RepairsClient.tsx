@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
+import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
 import { useNow } from "../../components/useNow";
@@ -57,6 +58,7 @@ export default function RepairsClient({
   const [expenseFor, setExpenseFor] = useState<RequestDTO | null>(null);
   const [expense, setExpense] = useState({ amount: "", date: serverToday, category: "", detail: "" });
   const [expenseError, setExpenseError] = useState("");
+  const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
 
   const openCount = requests.filter((r) => isOpen(r.status)).length;
   const urgentCount = requests.filter((r) => r.urgency === "urgent" && isOpen(r.status)).length;
@@ -124,6 +126,49 @@ export default function RepairsClient({
     }
     merge(fresh);
     push(isStatus ? "Status line removed." : "Message deleted.");
+  }
+
+  /**
+   * Throw the whole report away. Unlike a single thread line this asks first:
+   * it takes the tenant's words, their photos and the history with it, and
+   * there is no undo.
+   */
+  function removeRequest(r: RequestDTO) {
+    const bits = [
+      r.photos.length > 0 &&
+        `${r.photos.length} ${r.photos.length === 1 ? "photo" : "photos"}`,
+      r.updates.length > 0 &&
+        `${r.updates.length} ${r.updates.length === 1 ? "line" : "lines"} of history`,
+    ].filter(Boolean);
+    setConfirming({
+      title: "Delete this report?",
+      body: `"${r.title}" from ${r.tenantName || "a tenant"}${
+        bits.length ? `, along with ${bits.join(" and ")}` : ""
+      }. It disappears from their portal too, and it can't be undone.${
+        r.loggedAsExpense
+          ? " What it cost stays on the ledger — deleting the report doesn't touch the books."
+          : ""
+      }`,
+      confirmLabel: "Delete report",
+      danger: true,
+      onConfirm: async () => {
+        const res = await fetch(`/api/requests/${r.id}`, { method: "DELETE" });
+        if (!res.ok) {
+          push("Couldn't delete that.", "bad");
+          return;
+        }
+        const data = await res.json().catch(() => ({}));
+        setRequests((prev) => prev.filter((x) => x.id !== r.id));
+        setOpenId("");
+        setReply("");
+        push(
+          data?.keptTransaction
+            ? "Report deleted. The expense is still on the ledger."
+            : "Report deleted."
+        );
+        router.refresh();
+      },
+    });
   }
 
   function openExpense(r: RequestDTO) {
@@ -344,7 +389,14 @@ export default function RepairsClient({
               </button>
             </div>
 
-            <div className={styles.formFoot}>
+            <div className={styles.formFoot} style={{ justifyContent: "space-between" }}>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`}
+                onClick={() => removeRequest(current)}
+              >
+                Delete report
+              </button>
               {current.loggedAsExpense ? (
                 <span className={styles.helpText}>This repair is already on the books.</span>
               ) : (
@@ -433,6 +485,8 @@ export default function RepairsClient({
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog request={confirming} onCancel={() => setConfirming(null)} />
     </AppShell>
   );
 }

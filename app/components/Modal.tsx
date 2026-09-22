@@ -8,12 +8,20 @@ import styles from "./overlay.module.css";
  * the scrim close it, the page behind stops scrolling, and focus moves in on
  * open and back to whatever opened it on close.
  */
+/**
+ * Every dialog currently on screen, oldest first. Only the one on top answers
+ * Escape — without this, a confirmation opened over a form would close both,
+ * so saying "no, keep it" would still throw away what you were looking at.
+ */
+const openDialogs: symbol[] = [];
+
 export default function Modal({
   open,
   title,
   subtitle,
   onClose,
   narrow = false,
+  topLayer = false,
   children,
 }: {
   open: boolean;
@@ -21,6 +29,11 @@ export default function Modal({
   subtitle?: string;
   onClose: () => void;
   narrow?: boolean;
+  /**
+   * Sit above any other dialog rather than relying on being later in the
+   * tree. A confirmation is always asked *about* something already open.
+   */
+  topLayer?: boolean;
   children: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -45,8 +58,13 @@ export default function Modal({
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
+    const token = Symbol("dialog");
+    openDialogs.push(token);
+
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCloseRef.current();
+      if (e.key !== "Escape") return;
+      if (openDialogs[openDialogs.length - 1] !== token) return;
+      onCloseRef.current();
     }
     document.addEventListener("keydown", onKey);
 
@@ -56,6 +74,8 @@ export default function Modal({
     panel.current?.focus();
 
     return () => {
+      const at = openDialogs.indexOf(token);
+      if (at >= 0) openDialogs.splice(at, 1);
       document.removeEventListener("keydown", onKey);
       document.body.style.overflow = previousOverflow;
       restoreTo.current?.focus?.();
@@ -66,7 +86,7 @@ export default function Modal({
 
   return (
     <div
-      className={styles.scrim}
+      className={`${styles.scrim} ${topLayer ? styles.scrimTop : ""}`}
       onMouseDown={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}

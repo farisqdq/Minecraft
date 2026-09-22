@@ -15,6 +15,13 @@
   animation: fade var(--fast) both;
 }
 
+/* Above any other dialog. Two scrims at the same z-index are decided by which
+   came later in the tree, which is not something a caller should have to
+   think about when asking "are you sure?". */
+.scrimTop {
+  z-index: 110;
+}
+
 .panel {
   position: relative;
   width: 100%;

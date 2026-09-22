@@ -28,7 +28,7 @@ export default function ConfirmDialog({
   if (!request) return null;
 
   return (
-    <Modal open title={request.title} subtitle={request.body} onClose={onCancel} narrow>
+    <Modal open title={request.title} subtitle={request.body} onClose={onCancel} narrow topLayer>
       <div className={styles.confirmActions}>
         <button type="button" className={dash.btn} onClick={onCancel}>
           {/* "Keep it" only makes sense opposite a delete. */}
