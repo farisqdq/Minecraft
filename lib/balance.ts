@@ -130,6 +130,13 @@ export function buildStatement(opts: {
   lastRentMonth?: string | null;
   charges?: ChargeInput[];
   payments?: PaymentInput[];
+  /**
+   * Anything the standing rules add once the month's rent, charges and
+   * payments are in — in practice a late fee, which can only be decided after
+   * you know what is still outstanding. Called once per month, in order, and
+   * whatever comes back lands in that same month.
+   */
+  assess?: (month: string, owed: number, rentThisMonth: number) => ChargeInput[];
 }): Statement {
   const {
     startMonth,
@@ -139,6 +146,7 @@ export function buildStatement(opts: {
     lastRentMonth,
     charges = [],
     payments = [],
+    assess,
   } = opts;
 
   // A tenancy that has ended stops here, and so does the statement. Rent is
@@ -173,7 +181,26 @@ export function buildStatement(opts: {
       if (p.month === month) paid += Math.max(0, p.amount || 0);
     }
 
-    running = cents(running + rent + fees - credits - paid);
+    // What they'd owe with nothing else added. A late fee is assessed
+    // against exactly this, so paying in full before the grace period runs
+    // out means there is nothing to charge a fee on.
+    let owed = cents(running + rent + fees - credits - paid);
+
+    if (assess) {
+      for (const extra of assess(month, owed, rent)) {
+        const amount = Math.max(0, extra.amount || 0);
+        if (!(amount > 0.005)) continue;
+        if (extra.kind === "credit") {
+          credits += amount;
+          owed = cents(owed - amount);
+        } else {
+          fees += amount;
+          owed = cents(owed + amount);
+        }
+      }
+    }
+
+    running = owed;
     charged = cents(charged + rent + fees);
     received = cents(received + paid + credits);
     rows.push({

@@ -52,10 +52,24 @@ type CleanCharge = {
   label: string;
   amount: number;
   createdAt: Date;
+  /** Position in the tenant's `rules`, or -1 for a charge typed by hand. */
+  rule: number;
+};
+type CleanRule = {
+  kind: string;
+  label: string;
+  amount: number;
+  percent: boolean;
+  graceDays: number;
+  startMonth: string | null;
+  endMonth: string | null;
+  active: boolean;
+  runs: { month: string; amount: number; ranAt: Date }[];
 };
 type CleanTenant = {
   notices: CleanNotice[];
   charges: CleanCharge[];
+  rules: CleanRule[];
   openingBalance: number;
   balanceFrom: string | null;
   name: string;
@@ -249,18 +263,54 @@ function parseBackup(raw: unknown) {
         // A charge without a month can't be placed on the ledger and a
         // charge without an amount changes nothing, so neither comes back.
         if (!/^\d{4}-\d{2}$/.test(month) || !label || !(amount > 0)) continue;
+        const ruleAt = Math.round(num(c.rule));
         charges.push({
           month,
           kind: c.kind === "credit" ? "credit" : "fee",
           label,
           amount,
           createdAt: stamp(c.createdAt) ?? new Date(),
+          rule: Number.isFinite(ruleAt) && ruleAt >= 0 ? ruleAt : -1,
+        });
+      }
+
+      const rules: CleanRule[] = [];
+      for (const rawR of (Array.isArray(t.rules) ? t.rules : []).slice(0, 8)) {
+        const r = (rawR ?? {}) as Record<string, unknown>;
+        const label = str(r.label, 80);
+        const amount = num(r.amount);
+        const percent = r.percent === true;
+        // The same limits the rules API enforces. A backup is a file anyone
+        // could edit, so it gets no more trust than a form.
+        if (!label || !(amount > 0) || (percent ? amount > 100 : amount > 2000)) continue;
+        const startMonth = /^\d{4}-\d{2}$/.test(str(r.startMonth, 7)) ? str(r.startMonth, 7) : null;
+        const endMonth = /^\d{4}-\d{2}$/.test(str(r.endMonth, 7)) ? str(r.endMonth, 7) : null;
+        const seen = new Set<string>();
+        const runs: CleanRule["runs"] = [];
+        for (const rawRun of Array.isArray(r.runs) ? r.runs : []) {
+          const run = (rawRun ?? {}) as Record<string, unknown>;
+          const month = str(run.month, 7);
+          if (!/^\d{4}-\d{2}$/.test(month) || seen.has(month)) continue;
+          seen.add(month);
+          runs.push({ month, amount: num(run.amount), ranAt: stamp(run.ranAt) ?? new Date() });
+        }
+        rules.push({
+          kind: r.kind === "late" ? "late" : "monthly",
+          label,
+          amount,
+          percent,
+          graceDays: Math.min(28, Math.max(0, Math.round(num(r.graceDays)) || 0)),
+          startMonth,
+          endMonth,
+          active: r.active !== false,
+          runs,
         });
       }
 
       out.push({
         notices,
         charges,
+        rules,
         openingBalance: num(t.openingBalance),
         balanceFrom: /^\d{4}-\d{2}$/.test(str(t.balanceFrom, 7)) ? str(t.balanceFrom, 7) : null,
         name,
@@ -460,6 +510,7 @@ export async function POST(req: Request) {
     recurring: 0,
     tenants: 0,
     charges: 0,
+    rules: 0,
     rentChanges: 0,
     requests: 0,
   };
@@ -544,10 +595,27 @@ export async function POST(req: Request) {
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
-      const { notices, charges, ...fields } = t;
+      const { notices, charges, rules, ...fields } = t;
       const row = await tx.tenant.create({
         data: { ...fields, propertyId, unitId, createdById: userId },
       });
+      // Rules first, so their charges can point back at them, and their runs
+      // with them — otherwise every rule charge ever deleted would be billed
+      // again the first time this tenant's statement loaded.
+      const ruleIds: string[] = [];
+      for (const r of rules) {
+        const { runs, ...ruleFields } = r;
+        const made = await tx.tenantChargeRule.create({
+          data: { ...ruleFields, tenantId: row.id, createdById: userId },
+        });
+        ruleIds.push(made.id);
+        if (runs.length > 0) {
+          await tx.tenantRuleRun.createMany({
+            data: runs.map((run) => ({ ...run, ruleId: made.id })),
+          });
+        }
+        created.rules += 1;
+      }
       if (notices.length > 0) {
         await tx.tenantNotice.createMany({
           data: notices.map((n) => ({ ...n, tenantId: row.id, sentById: userId })),
@@ -555,7 +623,12 @@ export async function POST(req: Request) {
       }
       if (charges.length > 0) {
         await tx.tenantCharge.createMany({
-          data: charges.map((c) => ({ ...c, tenantId: row.id, raisedById: userId })),
+          data: charges.map(({ rule, ...c }) => ({
+            ...c,
+            tenantId: row.id,
+            raisedById: userId,
+            ruleId: rule >= 0 ? (ruleIds[rule] ?? null) : null,
+          })),
         });
         created.charges += charges.length;
       }

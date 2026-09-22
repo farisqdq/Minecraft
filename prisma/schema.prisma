@@ -15,29 +15,30 @@ model User {
   createdAt    DateTime @default(now())
 
   memberships         CompanyMember[]
-  invitesSent         Invite[]           @relation("InviteSender")
+  invitesSent         Invite[]            @relation("InviteSender")
   createdProperties   Property[]
   createdTransactions Transaction[]
   uploadedAttachments Attachment[]
   createdRecurring    RecurringExpense[]
   createdTenants      Tenant[]
   RentChange          RentChange[]
-  tenantInvitesSent   TenantInvite[]     @relation("TenantInviteSender")
+  tenantInvitesSent   TenantInvite[]      @relation("TenantInviteSender")
   requestUpdates      MaintenanceUpdate[]
   requestPhotos       MaintenancePhoto[]
   noticesSent         TenantNotice[]
   chargesRaised       TenantCharge[]
+  chargeRules         TenantChargeRule[]
 }
 
 model Company {
-  id        String   @id @default(cuid())
-  name      String
+  id           String   @id @default(cuid())
+  name         String
   // What tenants of this LLC's properties see under "Who to contact" — a
   // dispatch line or an office inbox, never a person's own number. Both are
   // optional and the portal shows nothing at all until one is filled in.
   contactPhone String?
   contactEmail String?
-  createdAt DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   members    CompanyMember[]
   properties Property[]
@@ -170,6 +171,7 @@ model Tenant {
   requests MaintenanceRequest[]
   notices  TenantNotice[]
   charges  TenantCharge[]
+  rules    TenantChargeRule[]
 
   // What they owed on the day you started keeping books here, and the first
   // month to charge rent for. Without these, a lease that began in 2023 and a
@@ -299,29 +301,29 @@ model Attachment {
 // have read it and called someone stops ringing every morning, and a landlord
 // with a queue stops finding out about the leak when the ceiling comes down.
 model MaintenanceRequest {
-  id         String    @id @default(cuid())
+  id         String   @id @default(cuid())
   propertyId String
-  property   Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   unitId     String?
-  unit       Unit?     @relation(fields: [unitId], references: [id], onDelete: SetNull)
+  unit       Unit?    @relation(fields: [unitId], references: [id], onDelete: SetNull)
   // Who reported it. Kept even after they move out, so the history of a place
   // survives its tenants.
   tenantId   String?
-  tenant     Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id], onDelete: SetNull)
 
-  title       String
-  detail      String
-  category    String
+  title         String
+  detail        String
+  category      String
   // "normal" | "urgent" — an emergency is a phone call, not a web form, and
   // the portal says so rather than offering a third level nobody agrees on.
-  urgency     String    @default("normal")
+  urgency       String    @default("normal")
   // "open" | "seen" | "scheduled" | "done" | "declined"
-  status      String    @default("open")
+  status        String    @default("open")
   // Where the tenant says the problem is, in their words: "kitchen sink".
-  place       String?
+  place         String?
   // Set when the status first leaves "open", so response time is measurable.
-  seenAt      DateTime?
-  resolvedAt  DateTime?
+  seenAt        DateTime?
+  resolvedAt    DateTime?
   // Filled in when a finished repair is logged into the ledger, so the same
   // repair can't be booked as an expense twice.
   transactionId String?
@@ -342,21 +344,21 @@ model MaintenanceRequest {
 // a status change. Both live in one table so the tenant reads a single
 // timeline instead of a comment list beside a history list.
 model MaintenanceUpdate {
-  id        String             @id @default(cuid())
-  requestId String
-  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  id             String             @id @default(cuid())
+  requestId      String
+  request        MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
   // Exactly one of these is set, and which one decides how the row is shown
   // and who is allowed to have written it.
   authorUserId   String?
-  authorUser     User?         @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  authorUser     User?              @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
   authorTenantId String?
   // The name to print, frozen at the time of writing so a deleted account
   // doesn't turn the thread into a row of blanks.
-  authorName String
-  body       String
+  authorName     String
+  body           String
   // Set instead of a body when this row is a status change.
-  statusTo   String?
-  createdAt  DateTime @default(now())
+  statusTo       String?
+  createdAt      DateTime           @default(now())
 
   @@index([requestId])
 }
@@ -365,18 +367,18 @@ model MaintenanceUpdate {
 // Transaction — loosening that model's foreign key to serve two masters is
 // how a proof file ends up attached to nothing.
 model MaintenancePhoto {
-  id        String             @id @default(cuid())
-  requestId String
-  request   MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
-  url         String
-  pathname    String
-  filename    String
-  contentType String
-  size        Int
+  id           String             @id @default(cuid())
+  requestId    String
+  request      MaintenanceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  url          String
+  pathname     String
+  filename     String
+  contentType  String
+  size         Int
   // Null when the tenant uploaded it; tenants are not Users.
   uploadedById String?
-  uploadedBy   User?   @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
-  createdAt    DateTime @default(now())
+  uploadedBy   User?              @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime           @default(now())
 
   @@index([requestId])
 }
@@ -408,21 +410,21 @@ model LoginThrottle {
 // Sending one does not move any money. It is a message about the ledger, not
 // an entry in it.
 model TenantNotice {
-  id         String   @id @default(cuid())
-  tenantId   String
-  tenant     Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id        String    @id @default(cuid())
+  tenantId  String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   // "rent" for a rent chase, "note" for anything else.
-  kind       String   @default("rent")
+  kind      String    @default("rent")
   // The month being chased, as YYYY-MM, and what was outstanding when the
   // notice went out. Frozen at send time: a later payment shouldn't rewrite
   // what you told them they owed.
-  month      String?
-  amount     Float?
-  body       String
-  sentById   String?
-  sentBy     User?    @relation(fields: [sentById], references: [id], onDelete: SetNull)
-  createdAt  DateTime @default(now())
-  readAt     DateTime?
+  month     String?
+  amount    Float?
+  body      String
+  sentById  String?
+  sentBy    User?     @relation(fields: [sentById], references: [id], onDelete: SetNull)
+  createdAt DateTime  @default(now())
+  readAt    DateTime?
 
   @@index([tenantId])
 }
@@ -436,20 +438,80 @@ model TenantNotice {
 // handles a raise mid-lease. Writing rent rows as well would mean two sources
 // for the same number and a backfill for every tenant on the books.
 model TenantCharge {
-  id        String   @id @default(cuid())
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  id         String            @id @default(cuid())
+  tenantId   String
+  tenant     Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   // "fee" adds to what they owe; "credit" takes off it.
-  kind      String   @default("fee")
+  kind       String            @default("fee")
   /// The YYYY-MM this belongs to, so it lands in the right row of a statement.
-  month     String
-  label     String
+  month      String
+  label      String
   /// Always positive. Which direction it moves is `kind`, so a sign error
   /// can't silently turn a charge into a credit.
-  amount    Float
+  amount     Float
   raisedById String?
-  raisedBy   User?   @relation(fields: [raisedById], references: [id], onDelete: SetNull)
-  createdAt DateTime @default(now())
+  raisedBy   User?             @relation(fields: [raisedById], references: [id], onDelete: SetNull)
+  /// Set when a standing rule produced this rather than a person typing it.
+  /// Only ever a label on where it came from: deleting the charge deletes
+  /// it, and what stops a rule writing it again is TenantRuleRun, not this.
+  ruleId     String?
+  rule       TenantChargeRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  createdAt  DateTime          @default(now())
 
   @@index([tenantId])
+}
+
+// A standing rule about what a tenant owes beyond rent: something billed
+// every month alongside it, or a fee that only exists because rent is late.
+//
+// The rule is a template. What it produces is an ordinary TenantCharge, so
+// every dollar is a row the landlord can see, waive and explain — not a
+// number that exists only inside a calculation.
+model TenantChargeRule {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// "monthly" rides along with rent; "late" applies only to rent still owed.
+  kind        String   @default("monthly")
+  label       String
+  /// Dollars, or a percentage of that month's rent when `percent` is set.
+  amount      Float
+  percent     Boolean  @default(false)
+  /// "late" only: days after the rent due day before the fee applies.
+  graceDays   Int      @default(5)
+  /// Bounds, so a rule can be stopped without deleting the history it made.
+  startMonth  String?
+  endMonth    String?
+  active      Boolean  @default(true)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  charges TenantCharge[]
+  runs    TenantRuleRun[]
+
+  @@index([tenantId])
+}
+
+// One row per month a rule has been applied for.
+//
+// This is deliberately not the charge itself. Deleting a charge has to mean
+// deleting it — the money is reversed and the row is gone — and if the rule's
+// memory lived on the charge, the next page load would write it straight back
+// and the delete would look broken. So the rule remembers here, the charge is
+// an ordinary row, and removing one never brings it back.
+model TenantRuleRun {
+  id     String           @id @default(cuid())
+  ruleId String
+  rule   TenantChargeRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+  /// The YYYY-MM the rule was applied for.
+  month  String
+  /// What it charged, kept for the record even after the charge is deleted.
+  amount Float
+  ranAt  DateTime         @default(now())
+
+  /// Applied at most once per month, enforced by the database rather than by
+  /// remembering to check — two requests landing together is the ordinary
+  /// case on a dashboard and must not bill a tenant twice.
+  @@unique([ruleId, month])
 }

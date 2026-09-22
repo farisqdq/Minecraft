@@ -4,7 +4,17 @@ import { useEffect, useState } from "react";
 import { money } from "@/lib/money";
 import { monthName } from "@/lib/notices";
 import type { Statement } from "@/lib/balance";
+import { ruleSummary, type ChargeRule } from "@/lib/charge-rules";
 import styles from "../dashboard/dashboard.module.css";
+
+type Charge = {
+  id: string;
+  month: string;
+  kind: string;
+  label: string;
+  amount: number;
+  automatic: boolean;
+};
 
 type Result = {
   statement: Statement;
@@ -12,10 +22,19 @@ type Result = {
   startMonth: string;
   openingBalance: number;
   startPinned: boolean;
-  charges: { id: string; month: string; kind: string; label: string; amount: number }[];
+  charges: Charge[];
+  rules: (ChargeRule & { dueDay: number })[];
 };
 
 const EMPTY_CHARGE = { kind: "fee" as "fee" | "credit", label: "", amount: "", month: "" };
+
+const EMPTY_RULE = {
+  kind: "monthly" as "monthly" | "late",
+  label: "",
+  amount: "",
+  percent: false,
+  graceDays: "5",
+};
 
 /**
  * A tenant's account, month by month, with the two controls that make it
@@ -43,6 +62,8 @@ export default function StatementPanel({
   const [charge, setCharge] = useState({ ...EMPTY_CHARGE, month: currentMonth });
   const [opening, setOpening] = useState("");
   const [from, setFrom] = useState("");
+  const [showRules, setShowRules] = useState(false);
+  const [rule, setRule] = useState(EMPTY_RULE);
 
   function apply(next: Result) {
     setData(next);
@@ -276,6 +297,7 @@ export default function StatementPanel({
                 {c.label}
                 <span className={styles.chargeWhen}>
                   {monthName(c.month)} · {c.kind === "credit" ? "credit" : "charge"}
+                  {c.automatic && " · added by a rule"}
                 </span>
               </span>
               <span className={`num ${c.kind === "credit" ? styles.pos : styles.neg}`}>
@@ -285,8 +307,8 @@ export default function StatementPanel({
               <button
                 type="button"
                 className={styles.chargeDel}
-                aria-label={`Remove ${c.label}`}
-                title="Remove"
+                aria-label={`Delete ${c.label}`}
+                title="Delete"
                 disabled={busy}
                 onClick={() =>
                   send(`/api/tenants/${tenantId}/charges?charge=${encodeURIComponent(c.id)}`, {
@@ -300,6 +322,148 @@ export default function StatementPanel({
           ))}
         </ul>
       )}
+
+      <div className={styles.ruleBlock}>
+        <div className={styles.ruleHead}>
+          <h4>What bills itself</h4>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.small}`}
+            onClick={() => setShowRules((v) => !v)}
+          >
+            {showRules ? "Done" : data.rules.length ? "Change" : "Set one up"}
+          </button>
+        </div>
+
+        {data.rules.length === 0 ? (
+          <p className={styles.helpText} style={{ marginTop: 0 }}>
+            Nothing yet. A rule saves typing the same lot fee in every month, or adds a late
+            fee on its own when rent is still owed after the grace period.
+          </p>
+        ) : (
+          <ul className={styles.ruleList}>
+            {data.rules.map((r) => (
+              <li key={r.id} className={r.active ? undefined : styles.ruleOff}>
+                <span className={styles.chargeWhat}>
+                  {r.label}
+                  <span className={styles.chargeWhen}>
+                    {ruleSummary(r, r.dueDay)}
+                    {r.active ? "" : " · off"}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  className={styles.portalLink}
+                  disabled={busy}
+                  onClick={() =>
+                    send(`/api/tenants/${tenantId}/rules`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ rule: r.id, active: !r.active }),
+                    })
+                  }
+                >
+                  {r.active ? "Turn off" : "Turn on"}
+                </button>
+                <button
+                  type="button"
+                  className={styles.chargeDel}
+                  aria-label={`Delete the ${r.label} rule`}
+                  title="Delete the rule"
+                  disabled={busy}
+                  onClick={() =>
+                    send(`/api/tenants/${tenantId}/rules?rule=${encodeURIComponent(r.id)}`, {
+                      method: "DELETE",
+                    })
+                  }
+                >
+                  ×
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {showRules && (
+          <div className={styles.ruleForm}>
+            <div className={styles.chargeRow}>
+              <select
+                aria-label="When it applies"
+                value={rule.kind}
+                onChange={(e) =>
+                  setRule((r) => ({ ...r, kind: e.target.value as "monthly" | "late" }))
+                }
+              >
+                <option value="monthly">Every month</option>
+                <option value="late">When rent is late</option>
+              </select>
+              <input
+                type="text"
+                aria-label="What the rule is for"
+                placeholder={rule.kind === "monthly" ? "Lot fee, pet rent…" : "Late fee"}
+                value={rule.label}
+                onChange={(e) => setRule((r) => ({ ...r, label: e.target.value }))}
+              />
+              <select
+                aria-label="Flat amount or a percentage"
+                value={rule.percent ? "percent" : "flat"}
+                onChange={(e) => setRule((r) => ({ ...r, percent: e.target.value === "percent" }))}
+              >
+                <option value="flat">$</option>
+                <option value="percent">% of rent</option>
+              </select>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                aria-label="How much"
+                placeholder={rule.percent ? "5" : "50.00"}
+                value={rule.amount}
+                onChange={(e) => setRule((r) => ({ ...r, amount: e.target.value }))}
+              />
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                disabled={busy || !rule.label.trim() || !(Number(rule.amount) > 0)}
+                onClick={() =>
+                  send(
+                    `/api/tenants/${tenantId}/rules`,
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        ...rule,
+                        amount: Number(rule.amount),
+                        graceDays: Number(rule.graceDays) || 0,
+                      }),
+                    },
+                    () => setRule(EMPTY_RULE)
+                  )
+                }
+              >
+                Add
+              </button>
+            </div>
+
+            {rule.kind === "late" && (
+              <div className={styles.graceRow}>
+                <label htmlFor={`grace-${tenantId}`}>Days after rent is due</label>
+                <input
+                  id={`grace-${tenantId}`}
+                  type="number"
+                  min="0"
+                  max="28"
+                  value={rule.graceDays}
+                  onChange={(e) => setRule((r) => ({ ...r, graceDays: e.target.value }))}
+                />
+                <span className={styles.helpText}>
+                  Nothing is charged before then, and nothing at all if they&apos;ve paid.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       <p className={styles.helpText}>
         Rent comes from the rent history and isn&apos;t listed above — only what you&apos;ve added

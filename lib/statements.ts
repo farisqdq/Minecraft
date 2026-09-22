@@ -6,9 +6,22 @@ import {
   type ChargeInput,
   type Statement,
 } from "@/lib/balance";
+import {
+  lateFeesFor,
+  monthlyChargesFor,
+  type AssessedFee,
+  type ChargeRule,
+} from "@/lib/charge-rules";
 
 /**
  * Turning a tenant row into a statement: the database half of lib/balance.ts.
+ *
+ * This is also where standing rules become real charges. There is no cron in
+ * this app — it runs on serverless functions, where nothing is awake between
+ * requests — so a rule is applied when its statement is worked out, for
+ * months that have already begun. A unique index on (ruleId, month) means two
+ * requests arriving together can't bill the same month twice, and every
+ * charge a rule makes is an ordinary row the landlord can see and delete.
  */
 
 export type StatementResult = {
@@ -30,7 +43,16 @@ export type StatementResult = {
    * put in front of a tenant as their account.
    */
   grounded: boolean;
-  charges: { id: string; month: string; kind: string; label: string; amount: number }[];
+  charges: {
+    id: string;
+    month: string;
+    kind: string;
+    label: string;
+    amount: number;
+    /** Whether a standing rule made this, rather than a person. */
+    automatic: boolean;
+  }[];
+  rules: (ChargeRule & { dueDay: number })[];
 };
 
 export const monthOf = (d: Date) =>
@@ -39,13 +61,44 @@ export const monthOf = (d: Date) =>
 export const currentMonthOf = (now = new Date()) =>
   `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 
-export async function statementForTenant(tenantId: string, now = new Date()): Promise<StatementResult | null> {
+type RuleRow = {
+  id: string;
+  kind: string;
+  label: string;
+  amount: number;
+  percent: boolean;
+  graceDays: number;
+  startMonth: string | null;
+  endMonth: string | null;
+  active: boolean;
+};
+
+const ruleDTO = (r: RuleRow): ChargeRule => ({
+  id: r.id,
+  kind: r.kind === "late" ? "late" : "monthly",
+  label: r.label,
+  amount: r.amount,
+  percent: r.percent,
+  graceDays: r.graceDays,
+  startMonth: r.startMonth,
+  endMonth: r.endMonth,
+  active: r.active,
+});
+
+export async function statementForTenant(
+  tenantId: string,
+  now = new Date()
+): Promise<StatementResult | null> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     include: {
       property: { select: { id: true, monthlyRent: true, vacant: true } },
       unit: { select: { id: true, monthlyRent: true, vacant: true } },
       charges: { orderBy: { createdAt: "asc" } },
+      rules: {
+        orderBy: { createdAt: "asc" },
+        include: { runs: { select: { month: true } } },
+      },
     },
   });
   if (!tenant) return null;
@@ -81,6 +134,8 @@ export async function statementForTenant(tenantId: string, now = new Date()): Pr
 
   const currentRent = tenant.unit ? tenant.unit.monthlyRent : tenant.property.monthlyRent;
   const vacant = tenant.unit ? tenant.unit.vacant : tenant.property.vacant;
+  const rentFor = (month: string) =>
+    vacant ? 0 : rentForMonth(changeDTOs, tenant.propertyId, tenant.unitId, month, currentRent);
 
   const startMonth = resolveStartMonth({
     explicit: tenant.balanceFrom,
@@ -99,22 +154,74 @@ export async function statementForTenant(tenantId: string, now = new Date()): Pr
         ? monthOf(payments[payments.length - 1].date)
         : startMonth;
 
-  const charges: ChargeInput[] = tenant.charges.map((c) => ({
-    month: c.month,
-    kind: c.kind === "credit" ? "credit" : "fee",
-    amount: c.amount,
-    label: c.label,
-  }));
+  const rules = tenant.rules.map(ruleDTO);
+  const paymentInputs = payments.map((p) => ({ month: monthOf(p.date), amount: p.amount }));
+
+  // Work out what the rules imply, write anything missing, then read the
+  // charges back — so the statement is built from rows that exist rather than
+  // from a calculation that merely agrees with them.
+  let charges = tenant.charges;
+  if (rules.some((r) => r.active)) {
+    const wanted = plannedRuleCharges({
+      rules,
+      startMonth,
+      currentMonth,
+      lastRentMonth,
+      openingBalance: tenant.openingBalance,
+      dueDay: tenant.dueDay,
+      today: now,
+      rentFor,
+      charges: liveCharges(charges),
+      payments: paymentInputs,
+      // A month a rule has already run for is never revisited — including one
+      // whose charge was since deleted. Deleting has to stick, and the run
+      // record is what remembers, so the charge itself can go outright.
+      already: new Set(
+        tenant.rules.flatMap((r) => r.runs.map((run) => `${r.id}|${run.month}`))
+      ),
+    });
+    let wrote = false;
+    for (const m of wanted) {
+      // The run and its charge go in together or not at all. The run's unique
+      // index is the lock: if another request got to this month first, this
+      // insert fails, the transaction rolls back, and no second charge exists.
+      try {
+        await prisma.$transaction([
+          prisma.tenantRuleRun.create({
+            data: { ruleId: m.ruleId, month: m.month, amount: m.amount },
+          }),
+          prisma.tenantCharge.create({
+            data: {
+              tenantId: tenant.id,
+              kind: "fee",
+              month: m.month,
+              label: m.label,
+              amount: m.amount,
+              ruleId: m.ruleId,
+            },
+          }),
+        ]);
+        wrote = true;
+      } catch (e) {
+        if ((e as { code?: string })?.code !== "P2002") throw e;
+      }
+    }
+    if (wrote) {
+      charges = await prisma.tenantCharge.findMany({
+        where: { tenantId: tenant.id },
+        orderBy: { createdAt: "asc" },
+      });
+    }
+  }
 
   const statement = buildStatement({
     startMonth,
     currentMonth,
     openingBalance: tenant.openingBalance,
     lastRentMonth,
-    rentFor: (month) =>
-      vacant ? 0 : rentForMonth(changeDTOs, tenant.propertyId, tenant.unitId, month, currentRent),
-    charges,
-    payments: payments.map((p) => ({ month: monthOf(p.date), amount: p.amount })),
+    rentFor,
+    charges: liveCharges(charges),
+    payments: paymentInputs,
   });
 
   return {
@@ -130,15 +237,93 @@ export async function statementForTenant(tenantId: string, now = new Date()): Pr
       payments.length > 0 ||
       Boolean(tenant.balanceFrom) ||
       Math.abs(tenant.openingBalance) > 0.005 ||
-      tenant.charges.length > 0,
-    charges: tenant.charges.map((c) => ({
+      charges.length > 0,
+    charges: charges.map((c) => ({
       id: c.id,
       month: c.month,
       kind: c.kind,
       label: c.label,
       amount: c.amount,
+      automatic: Boolean(c.ruleId),
     })),
+    rules: tenant.rules.map((r) => ({ ...ruleDTO(r), dueDay: tenant.dueDay })),
   };
+}
+
+function liveCharges(
+  rows: { month: string; kind: string; amount: number; label: string }[]
+): ChargeInput[] {
+  return rows.map((c) => ({
+      month: c.month,
+      kind: c.kind === "credit" ? ("credit" as const) : ("fee" as const),
+      amount: c.amount,
+      label: c.label,
+    }));
+}
+
+/**
+ * Every charge the standing rules imply for the months on the books.
+ *
+ * A late fee depends on what was still owed once that month's rent, charges
+ * and payments were counted, so this walks the months the same way a
+ * statement does — using the engine itself rather than a second copy of the
+ * arithmetic that could drift away from it.
+ */
+function plannedRuleCharges(opts: {
+  rules: ChargeRule[];
+  startMonth: string;
+  currentMonth: string;
+  lastRentMonth: string | null;
+  openingBalance: number;
+  dueDay: number;
+  today: Date;
+  rentFor: (month: string) => number;
+  charges: ChargeInput[];
+  payments: { month: string; amount: number }[];
+  /** "ruleId|month" for every month a rule has already run for. */
+  already: Set<string>;
+}): (AssessedFee & { month: string })[] {
+  const planned: (AssessedFee & { month: string })[] = [];
+  // Keyed exactly as the unique index is, so what the planner skips and what
+  // the database would refuse are the same set — not two rules that drift.
+  const done = (ruleId: string, month: string) => opts.already.has(`${ruleId}|${month}`);
+
+  buildStatement({
+    startMonth: opts.startMonth,
+    currentMonth: opts.currentMonth,
+    openingBalance: opts.openingBalance,
+    lastRentMonth: opts.lastRentMonth,
+    rentFor: opts.rentFor,
+    charges: opts.charges,
+    payments: opts.payments,
+    assess: (month, owed, rent) => {
+      // Recurring first: it is part of what they owe, so a late fee is
+      // assessed on rent *and* the lot fee, which is how a lease reads.
+      const monthly = monthlyChargesFor({ rules: opts.rules, month, rentThisMonth: rent }).filter(
+        (m) => !done(m.ruleId, month)
+      );
+      const owedWithMonthly = monthly.reduce((sum, m) => sum + m.amount, owed);
+      const late = lateFeesFor({
+        rules: opts.rules,
+        month,
+        owed: owedWithMonthly,
+        rentThisMonth: rent,
+        dueDay: opts.dueDay,
+        today: opts.today,
+      }).filter((f) => !done(f.ruleId, month));
+
+      const fresh = [...monthly, ...late];
+      for (const fee of fresh) planned.push({ ...fee, month });
+      return fresh.map((f) => ({
+        month,
+        kind: "fee" as const,
+        amount: f.amount,
+        label: f.label,
+      }));
+    },
+  });
+
+  return planned;
 }
 
 /** Just the number, for a list of cards. One query per tenant is fine at this size. */

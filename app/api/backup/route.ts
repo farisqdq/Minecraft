@@ -4,7 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 7;
+export const BACKUP_VERSION = 8;
 
 type TxnRow = {
   type: string;
@@ -61,7 +61,19 @@ function serializeRecurring(rows: RecurringRow[]) {
 
 type TenantRow = {
   notices?: { kind: string; month: string | null; amount: number | null; body: string; createdAt: Date; readAt: Date | null }[];
-  charges?: { month: string; kind: string; label: string; amount: number; createdAt: Date }[];
+  charges?: { month: string; kind: string; label: string; amount: number; createdAt: Date; ruleId: string | null }[];
+  rules?: {
+    id: string;
+    kind: string;
+    label: string;
+    amount: number;
+    percent: boolean;
+    graceDays: number;
+    startMonth: string | null;
+    endMonth: string | null;
+    active: boolean;
+    runs: { month: string; amount: number; ranAt: Date }[];
+  }[];
   openingBalance: number;
   balanceFrom: string | null;
   name: string;
@@ -99,6 +111,27 @@ function serializeTenants(rows: TenantRow[]) {
       label: c.label,
       amount: c.amount,
       createdAt: c.createdAt.toISOString(),
+      // Which rule made it, by its position in `rules` below — ids don't
+      // survive a restore into a fresh database, positions do.
+      rule: c.ruleId ? (t.rules ?? []).findIndex((r) => r.id === c.ruleId) : -1,
+    })),
+    // Standing rules, with the months each has already run for. The runs
+    // matter as much as the rules: without them a restore would bill again
+    // every rule charge you had deleted.
+    rules: (t.rules ?? []).map((r) => ({
+      kind: r.kind,
+      label: r.label,
+      amount: r.amount,
+      percent: r.percent,
+      graceDays: r.graceDays,
+      startMonth: r.startMonth ?? "",
+      endMonth: r.endMonth ?? "",
+      active: r.active,
+      runs: r.runs.map((run) => ({
+        month: run.month,
+        amount: run.amount,
+        ranAt: run.ranAt.toISOString(),
+      })),
     })),
     // When you chased them and whether they read it. Kept because that is
     // the part a backup is for — the record, not the conversation.
@@ -200,6 +233,7 @@ export async function GET() {
             include: {
               notices: { orderBy: { createdAt: "asc" } },
               charges: { orderBy: { createdAt: "asc" } },
+              rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
             },
           },
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
@@ -217,6 +251,7 @@ export async function GET() {
                 include: {
                   notices: { orderBy: { createdAt: "asc" } },
                   charges: { orderBy: { createdAt: "asc" } },
+              rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
                 },
               },
               rentChanges: { orderBy: { effectiveFrom: "asc" } },

@@ -39,7 +39,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   return NextResponse.json(await statementForTenant(id), { status: 201 });
 }
 
-/** Take one back off. Rent can't be deleted this way — it isn't stored here. */
+/**
+ * Delete a charge: the money comes off the balance and the row is gone, as
+ * if it had never been added. Rent can't be deleted this way — it isn't
+ * stored here.
+ *
+ * This works the same whether a person typed the charge or a standing rule
+ * made it. A rule remembers which months it has run for in its own table,
+ * not on the charge, so deleting a rule's late fee does not bring it back on
+ * the next page load.
+ */
 export async function DELETE(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
