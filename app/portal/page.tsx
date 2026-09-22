@@ -5,6 +5,8 @@ import { blobConfigured } from "@/lib/blob";
 import { formatPhone, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 import { money } from "@/lib/money";
 import { requestInclude, serializeRequest } from "@/lib/requests";
+import { statementForTenant } from "@/lib/statements";
+import { monthName } from "@/lib/notices";
 import PortalShell from "./PortalShell";
 import PortalRequests from "./PortalRequests";
 import PortalNotices from "./PortalNotices";
@@ -37,6 +39,14 @@ export default async function PortalHome() {
     include: requestInclude,
     orderBy: { createdAt: "desc" },
   });
+
+  // Their own account. Shown only when the books rest on something — see
+  // `grounded` in lib/statements.ts. A tenant should never be told they owe
+  // money because a ledger happens to be empty.
+  const account = await statementForTenant(tenant.id);
+  const showAccount = Boolean(
+    account && account.grounded && !account.problem && account.statement.rows.length > 0
+  );
 
   const status = leaseStatus(
     {
@@ -112,6 +122,76 @@ export default async function PortalHome() {
           </div>
         </section>
       )}
+
+      {showAccount && account && (() => {
+        const owed = account.statement.balance;
+        const state = owed > 0.005 ? "behind" : owed < -0.005 ? "credit" : "square";
+        // The last half-year is what anyone actually checks. Older months are
+        // still in the running total, so the figure stays right.
+        const recent = account.statement.rows.slice(-6);
+        const labelsFor = (month: string) =>
+          account.charges
+            .filter((c) => c.month === month)
+            .map((c) => `${c.kind === "credit" ? "less " : ""}${c.label}`)
+            .join(", ");
+        return (
+          <section className={styles.card}>
+            <h2>Your account</h2>
+            <div className={styles.balanceHead}>
+              <span
+                className={`${styles.balanceFigure} ${
+                  state === "behind" ? styles.balanceOwing : ""
+                }`}
+              >
+                {state === "square" ? "You\u2019re paid up" : money(Math.abs(owed))}
+              </span>
+              <span className={styles.factLabel}>
+                {state === "behind"
+                  ? account.statement.behindSince
+                    ? `outstanding, going back to ${monthName(account.statement.behindSince)}`
+                    : "outstanding"
+                  : state === "credit"
+                    ? "in credit \u2014 this comes off your next rent"
+                    : "nothing outstanding"}
+              </span>
+            </div>
+            <table className={styles.months}>
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Charged</th>
+                  <th>Paid</th>
+                  <th>Balance</th>
+                </tr>
+              </thead>
+              <tbody>
+                {recent.map((r) => (
+                  <tr key={r.month}>
+                    <td>
+                      {monthName(r.month)}
+                      {/* A month where the charge isn't just rent says why.
+                          An unexplained extra $200 is a phone call. */}
+                      {labelsFor(r.month) && (
+                        <span className={styles.monthWhy}>{labelsFor(r.month)}</span>
+                      )}
+                    </td>
+                    <td>{money(r.rent + r.fees - r.credits)}</td>
+                    <td>{r.paid ? money(r.paid) : "\u2014"}</td>
+                    <td className={r.balance > 0.005 ? styles.balanceOwing : ""}>
+                      {r.balance < -0.005 ? "\u2212" : ""}
+                      {money(Math.abs(r.balance))}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className={styles.accountNote}>
+              This is what your landlord has recorded. If a payment you made isn&apos;t here,
+              get in touch rather than paying it again.
+            </p>
+          </section>
+        );
+      })()}
 
       <section className={styles.card}>
         <h2>Your lease</h2>

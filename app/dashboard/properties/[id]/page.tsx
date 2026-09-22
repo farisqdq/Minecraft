@@ -3,6 +3,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { openRepairCount, requestInclude, serializeRequest } from "@/lib/requests";
 import { isOpen } from "@/lib/maintenance";
+import { balancesForTenants } from "@/lib/statements";
 import { requireProperty } from "@/lib/access";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
@@ -61,6 +62,8 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
     }),
   ]);
 
+  const balances = await balancesForTenants(tenants.map((t) => t.id));
+
   return (
     <PropertyManageClient
       openRepairs={openRepairs}
@@ -96,6 +99,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         active: r.active,
       }))}
       initialTenants={tenants.map(serializeTenant)}
+      initialBalances={balances}
       initialRequests={requests
         .map(serializeRequest)
         // Anything still open comes first — a finished urgent repair from

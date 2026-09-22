@@ -4,7 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 6;
+export const BACKUP_VERSION = 7;
 
 type TxnRow = {
   type: string;
@@ -61,6 +61,9 @@ function serializeRecurring(rows: RecurringRow[]) {
 
 type TenantRow = {
   notices?: { kind: string; month: string | null; amount: number | null; body: string; createdAt: Date; readAt: Date | null }[];
+  charges?: { month: string; kind: string; label: string; amount: number; createdAt: Date }[];
+  openingBalance: number;
+  balanceFrom: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -83,6 +86,20 @@ function serializeTenants(rows: TenantRow[]) {
     dueDay: t.dueDay,
     active: t.active,
     note: t.note ?? "",
+    // Where the books start for them and what they owed on that day. Without
+    // these two a restore would re-infer the start from the first payment and
+    // quietly forget an opening balance the landlord had set by hand.
+    openingBalance: t.openingBalance,
+    balanceFrom: t.balanceFrom ?? "",
+    // Anything owed on top of rent. Rent itself isn't here because it isn't
+    // stored — it comes back with the rent history.
+    charges: (t.charges ?? []).map((c) => ({
+      month: c.month,
+      kind: c.kind,
+      label: c.label,
+      amount: c.amount,
+      createdAt: c.createdAt.toISOString(),
+    })),
     // When you chased them and whether they read it. Kept because that is
     // the part a backup is for — the record, not the conversation.
     notices: (t.notices ?? []).map((n) => ({
@@ -180,7 +197,10 @@ export async function GET() {
           tenants: {
             where: { unitId: null },
             orderBy: { createdAt: "asc" },
-            include: { notices: { orderBy: { createdAt: "asc" } } },
+            include: {
+              notices: { orderBy: { createdAt: "asc" } },
+              charges: { orderBy: { createdAt: "asc" } },
+            },
           },
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
           requests: { ...REQUEST_INCLUDE, where: { unitId: null } },
@@ -192,7 +212,13 @@ export async function GET() {
                 include: { attachments: { orderBy: { createdAt: "asc" } } },
               },
               recurringExpenses: { orderBy: { createdAt: "asc" } },
-              tenants: { orderBy: { createdAt: "asc" }, include: { notices: { orderBy: { createdAt: "asc" } } } },
+              tenants: {
+                orderBy: { createdAt: "asc" },
+                include: {
+                  notices: { orderBy: { createdAt: "asc" } },
+                  charges: { orderBy: { createdAt: "asc" } },
+                },
+              },
               rentChanges: { orderBy: { effectiveFrom: "asc" } },
               requests: REQUEST_INCLUDE,
             },

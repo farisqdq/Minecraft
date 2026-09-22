@@ -7,6 +7,7 @@ import AppShell from "../../../components/AppShell";
 import CashFlowChart from "../../../components/CashFlowChart";
 import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
 import Modal from "../../../components/Modal";
+import StatementPanel from "../../../components/StatementPanel";
 import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
 import { useNow } from "../../../components/useNow";
@@ -17,6 +18,7 @@ import type { TenantDTO } from "@/lib/tenants";
 import { formatJoinCode } from "@/lib/codes";
 import { NO_ACCESS, type PortalAccess } from "@/lib/portal";
 import { STATUS_LABEL, ago, isOpen, type RequestDTO } from "@/lib/maintenance";
+import { monthName } from "@/lib/notices";
 import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 
 type Property = { id: string; name: string; address: string; monthlyRent: number; vacant: boolean };
@@ -79,6 +81,7 @@ export default function PropertyManageClient({
   initialUnits,
   initialRecurring,
   initialTenants,
+  initialBalances,
   rentChanges,
   transactions: initialTransactions,
   initialPortal,
@@ -96,6 +99,8 @@ export default function PropertyManageClient({
   initialUnits: Unit[];
   initialRecurring: RecurringExpense[];
   initialTenants: TenantDTO[];
+  /** What each tenant owes, worked out on the server so the cards render with it. */
+  initialBalances: Record<string, { balance: number; behindSince: string; problem: string }>;
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
   /** Portal access per tenant id, so the cards render it without a round trip. */
@@ -351,6 +356,14 @@ export default function PropertyManageClient({
     push(editing ? "Tenant updated." : `${data.name} added.`);
     router.refresh();
   }
+
+  /**
+   * Kept in state rather than read straight from the prop: adding a late fee
+   * inside the statement changes the number, and the card behind it should
+   * say the new one without a round trip to the server.
+   */
+  const [balances, setBalances] = useState(initialBalances);
+  const [statementFor, setStatementFor] = useState<TenantDTO | null>(null);
 
   const [portal, setPortal] = useState<Record<string, PortalAccess>>(initialPortal);
   const [portalBusy, setPortalBusy] = useState("");
@@ -842,6 +855,44 @@ export default function PropertyManageClient({
                       <span className={styles.figureValue}>{money(t.deposit)}</span>
                     </div>
                   </div>
+
+                  {(() => {
+                    const bal = balances[t.id];
+                    if (!bal) return null;
+                    const owed = bal.balance;
+                    // A hair either side of zero is zero: a cent of float drift
+                    // must not put someone "behind".
+                    const state = owed > 0.005 ? "behind" : owed < -0.005 ? "credit" : "square";
+                    return (
+                      <div className={styles.balanceRow}>
+                        <span
+                          className={`${styles.balanceFigure} num ${
+                            state === "behind" ? styles.neg : state === "credit" ? styles.pos : ""
+                          }`}
+                        >
+                          {state === "square" ? "Paid up" : money(Math.abs(owed))}
+                        </span>
+                        <span className={styles.balanceWord}>
+                          {bal.problem
+                            ? "books can't be split here"
+                            : state === "behind"
+                              ? bal.behindSince
+                                ? `behind since ${monthName(bal.behindSince)}`
+                                : "owing"
+                              : state === "credit"
+                                ? "in credit"
+                                : "nothing owing"}
+                        </span>
+                        <button
+                          type="button"
+                          className={styles.portalLink}
+                          onClick={() => setStatementFor(t)}
+                        >
+                          Statement
+                        </button>
+                      </div>
+                    );
+                  })()}
 
                   {t.note && <div className={styles.note}>{t.note}</div>}
 
@@ -1708,6 +1759,31 @@ export default function PropertyManageClient({
             </button>
           </div>
         </form>
+      </Modal>
+
+      <Modal
+        open={Boolean(statementFor)}
+        title={statementFor ? `${statementFor.name}\u2019s account` : "Account"}
+        subtitle="Every month since the books start here: charged, paid, and what’s left."
+        onClose={() => setStatementFor(null)}
+      >
+        {statementFor && (
+          <StatementPanel
+            tenantId={statementFor.id}
+            tenantName={statementFor.name}
+            currentMonth={todayKey.slice(0, 7)}
+            onBalance={(balance, behindSince) =>
+              setBalances((prev) => ({
+                ...prev,
+                [statementFor.id]: {
+                  balance,
+                  behindSince,
+                  problem: prev[statementFor.id]?.problem ?? "",
+                },
+              }))
+            }
+          />
+        )}
       </Modal>
 
       <ConfirmDialog request={confirming} onCancel={() => setConfirming(null)} />

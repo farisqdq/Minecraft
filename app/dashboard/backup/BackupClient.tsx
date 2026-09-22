@@ -80,6 +80,9 @@ export default function BackupClient({
       if (data.requests) {
         parts.push(`${data.requests} repair ${data.requests === 1 ? "report" : "reports"}`);
       }
+      if (data.charges) {
+        parts.push(`${data.charges} ${data.charges === 1 ? "charge" : "charges"}`);
+      }
       parts.push(`${data.attachments} ${data.attachments === 1 ? "proof" : "proofs"}`);
       setResult(`Restored ${parts.join(", ")}.`);
       router.refresh();

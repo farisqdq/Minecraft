@@ -46,8 +46,18 @@ type CleanNotice = {
   createdAt: Date;
   readAt: Date | null;
 };
+type CleanCharge = {
+  month: string;
+  kind: string;
+  label: string;
+  amount: number;
+  createdAt: Date;
+};
 type CleanTenant = {
   notices: CleanNotice[];
+  charges: CleanCharge[];
+  openingBalance: number;
+  balanceFrom: string | null;
   name: string;
   email: string | null;
   phone: string | null;
@@ -230,8 +240,29 @@ function parseBackup(raw: unknown) {
         });
       }
 
+      const charges: CleanCharge[] = [];
+      for (const rawC of Array.isArray(t.charges) ? t.charges : []) {
+        const c = (rawC ?? {}) as Record<string, unknown>;
+        const month = str(c.month, 7);
+        const label = str(c.label, 120);
+        const amount = num(c.amount);
+        // A charge without a month can't be placed on the ledger and a
+        // charge without an amount changes nothing, so neither comes back.
+        if (!/^\d{4}-\d{2}$/.test(month) || !label || !(amount > 0)) continue;
+        charges.push({
+          month,
+          kind: c.kind === "credit" ? "credit" : "fee",
+          label,
+          amount,
+          createdAt: stamp(c.createdAt) ?? new Date(),
+        });
+      }
+
       out.push({
         notices,
+        charges,
+        openingBalance: num(t.openingBalance),
+        balanceFrom: /^\d{4}-\d{2}$/.test(str(t.balanceFrom, 7)) ? str(t.balanceFrom, 7) : null,
         name,
         email: str(t.email, 200) || null,
         phone: str(t.phone, 40) || null,
@@ -428,6 +459,7 @@ export async function POST(req: Request) {
     attachments: 0,
     recurring: 0,
     tenants: 0,
+    charges: 0,
     rentChanges: 0,
     requests: 0,
   };
@@ -512,7 +544,7 @@ export async function POST(req: Request) {
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
-      const { notices, ...fields } = t;
+      const { notices, charges, ...fields } = t;
       const row = await tx.tenant.create({
         data: { ...fields, propertyId, unitId, createdById: userId },
       });
@@ -520,6 +552,12 @@ export async function POST(req: Request) {
         await tx.tenantNotice.createMany({
           data: notices.map((n) => ({ ...n, tenantId: row.id, sentById: userId })),
         });
+      }
+      if (charges.length > 0) {
+        await tx.tenantCharge.createMany({
+          data: charges.map((c) => ({ ...c, tenantId: row.id, raisedById: userId })),
+        });
+        created.charges += charges.length;
       }
       created.tenants += 1;
       // First one wins: two tenants of the same name in one unit is a
