@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
 import { monthKeyOf, recordRentChange } from "@/lib/rent";
+import { validRent } from "@/lib/money";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -22,7 +23,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (!name) {
     return NextResponse.json({ error: "Property name is required." }, { status: 400 });
   }
-  if (!Number.isFinite(monthlyRent) || monthlyRent < 0) {
+  if (!validRent(monthlyRent)) {
     return NextResponse.json({ error: "Enter a valid monthly rent." }, { status: 400 });
   }
 

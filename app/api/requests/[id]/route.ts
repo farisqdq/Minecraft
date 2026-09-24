@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
-import { del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
-import { blobConfigured } from "@/lib/blob";
+import { releaseBlob } from "@/lib/blob-release";
 import { getCurrentUser } from "@/lib/session";
 import { normalizeStatus, STATUS_LABEL, text } from "@/lib/maintenance";
 import { addUpdate, requestForUser, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
@@ -70,12 +69,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const existing = await requestForUser(me.id, id);
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (blobConfigured() && existing.photos.length > 0) {
-    await Promise.all(existing.photos.map((p) => del(p.url).catch(() => undefined)));
-  }
-
-  // Updates and photos are cascade-deleted by the schema.
+  // Updates and photos are cascade-deleted by the schema. The files go
+  // after, and only those no other record in any account still links to.
   await prisma.maintenanceRequest.delete({ where: { id } });
+  for (const photo of existing.photos) await releaseBlob(photo.url);
 
   return NextResponse.json({
     ok: true,

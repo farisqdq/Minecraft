@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireUnit } from "@/lib/access";
 import { monthKeyOf, recordRentChange } from "@/lib/rent";
+import { validRent } from "@/lib/money";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -24,7 +25,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if (body?.monthlyRent !== undefined) {
     const rent = Number(body.monthlyRent);
-    if (!Number.isFinite(rent) || rent < 0) {
+    if (!validRent(rent)) {
       return NextResponse.json({ error: "Enter a valid monthly rent." }, { status: 400 });
     }
     data.monthlyRent = rent;

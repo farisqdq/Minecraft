@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireDocument } from "@/lib/access";
-import { blobConfigured } from "@/lib/blob";
+import { releaseBlob } from "@/lib/blob-release";
 import { normalizeKind } from "@/lib/documents";
 import { documentInclude, parseDay, serializeDocument } from "@/lib/documents-db";
 
@@ -52,7 +51,7 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
 
   // The row goes regardless: a row pointing at a missing file is a broken
   // link, a file with no row is invisible and costs pennies.
-  if (blobConfigured()) await del(doc.url).catch(() => undefined);
   await prisma.document.delete({ where: { id } });
+  await releaseBlob(doc.url);
   return NextResponse.json({ ok: true });
 }

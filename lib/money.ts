@@ -26,3 +26,20 @@ export function moneyRound(value: number) {
 export function signedMoney(value: number) {
   return `${value < 0 ? "−" : ""}${money(Math.abs(value))}`;
 }
+
+/**
+ * The largest single amount any form accepts. Well past any real rent,
+ * repair or deposit, and small enough that a typo like "1e309" (which
+ * JavaScript reads as infinity) can't be stored and poison every total.
+ */
+export const MAX_AMOUNT = 10_000_000;
+
+/** A payment, charge or bill amount: positive, finite, at most MAX_AMOUNT. */
+export function validAmount(n: number): boolean {
+  return Number.isFinite(n) && n > 0 && n <= MAX_AMOUNT;
+}
+
+/** A rent figure: zero (not let) or a valid amount. */
+export function validRent(n: number): boolean {
+  return Number.isFinite(n) && n >= 0 && n <= MAX_AMOUNT;
+}

@@ -28,6 +28,14 @@ import {
  */
 export type SessionKind = "user" | "tenant";
 
+/**
+ * A real bcrypt hash of a random string, compared against when an email has
+ * no account. Without it, a wrong password for a real account takes a
+ * quarter of a second (bcrypt) and one for a made-up email takes none, and
+ * that difference is enough to learn which emails are customers.
+ */
+const DUMMY_HASH = bcrypt.hashSync(`no-account-${Math.random()}`, 12);
+
 export const authOptions: AuthOptions = {
   session: { strategy: "jwt" },
   pages: {
@@ -55,8 +63,8 @@ export const authOptions: AuthOptions = {
 
         const user = await prisma.user.findUnique({ where: { email } });
         // A miss on an unknown email counts too, so failure counts can't be
-        // used to learn which emails have accounts.
-        const valid = user ? await bcrypt.compare(password, user.passwordHash) : false;
+        // used to learn which emails have accounts — and costs the same time.
+        const valid = await bcrypt.compare(password, user?.passwordHash ?? DUMMY_HASH);
         if (!user || !valid) {
           await recordFailure([
             { key: keys[0], max: MAX_PER_ACCOUNT },
@@ -88,7 +96,7 @@ export const authOptions: AuthOptions = {
           where: { email },
           include: { tenant: { select: { id: true, name: true, active: true } } },
         });
-        const valid = account ? await bcrypt.compare(password, account.passwordHash) : false;
+        const valid = await bcrypt.compare(password, account?.passwordHash ?? DUMMY_HASH);
         if (!account || !valid) {
           await recordFailure([
             { key: keys[0], max: MAX_PER_ACCOUNT },

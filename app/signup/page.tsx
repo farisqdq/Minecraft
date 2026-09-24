@@ -4,18 +4,21 @@ import { Suspense, useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { safeCallbackUrl } from "@/lib/safe-redirect";
 
 function SignupForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const callbackUrl = searchParams.get("callbackUrl") || "/dashboard";
+  // Only ever a path on this site — see lib/safe-redirect.ts.
+  const callbackUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
   const inviteToken = searchParams.get("invite") || "";
   const invitedEmail = searchParams.get("email") || "";
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState(invitedEmail);
   const [password, setPassword] = useState("");
-  const [code, setCode] = useState("");
+  // An invite link carries the code; it fills the box rather than hiding it.
+  const [code, setCode] = useState(inviteToken);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -27,7 +30,7 @@ function SignupForm() {
     const res = await fetch("/api/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, code, inviteToken }),
+      body: JSON.stringify({ name, email, password, code }),
     });
     const data = await res.json().catch(() => ({}));
 
@@ -91,18 +94,18 @@ function SignupForm() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
-        {!inviteToken && (
-          <div className="field">
-            <label htmlFor="code">Invite code (if required)</label>
-            <input
-              id="code"
-              type="text"
-              autoComplete="off"
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </div>
-        )}
+        <div className="field">
+          <label htmlFor="code">Signup or join code</label>
+          <input
+            id="code"
+            type="text"
+            autoComplete="off"
+            required
+            placeholder="From the LLC owner who invited you"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+          />
+        </div>
         <button type="submit" className="btn primary" disabled={loading}>
           {loading ? "Creating account…" : "Create account"}
         </button>

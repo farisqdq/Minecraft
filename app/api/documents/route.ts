@@ -3,7 +3,7 @@ import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser, requireCompany, requireProperty, requireTenant, requireVendor } from "@/lib/access";
-import { BLOB_SETUP_MESSAGE, MAX_UPLOAD_BYTES, blobConfigured, resolveContentType } from "@/lib/blob";
+import { BLOB_SETUP_MESSAGE, blobConfigured, inspectUpload } from "@/lib/blob";
 import { normalizeKind } from "@/lib/documents";
 import { documentInclude, documentsWhere, parseDay, serializeDocument } from "@/lib/documents-db";
 
@@ -75,22 +75,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  // After the access check, so nothing about this deployment's setup is told
-  // to someone who couldn't have uploaded here anyway.
-  if (!blobConfigured()) {
-    return NextResponse.json({ error: BLOB_SETUP_MESSAGE }, { status: 503 });
-  }
-
   const file = form.get("file");
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "Choose a file to upload." }, { status: 400 });
   }
-  const contentType = resolveContentType(file.type, file.name || "");
-  if (!contentType) {
-    return NextResponse.json({ error: "Upload a PDF or a photo (JPG, PNG, HEIC, WebP)." }, { status: 400 });
-  }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: "That file is too large — keep it under 4 MB." }, { status: 400 });
+  // The type is read from the file's bytes, not from what the browser said.
+  const inspected = await inspectUpload(file);
+  if ("error" in inspected) return NextResponse.json({ error: inspected.error }, { status: 400 });
+  const { contentType } = inspected;
+
+  // After the access check, so nothing about this deployment's setup is told
+  // to someone who couldn't have uploaded here anyway.
+  if (!blobConfigured()) {
+    return NextResponse.json({ error: BLOB_SETUP_MESSAGE }, { status: 503 });
   }
 
   const title = field("title").slice(0, 120) || (file.name || "Document").replace(/\.[a-z0-9]+$/i, "");

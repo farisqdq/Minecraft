@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
-import { text } from "@/lib/maintenance";
+import { MAX_MESSAGES_PER_HOUR, text } from "@/lib/maintenance";
 import { addUpdate, requestForTenant, requestInclude, serializeRequest } from "@/lib/requests";
 
 /** The tenant adding to their own report: "it's worse today". */
@@ -16,6 +16,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const body = await req.json().catch(() => null);
   const note = text(body?.body, 2000);
   if (!note) return NextResponse.json({ error: "Type something first." }, { status: 400 });
+
+  const lastHour = await prisma.maintenanceUpdate.count({
+    where: { authorTenantId: me.tenant.id, createdAt: { gt: new Date(Date.now() - 3_600_000) } },
+  });
+  if (lastHour >= MAX_MESSAGES_PER_HOUR) {
+    return NextResponse.json(
+      { error: "You've sent a lot of messages this hour. Give it a little while, or call the office." },
+      { status: 429 }
+    );
+  }
 
   await addUpdate({
     requestId: id,

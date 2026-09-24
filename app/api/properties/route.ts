@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser, requireCompany } from "@/lib/access";
+import { validRent } from "@/lib/money";
 
 export async function GET() {
   const userId = await getCurrentUserId();
@@ -23,10 +24,13 @@ export async function POST(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
-  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const name = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
   const address = typeof body?.address === "string" ? body.address.trim() : "";
   const companyId = typeof body?.companyId === "string" ? body.companyId : "";
   const monthlyRent = Number(body?.monthlyRent) || 0;
+  if (!validRent(monthlyRent)) {
+    return NextResponse.json({ error: "Enter a valid monthly rent." }, { status: 400 });
+  }
 
   if (!name) {
     return NextResponse.json({ error: "Property name is required." }, { status: 400 });

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
-import { requireTenant } from "@/lib/access";
+import { requireCompany, requireTenant } from "@/lib/access";
 import { clampDueDay, parseDay, serializeTenant, text } from "@/lib/tenants";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -55,8 +55,16 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!(await requireTenant(userId, id))) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const tenant = await requireTenant(userId, id);
+  if (!tenant) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  // Takes their charges, billing rules and notices with them, so it's an
+  // owner's call — the same bar as deleting a unit or a property. A member
+  // can still mark someone moved out, which keeps the history.
+  if (!(await requireCompany(userId, tenant.property.companyId, "owner"))) {
+    return NextResponse.json(
+      { error: "Only an owner can delete a tenant. Mark them moved out instead." },
+      { status: 403 }
+    );
   }
 
   await prisma.tenant.delete({ where: { id } });

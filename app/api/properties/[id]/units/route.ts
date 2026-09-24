@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
+import { validRent } from "@/lib/money";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -26,8 +27,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const body = await req.json().catch(() => null);
-  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const name = typeof body?.name === "string" ? body.name.trim().slice(0, 80) : "";
   const monthlyRent = Number(body?.monthlyRent) || 0;
+  if (!validRent(monthlyRent)) {
+    return NextResponse.json({ error: "Enter a valid monthly rent." }, { status: 400 });
+  }
   if (!name) {
     return NextResponse.json({ error: "Unit name is required." }, { status: 400 });
   }

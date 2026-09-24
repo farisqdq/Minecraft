@@ -23,6 +23,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!(await requireCompany(userId, id))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
+  // Owners only. A live code is a key: a member who could read an owner
+  // code could redeem it from a second account and make themselves owner.
+  if (!(await requireCompany(userId, id, "owner"))) {
+    return NextResponse.json({ error: "Only an owner can see join codes." }, { status: 403 });
+  }
 
   const invites = await prisma.invite.findMany({
     where: { companyId: id, acceptedAt: null, expiresAt: { gt: new Date() } },

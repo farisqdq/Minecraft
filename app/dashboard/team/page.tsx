@@ -60,7 +60,10 @@ export default async function TeamPage() {
           name: x.user.name ?? "",
           role: x.role as "owner" | "member",
         })),
-        invites: m.company.invites.map((i) => ({
+        // Owners only, as in the API. Hiding them on screen isn't enough: this
+        // list is sent to the browser in the page data, where a member could
+        // read an owner code and redeem it from a second account.
+        invites: (m.role === "owner" ? m.company.invites : []).map((i) => ({
           id: i.id,
           role: i.role as "owner" | "member",
           code: formatJoinCode(i.token),

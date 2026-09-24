@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireTenant } from "@/lib/access";
 import { statementForTenant } from "@/lib/statements";
+import { validAmount } from "@/lib/money";
 
 /**
  * Anything owed that isn't the scheduled rent — a late fee, the lot fee that
@@ -31,7 +32,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!/^\d{4}-\d{2}$/.test(month)) {
     return NextResponse.json({ error: "Which month does it belong to?" }, { status: 400 });
   }
-  if (!(amount > 0)) return NextResponse.json({ error: "Enter an amount." }, { status: 400 });
+  if (!validAmount(amount)) return NextResponse.json({ error: "Enter an amount." }, { status: 400 });
 
   await prisma.tenantCharge.create({
     data: { tenantId: id, kind, month, label, amount, raisedById: userId },

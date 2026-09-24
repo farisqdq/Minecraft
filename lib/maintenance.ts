@@ -3,6 +3,14 @@
 // Written for a mixed portfolio: houses and storefronts. "Parking lot" and
 // "Signage" matter to a laundromat in a way they never do to a duplex, and a
 // tenant who can't find their problem in the list picks the wrong one.
+/**
+ * Ceilings on what one tenant can send, so a compromised or angry account
+ * can't bury the landlord's queue. Far above anything a real tenant does:
+ * ten new reports in a day is a burst pipe, a broken lock and seven more.
+ */
+export const MAX_REPORTS_PER_DAY = 10;
+export const MAX_MESSAGES_PER_HOUR = 30;
+
 export const REQUEST_CATEGORIES = [
   "Plumbing",
   "Heating / AC",

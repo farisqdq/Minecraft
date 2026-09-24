@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
+import { validAmount } from "@/lib/money";
 
 function clampDay(day: number) {
   return Math.min(31, Math.max(1, Math.round(day) || 1));
@@ -46,7 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!category) {
     return NextResponse.json({ error: "Pick a category." }, { status: 400 });
   }
-  if (!(amount > 0)) {
+  if (!validAmount(amount)) {
     return NextResponse.json({ error: "Enter a valid amount." }, { status: 400 });
   }
   if (unitId) {

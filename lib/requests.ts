@@ -3,7 +3,9 @@ import type { RequestDTO, RequestStatus, Urgency } from "@/lib/maintenance";
 
 /** Everything both sides need to render a request, fetched the same way. */
 export const requestInclude = {
-  property: { select: { name: true } },
+  // The company name is what a tenant sees as the author of the landlord's
+  // replies — never the person's own name or email.
+  property: { select: { name: true, company: { select: { name: true } } } },
   unit: { select: { name: true } },
   tenant: { select: { name: true } },
   photos: { orderBy: { createdAt: "asc" } },
@@ -24,7 +26,19 @@ type Row = Awaited<ReturnType<typeof shapeOfOne>>;
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : "");
 
+/**
+ * The tenant's view of a request. This is the one the portal uses, so it is
+ * the one that must not leak who on the landlord's side wrote what: replies
+ * and status changes are signed with the LLC's name. A landlord account's
+ * name is often a first name and, when none was set, its email address —
+ * the personal details the portal exists to keep private.
+ */
 export function serializeRequest(r: NonNullable<Row>): RequestDTO {
+  return serializeFor(r, "tenant");
+}
+
+function serializeFor(r: NonNullable<Row>, audience: "tenant" | "landlord"): RequestDTO {
+  const company = r.property.company?.name || "Your landlord";
   return {
     id: r.id,
     propertyId: r.propertyId,
@@ -50,7 +64,9 @@ export function serializeRequest(r: NonNullable<Row>): RequestDTO {
     updates: r.updates.map((u) => ({
       id: u.id,
       from: u.statusTo ? ("system" as const) : u.authorUserId ? ("landlord" as const) : ("tenant" as const),
-      authorName: u.authorName,
+      // The tenant's own messages keep their name; everything from the
+      // landlord's side is the company, for the tenant's eyes.
+      authorName: audience === "tenant" && (u.statusTo || u.authorUserId) ? company : u.authorName,
       body: u.body,
       statusTo: (u.statusTo as RequestStatus) ?? null,
       createdAt: iso(u.createdAt),
@@ -69,7 +85,7 @@ export function serializeRequest(r: NonNullable<Row>): RequestDTO {
  * strip it.
  */
 export function serializeRequestForLandlord(r: NonNullable<Row>): RequestDTO & { vendorId: string } {
-  return { ...serializeRequest(r), vendorId: r.vendorId ?? "" };
+  return { ...serializeFor(r, "landlord"), vendorId: r.vendorId ?? "" };
 }
 
 /**
@@ -91,7 +107,10 @@ export async function requestForTenant(tenantId: string, requestId: string) {
 export async function requestForUser(userId: string, requestId: string) {
   const row = await prisma.maintenanceRequest.findUnique({
     where: { id: requestId },
-    include: { ...requestInclude, property: { select: { name: true, companyId: true } } },
+    include: {
+      ...requestInclude,
+      property: { select: { name: true, companyId: true, company: { select: { name: true } } } },
+    },
   });
   if (!row) return null;
   const membership = await prisma.companyMember.findUnique({

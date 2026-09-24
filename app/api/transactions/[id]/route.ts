@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
+import { validAmount } from "@/lib/money";
 
 function serialize<T extends { date: Date; detail: string | null; note: string | null; category: string | null }>(
   t: T
@@ -44,7 +45,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const amount = "amount" in body ? Number(body.amount) : existing.amount;
   const category = type === "expense" ? normalizeCategory(body.category ?? existing.category) : null;
 
-  if (!date || isNaN(date.getTime()) || !(amount > 0)) {
+  if (!date || isNaN(date.getTime()) || !validAmount(amount)) {
     return NextResponse.json({ error: "Missing or invalid fields." }, { status: 400 });
   }
   if (type === "expense" && !category) {

@@ -22,7 +22,7 @@ export async function POST(req: Request) {
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => null);
-  const name = typeof body?.name === "string" ? body.name.trim() : "";
+  const name = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
   if (!name) {
     return NextResponse.json({ error: "Enter a name for the LLC." }, { status: 400 });
   }

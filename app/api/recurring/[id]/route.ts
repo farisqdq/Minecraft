@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireRecurring } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
+import { validAmount } from "@/lib/money";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -19,7 +20,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (body?.active !== undefined) data.active = Boolean(body.active);
   if (body?.amount !== undefined) {
     const amount = Number(body.amount);
-    if (!(amount > 0)) return NextResponse.json({ error: "Enter a valid amount." }, { status: 400 });
+    if (!validAmount(amount)) return NextResponse.json({ error: "Enter a valid amount." }, { status: 400 });
     data.amount = amount;
   }
   if (body?.category !== undefined) {

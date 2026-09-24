@@ -6,6 +6,7 @@ import { BACKUP_FORMAT } from "../route";
 import { normalizeCategory } from "@/lib/categories";
 import { normalizeTrade } from "@/lib/vendors";
 import { normalizeKind } from "@/lib/documents";
+import { isBlobUrl } from "@/lib/blob-release";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
 
 type Tx = Prisma.TransactionClient;
@@ -213,7 +214,7 @@ function parseBackup(raw: unknown) {
         const url = str(a.url, 1000);
         // Only re-link files still served over https; anything else in the
         // file would just render as a broken thumbnail.
-        if (!/^https:\/\//i.test(url)) continue;
+        if (!isBlobUrl(url)) continue;
         attachments.push({
           url,
           filename: str(a.filename, 200) || "proof",
@@ -379,7 +380,7 @@ function parseBackup(raw: unknown) {
       const d = (rawD ?? {}) as Record<string, unknown>;
       const url = str(d.url, 1000);
       // Same rule as receipts: only files still served over https come back.
-      if (!/^https:\/\//i.test(url)) continue;
+      if (!isBlobUrl(url)) continue;
       if (++documentTotal > 5000) throw new Error("That backup is too large to import.");
       const exp = str(d.expiresOn, 10);
       out.push({
@@ -415,7 +416,7 @@ function parseBackup(raw: unknown) {
       for (const rawPhoto of Array.isArray(r.photos) ? r.photos : []) {
         const a = (rawPhoto ?? {}) as Record<string, unknown>;
         const url = str(a.url, 1000);
-        if (!/^https:\/\//i.test(url)) continue;
+        if (!isBlobUrl(url)) continue;
         photos.push({
           url,
           filename: str(a.filename, 200) || "photo",

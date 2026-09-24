@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
-import { BLOB_SETUP_MESSAGE, MAX_UPLOAD_BYTES, blobConfigured, resolveContentType } from "@/lib/blob";
+import { BLOB_SETUP_MESSAGE, blobConfigured, inspectUpload } from "@/lib/blob";
 import { MAX_PHOTOS } from "@/lib/maintenance";
 import { requestForTenant } from "@/lib/requests";
 
@@ -28,23 +28,19 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       { status: 400 }
     );
   }
-  if (!blobConfigured()) {
-    return NextResponse.json({ error: BLOB_SETUP_MESSAGE }, { status: 503 });
-  }
-
   const form = await req.formData().catch(() => null);
   const file = form?.get("file");
   if (!(file instanceof File)) {
     return NextResponse.json({ error: "No photo was uploaded." }, { status: 400 });
   }
-  const contentType = resolveContentType(file.type, file.name || "");
-  // No PDFs here — a tenant reporting a leak is sending a photo, and the
-  // narrower the accepted set the less there is to go wrong.
-  if (!contentType || !contentType.startsWith("image/")) {
-    return NextResponse.json({ error: "Attach a photo (JPG, PNG or HEIC)." }, { status: 400 });
-  }
-  if (file.size > MAX_UPLOAD_BYTES) {
-    return NextResponse.json({ error: "That photo is too large — keep it under 4 MB." }, { status: 400 });
+  // No PDFs here — a tenant reporting a leak is sending a photo — and the
+  // type is read from the file's bytes, not from what the phone claimed.
+  const inspected = await inspectUpload(file, { imagesOnly: true });
+  if ("error" in inspected) return NextResponse.json({ error: inspected.error }, { status: 400 });
+  const { contentType } = inspected;
+
+  if (!blobConfigured()) {
+    return NextResponse.json({ error: BLOB_SETUP_MESSAGE }, { status: 503 });
   }
 
   const safeName = (file.name || "photo").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
@@ -54,6 +50,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     blob = await put(`requests/${id}/${Date.now()}-${safeName}`, file, {
       access: "public",
       contentType,
+      // These can show the inside of someone's home; the URL must not be guessable.
+      addRandomSuffix: true,
     });
   } catch (err) {
     console.error("Blob upload failed", err);

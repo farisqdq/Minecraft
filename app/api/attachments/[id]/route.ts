@@ -1,9 +1,8 @@
 import { NextResponse } from "next/server";
-import { del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
-import { blobConfigured } from "@/lib/blob";
+import { releaseBlob } from "@/lib/blob-release";
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -18,12 +17,10 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  if (blobConfigured()) {
-    // A file left in storage is recoverable noise; a row pointing at a file
-    // that's gone is a broken thumbnail, so drop the row either way.
-    await del(attachment.url).catch(() => undefined);
-  }
+  // Row first, then the file — and the file only if no other record, in any
+  // account, still links to it (see lib/blob-release.ts for why).
   await prisma.attachment.delete({ where: { id } });
+  await releaseBlob(attachment.url);
 
   return NextResponse.json({ ok: true });
 }
