@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserId } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
+import { backupFileKey } from "@/lib/backup-files";
+import { storageAccessOf } from "@/lib/file-links";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
 export const BACKUP_VERSION = 10;
+
+/** Signs a private file's link for the account exporting it; see lib/backup-files. */
+type FileKey = (url: string) => string | undefined;
 
 type TxnRow = {
   type: string;
@@ -17,7 +22,7 @@ type TxnRow = {
   vendor: { name: string } | null;
 };
 
-function serializeTxns(txns: TxnRow[]) {
+function serializeTxns(txns: TxnRow[], key: FileKey) {
   return txns.map((t) => ({
     type: t.type,
     date: t.date.toISOString().slice(0, 10),
@@ -31,6 +36,7 @@ function serializeTxns(txns: TxnRow[]) {
     // blob storage and keep working as long as the app does.
     attachments: t.attachments.map((a) => ({
       url: a.url,
+      key: key(a.url),
       filename: a.filename,
       contentType: a.contentType,
       size: a.size,
@@ -168,11 +174,12 @@ type DocumentRow = {
  * Links to the stored files, like receipts — the files stay in blob storage.
  * What each is attached to goes by name, because ids don't survive a restore.
  */
-function serializeDocuments(rows: DocumentRow[]) {
+function serializeDocuments(rows: DocumentRow[], key: FileKey) {
   return rows.map((d) => ({
     title: d.title,
     kind: d.kind,
     url: d.url,
+    key: key(d.url),
     pathname: d.pathname,
     filename: d.filename,
     contentType: d.contentType,
@@ -219,7 +226,7 @@ type RequestRow = {
  * fresh database, and the name is what re-links it to the tenant row that
  * comes back alongside it.
  */
-function serializeRequests(rows: RequestRow[]) {
+function serializeRequests(rows: RequestRow[], key: FileKey) {
   return rows.map((r) => ({
     title: r.title,
     detail: r.detail,
@@ -234,6 +241,7 @@ function serializeRequests(rows: RequestRow[]) {
     resolvedAt: r.resolvedAt ? r.resolvedAt.toISOString() : "",
     photos: r.photos.map((p) => ({
       url: p.url,
+      key: key(p.url),
       filename: p.filename,
       contentType: p.contentType,
       size: p.size,
@@ -258,8 +266,12 @@ const REQUEST_INCLUDE = {
 } as const;
 
 export async function GET() {
-  const userId = await getCurrentUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = me.id;
+  const secret = process.env.NEXTAUTH_SECRET ?? "";
+  const key: FileKey = (url) =>
+    storageAccessOf(url) === "private" ? backupFileKey(secret, me.email, url) : undefined;
 
   const companyIds = await companyIdsForUser(userId);
   const companies = await prisma.company.findMany({
@@ -332,27 +344,27 @@ export async function GET() {
         email: v.email ?? "",
         note: v.note ?? "",
       })),
-      documents: serializeDocuments(c.documents),
+      documents: serializeDocuments(c.documents, key),
       properties: c.properties.map((p) => ({
         name: p.name,
         address: p.address ?? "",
         monthlyRent: p.monthlyRent,
         vacant: p.vacant,
-        transactions: serializeTxns(p.transactions),
+        transactions: serializeTxns(p.transactions, key),
         recurringExpenses: serializeRecurring(p.recurringExpenses),
         tenants: serializeTenants(p.tenants),
         rentChanges: serializeRentChanges(p.rentChanges),
-        requests: serializeRequests(p.requests),
-        documents: serializeDocuments(p.documents),
+        requests: serializeRequests(p.requests, key),
+        documents: serializeDocuments(p.documents, key),
         units: p.units.map((u) => ({
           name: u.name,
           monthlyRent: u.monthlyRent,
           vacant: u.vacant,
-          transactions: serializeTxns(u.transactions),
+          transactions: serializeTxns(u.transactions, key),
           recurringExpenses: serializeRecurring(u.recurringExpenses),
           tenants: serializeTenants(u.tenants),
           rentChanges: serializeRentChanges(u.rentChanges),
-          requests: serializeRequests(u.requests),
+          requests: serializeRequests(u.requests, key),
         })),
       })),
     })),

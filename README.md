@@ -27,7 +27,8 @@ data — safe to deploy publicly on Vercel.
    - `DATABASE_URL` — your Postgres connection string
    - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
    - `NEXTAUTH_URL` — leave as `http://localhost:3000` for local dev
-   - `SIGNUP_CODE` (optional) — set this to require an invite code for new accounts, so random visitors to your deployed URL can't sign themselves up. Leave unset for open signup.
+   - `NEXTAUTH_SECRET` must be at least 32 characters; a production build refuses to start with a short or placeholder one.
+   - `SIGNUP_CODE` — the code that lets someone create a landlord account. Signup is closed without it: only join codes from an existing team work.
 4. Create the database tables:
    ```
    npx prisma migrate deploy
@@ -53,12 +54,13 @@ Node's own test runner in about a second.
 
 1. Import this repository into Vercel.
 2. Add a Postgres database from the project's **Storage** tab (or connect an external one like Neon/Supabase) — this sets `DATABASE_URL` automatically, or you can set it yourself under **Settings → Environment Variables**.
-3. Add **Blob** from the same Storage tab if you want proof photos and receipts
-   (see below) — this sets `BLOB_READ_WRITE_TOKEN` automatically.
+3. Add a **private Blob** store from the same Storage tab if you want receipts,
+   photos and documents (see below) — the app reads its token as
+   `PRIVATE_BLOB_READ_WRITE_TOKEN`.
 4. Add the other environment variables:
    - `NEXTAUTH_SECRET` — same as above
    - `NEXTAUTH_URL` — your deployment URL, e.g. `https://your-app.vercel.app`
-   - `SIGNUP_CODE` (optional)
+   - `SIGNUP_CODE` — without it, only join codes can create accounts
 
    Leave a variable out entirely rather than saving it blank — an empty value
    is not the same as unset and can break the build.
@@ -277,18 +279,33 @@ Photos are shrunk in the browser before upload (long edge 1600px, JPEG), so a
 phone photo uploads quickly and stays well under the 4 MB per-file limit. PDFs
 upload as-is.
 
-This needs **Vercel Blob** storage:
+This needs a **private Vercel Blob** store:
 
 1. In Vercel, open the project's **Storage** tab.
-2. Add **Blob**, connect it to this project, and redeploy.
+2. Create a **Blob** store, choose **Private**, connect it to this project,
+   and redeploy.
+3. Check the project's environment variables for the new store's token. The
+   app reads it as `PRIVATE_BLOB_READ_WRITE_TOKEN`; if Vercel named it
+   something else, rename it and redeploy.
 
-That sets `BLOB_READ_WRITE_TOKEN` automatically. Until it's connected, the app
-works normally and uploads fail with a message saying to set this up —
-transactions still save either way.
+Until a store is connected, the app works normally and uploads fail with a
+message saying to set this up — transactions still save either way.
 
-Backups include links to the proof files rather than the files themselves. The
-files live in blob storage, so a restored backup re-links to the same images as
-long as that storage still exists.
+Files never leave through their storage URL. Every receipt, photo and document
+is linked as `/api/files/<kind>/<id>`, which checks the session first: the
+landlord team for that property or LLC, the tenant who filed a repair photo,
+or the tenant a document was shared with. Anyone else gets a 404.
+
+**Upgrading from the public store:** files uploaded before the private store
+existed are still in the old public one, where the exact URL opens them. Go
+to **Account → Stored files → Move old files** once: it copies each one into
+the private store, re-points the app at the copy and deletes the original.
+
+Backups include links to the files rather than the files themselves, so a
+restored backup re-links to the same files as long as the store still exists.
+Private links in a backup are signed for the account that exported it: the
+same account restoring its own backup gets its files back, but anyone else
+importing a copy of it does not.
 
 ## Installing it on a phone
 

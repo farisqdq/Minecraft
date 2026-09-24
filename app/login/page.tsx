@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { pauseMessage } from "@/lib/throttle-rules";
 import { safeCallbackUrl } from "@/lib/safe-redirect";
+import { TWO_FACTOR_INVALID, TWO_FACTOR_REQUIRED } from "@/lib/auth-messages";
 
 function LoginForm() {
   const router = useRouter();
@@ -14,6 +15,10 @@ function LoginForm() {
   const callbackUrl = safeCallbackUrl(searchParams.get("callbackUrl"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  // Shown once the password has been accepted and the account has
+  // two-factor on. The email and password stay filled in behind it.
+  const [needsCode, setNeedsCode] = useState(false);
+  const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -24,9 +29,19 @@ function LoginForm() {
     const result = await signIn("credentials", {
       email,
       password,
+      code: needsCode ? code : "",
       redirect: false,
     });
     setLoading(false);
+    if (result?.error === TWO_FACTOR_REQUIRED) {
+      setNeedsCode(true);
+      return;
+    }
+    if (result?.error === TWO_FACTOR_INVALID) {
+      setCode("");
+      setError("That code didn't work. Use the newest one from the app, or a backup code.");
+      return;
+    }
     if (result?.error) {
       // A paused account gets the same refusal as a wrong password from the
       // server. Ask which it was, so a right password isn't called wrong.
@@ -40,6 +55,9 @@ function LoginForm() {
       setError(status?.lockedForSeconds > 0 ? pauseMessage(status.lockedForSeconds) : "Incorrect email or password.");
       return;
     }
+    // Remember this device, so someone typing wrong passwords at this account
+    // from elsewhere can't lock it here. Best effort: signing in has worked.
+    await fetch("/api/auth/device", { method: "POST" }).catch(() => undefined);
     router.push(callbackUrl);
     router.refresh();
   }
@@ -77,8 +95,24 @@ function LoginForm() {
             onChange={(e) => setPassword(e.target.value)}
           />
         </div>
+        {needsCode && (
+          <div className="field">
+            <label htmlFor="code">Code from your authenticator app</label>
+            <input
+              id="code"
+              type="text"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              autoFocus
+              required
+              placeholder="123456, or a backup code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+          </div>
+        )}
         <button type="submit" className="btn primary" disabled={loading}>
-          {loading ? "Signing in…" : "Sign in"}
+          {loading ? "Signing in…" : needsCode ? "Verify" : "Sign in"}
         </button>
       </form>
       <div className="authFoot">

@@ -5,6 +5,7 @@ import { openRepairCount, requestInclude, serializeRequestForLandlord } from "@/
 import { expiringDocuments } from "@/lib/documents-db";
 import { SOON_DAYS } from "@/lib/documents";
 import { blobConfigured } from "@/lib/blob";
+import { fileLink } from "@/lib/file-links";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
@@ -146,7 +147,7 @@ export default async function DashboardPage() {
         attachments: t.attachments.map((a) => ({
           id: a.id,
           transactionId: a.transactionId,
-          url: a.url,
+          url: fileLink("attachment", a.id),
           filename: a.filename,
           contentType: a.contentType,
         })),

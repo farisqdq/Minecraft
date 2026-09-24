@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
 import { blobConfigured } from "@/lib/blob";
+import { fileLink } from "@/lib/file-links";
 import { formatDay, formatPhone, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 import { money } from "@/lib/money";
 import { requestInclude, serializeRequest } from "@/lib/requests";
@@ -52,7 +53,7 @@ export default async function PortalHome() {
   // Both conditions are in the query — nothing is fetched and then hidden.
   const sharedDocs = await prisma.document.findMany({
     where: { tenantId: tenant.id, shared: true },
-    select: { id: true, title: true, kind: true, url: true, expiresOn: true },
+    select: { id: true, title: true, kind: true, expiresOn: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -230,7 +231,7 @@ export default async function PortalHome() {
           <ul className={styles.docList}>
             {sharedDocs.map((d) => (
               <li key={d.id}>
-                <a href={d.url} target="_blank" rel="noopener noreferrer">
+                <a href={fileLink("document", d.id)} target="_blank" rel="noopener noreferrer">
                   {d.title}
                 </a>
                 <span className={styles.factLabel}>

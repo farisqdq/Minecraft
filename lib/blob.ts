@@ -1,9 +1,14 @@
 export const BLOB_SETUP_MESSAGE =
-  "File storage isn't set up yet. In Vercel, open this project's Storage tab, add Blob, " +
-  "and redeploy — then proof photos will upload here.";
+  "File storage isn't set up yet. In Vercel, open this project's Storage tab, add a private " +
+  "Blob store, and redeploy — then proof photos will upload here.";
 
+/** Some store is connected, so uploads can work. lib/storage decides which. */
 export function blobConfigured() {
-  return Boolean(process.env.BLOB_READ_WRITE_TOKEN);
+  return Boolean(
+    process.env.PRIVATE_BLOB_READ_WRITE_TOKEN ||
+      process.env.BLOB_READ_WRITE_TOKEN ||
+      (process.env.LOCAL_STORAGE_DIR && !process.env.VERCEL)
+  );
 }
 
 export const ALLOWED_TYPES = [

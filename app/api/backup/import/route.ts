@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCurrentUserId } from "@/lib/session";
+import { getCurrentUser } from "@/lib/session";
 import { BACKUP_FORMAT } from "../route";
 import { normalizeCategory } from "@/lib/categories";
 import { normalizeTrade } from "@/lib/vendors";
 import { normalizeKind } from "@/lib/documents";
-import { isBlobUrl } from "@/lib/blob-release";
+import { acceptBackupFile } from "@/lib/backup-files";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
 
 type Tx = Prisma.TransactionClient;
@@ -181,7 +181,7 @@ const stamp = (v: unknown) => {
 };
 
 /** Reshape an uploaded file into exactly what we're willing to store. */
-function parseBackup(raw: unknown) {
+function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boolean) {
   if (!raw || typeof raw !== "object") throw new Error("That file isn't a Rent Roll backup.");
   const body = raw as Record<string, unknown>;
   if (body.format !== BACKUP_FORMAT) {
@@ -212,9 +212,9 @@ function parseBackup(raw: unknown) {
       for (const rawAttachment of Array.isArray(t.attachments) ? t.attachments : []) {
         const a = (rawAttachment ?? {}) as Record<string, unknown>;
         const url = str(a.url, 1000);
-        // Only re-link files still served over https; anything else in the
-        // file would just render as a broken thumbnail.
-        if (!isBlobUrl(url)) continue;
+        // Only links into Blob storage come back, and a private one only for
+        // the account that exported it (lib/backup-files).
+        if (!acceptFile(url, str(a.key, 100))) continue;
         attachments.push({
           url,
           filename: str(a.filename, 200) || "proof",
@@ -379,8 +379,8 @@ function parseBackup(raw: unknown) {
     for (const rawD of Array.isArray(raw) ? raw : []) {
       const d = (rawD ?? {}) as Record<string, unknown>;
       const url = str(d.url, 1000);
-      // Same rule as receipts: only files still served over https come back.
-      if (!isBlobUrl(url)) continue;
+      // Same rule as receipts.
+      if (!acceptFile(url, str(d.key, 100))) continue;
       if (++documentTotal > 5000) throw new Error("That backup is too large to import.");
       const exp = str(d.expiresOn, 10);
       out.push({
@@ -416,7 +416,7 @@ function parseBackup(raw: unknown) {
       for (const rawPhoto of Array.isArray(r.photos) ? r.photos : []) {
         const a = (rawPhoto ?? {}) as Record<string, unknown>;
         const url = str(a.url, 1000);
-        if (!isBlobUrl(url)) continue;
+        if (!acceptFile(url, str(a.key, 100))) continue;
         photos.push({
           url,
           filename: str(a.filename, 200) || "photo",
@@ -550,14 +550,16 @@ function parseBackup(raw: unknown) {
 }
 
 export async function POST(req: Request) {
-  const userId = await getCurrentUserId();
-  if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const me = await getCurrentUser();
+  if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  const userId = me.id;
+  const secret = process.env.NEXTAUTH_SECRET ?? "";
 
   const raw = await req.json().catch(() => null);
 
   let parsed;
   try {
-    parsed = parseBackup(raw);
+    parsed = parseBackup(raw, (url, key) => acceptBackupFile({ secret, email: me.email, url, key }));
   } catch (err) {
     return NextResponse.json({ error: (err as Error).message }, { status: 400 });
   }

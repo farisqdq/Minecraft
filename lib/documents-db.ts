@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { normalizeKind, type DocumentDTO } from "@/lib/documents";
+import { fileLink } from "@/lib/file-links";
 
 export const documentInclude = {
   property: { select: { name: true } },
@@ -22,7 +23,8 @@ export function serializeDocument(d: Row): DocumentDTO {
     ownerLabel: d.tenant?.name ?? d.vendor?.name ?? d.property?.name ?? "The LLC",
     title: d.title,
     kind: normalizeKind(d.kind),
-    url: d.url,
+    // Never the storage URL: /api/files checks who is asking first.
+    url: fileLink("document", d.id),
     filename: d.filename,
     contentType: d.contentType,
     size: d.size,

@@ -18,39 +18,11 @@ if (process.env.NODE_ENV === "production" && process.env.VERCEL) {
   }
 }
 
-const dev = process.env.NODE_ENV !== "production";
-
-/**
- * What a page may load, and from where. Everything is this site unless named:
- * Google Fonts for the typefaces, and Vercel Blob for receipt and repair
- * photos. `frame-ancestors 'none'` stops another site from loading this one
- * in a hidden frame and tricking clicks out of a signed-in landlord.
- *
- * Scripts allow 'unsafe-inline' because Next.js writes small inline scripts
- * into every page to start the app. Removing that needs a per-request nonce
- * threaded through the proxy on every route; until then, the rest of this
- * policy still blocks scripts from any other origin, plugins, framing, and
- * form posts or connections to anywhere but here.
- */
-const csp = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${dev ? " 'unsafe-eval'" : ""}`,
-  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-  "font-src 'self' data: https://fonts.gstatic.com",
-  "img-src 'self' data: blob: https://*.public.blob.vercel-storage.com",
-  `connect-src 'self'${dev ? " ws: wss:" : ""}`,
-  "frame-ancestors 'none'",
-  "frame-src 'none'",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "manifest-src 'self'",
-  "worker-src 'self' blob:",
-].join("; ");
-
+// The Content-Security-Policy is set per request in proxy.ts, because each
+// response carries its own script nonce. These are the fixed ones.
 const securityHeaders = [
-  { key: "Content-Security-Policy", value: csp },
-  // The older header for the same thing, for browsers that predate CSP's.
+  // The older header for the frame-ancestors part of the CSP, for browsers
+  // that predate it.
   { key: "X-Frame-Options", value: "DENY" },
   // Never guess a file's type from its contents: a "photo" that is really a
   // page of HTML must not be run as one.

@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
 import { validAmount } from "@/lib/money";
+import { fileLink } from "@/lib/file-links";
 
 function serialize<T extends { date: Date; detail: string | null; note: string | null; category: string | null }>(
   t: T
@@ -79,7 +80,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     include: { attachments: { orderBy: { createdAt: "asc" } } },
   });
 
-  return NextResponse.json(serialize(transaction));
+  return NextResponse.json({
+    ...serialize(transaction),
+    // Links through /api/files, never the storage URL.
+    attachments: transaction.attachments.map((a) => ({
+      id: a.id,
+      transactionId: a.transactionId,
+      url: fileLink("attachment", a.id),
+      filename: a.filename,
+      contentType: a.contentType,
+    })),
+  });
 }
 
 export async function DELETE(_req: Request, { params }: { params: Promise<{ id: string }> }) {

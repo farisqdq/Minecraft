@@ -2,6 +2,11 @@ import type { Metadata, Viewport } from "next";
 import Providers from "./providers";
 import "./globals.css";
 
+// Every page is rendered per request. The Content-Security-Policy carries a
+// fresh nonce each time (see proxy.ts), and a page built once at deploy time
+// would ship scripts stamped with no nonce at all — which the policy refuses.
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Rent Roll",
   description: "Track rent payments and repair costs across your rental properties.",

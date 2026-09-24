@@ -34,6 +34,8 @@ function PortalLoginForm() {
       setError(status?.lockedForSeconds > 0 ? pauseMessage(status.lockedForSeconds) : "Incorrect email or password.");
       return;
     }
+    // Remember this device (see lib/device-trust.ts). Best effort.
+    await fetch("/api/auth/device", { method: "POST" }).catch(() => undefined);
     router.push("/portal");
     router.refresh();
   }

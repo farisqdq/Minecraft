@@ -6,6 +6,8 @@ declare module "next-auth" {
   interface Session {
     /** Which door this session came through. See SessionKind in lib/auth. */
     kind?: SessionKind;
+    /** The account's sessionVersion when this session began; see lib/session. */
+    sv?: number;
     user?: {
       id?: string;
       name?: string | null;
@@ -15,6 +17,7 @@ declare module "next-auth" {
 
   interface User {
     kind?: SessionKind;
+    sv?: number;
   }
 }
 
@@ -22,5 +25,6 @@ declare module "next-auth/jwt" {
   interface JWT {
     id?: string;
     kind?: SessionKind;
+    sv?: number;
   }
 }

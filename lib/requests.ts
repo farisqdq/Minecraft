@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { RequestDTO, RequestStatus, Urgency } from "@/lib/maintenance";
+import { fileLink } from "@/lib/file-links";
 
 /** Everything both sides need to render a request, fetched the same way. */
 export const requestInclude = {
@@ -57,7 +58,7 @@ function serializeFor(r: NonNullable<Row>, audience: "tenant" | "landlord"): Req
     loggedAsExpense: Boolean(r.transactionId),
     photos: r.photos.map((p) => ({
       id: p.id,
-      url: p.url,
+      url: fileLink("photo", p.id),
       filename: p.filename,
       contentType: p.contentType,
     })),

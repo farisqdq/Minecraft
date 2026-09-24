@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
 import { BLOB_SETUP_MESSAGE, blobConfigured, inspectUpload } from "@/lib/blob";
+import { storeFile } from "@/lib/storage";
+import { fileLink } from "@/lib/file-links";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -34,12 +35,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   let blob;
   try {
-    blob = await put(`transactions/${id}/${Date.now()}-${safeName}`, file, {
-      access: "public",
-      contentType,
-      // Public URLs are only as private as they are hard to guess.
-      addRandomSuffix: true,
-    });
+    blob = await storeFile(`transactions/${id}/${safeName}`, file, contentType);
   } catch (err) {
     console.error("Blob upload failed", err);
     return NextResponse.json(
@@ -64,7 +60,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     {
       id: attachment.id,
       transactionId: id,
-      url: attachment.url,
+      url: fileLink("attachment", attachment.id),
       filename: attachment.filename,
       contentType: attachment.contentType,
     },

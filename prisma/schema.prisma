@@ -14,6 +14,22 @@ model User {
   name         String?
   createdAt    DateTime @default(now())
 
+  /// Stamped into every session token. Bumping it signs this account out
+  /// everywhere at once — "sign out everywhere", a password change — because
+  /// every request compares the token's copy against this one.
+  sessionVersion    Int       @default(0)
+  /// Two-factor: the authenticator app's secret, encrypted with a key derived
+  /// from NEXTAUTH_SECRET so a copy of the database alone can't generate codes.
+  totpSecret        String?
+  /// The same, while being set up and not yet confirmed with a first code.
+  totpPendingSecret String?
+  totpEnabledAt     DateTime?
+  /// The last 30-second window a code was accepted for, so a code seen over
+  /// someone's shoulder can't be used a second time.
+  totpLastStep      Int?
+  /// SHA-256 of each unused one-time backup code.
+  recoveryCodes     String[]  @default([])
+
   memberships         CompanyMember[]
   invitesSent         Invite[]            @relation("InviteSender")
   createdProperties   Property[]
@@ -205,13 +221,15 @@ model Tenant {
 // The row hangs off a Tenant, which is what carries the property and unit, so
 // deleting a tenant takes their login with it.
 model TenantAccount {
-  id           String    @id @default(cuid())
-  tenantId     String    @unique
-  tenant       Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  email        String    @unique
-  passwordHash String
-  createdAt    DateTime  @default(now())
-  lastLoginAt  DateTime?
+  id             String    @id @default(cuid())
+  tenantId       String    @unique
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  email          String    @unique
+  passwordHash   String
+  createdAt      DateTime  @default(now())
+  lastLoginAt    DateTime?
+  /// As on User: bump it and every session for this login ends.
+  sessionVersion Int       @default(0)
 }
 
 // The only way a TenantAccount comes into existence. The landlord issues a

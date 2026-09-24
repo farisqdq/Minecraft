@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getCurrentTenantAccountId } from "@/lib/session";
+import { getCurrentTenantSession } from "@/lib/session";
 
 /**
  * Everything a portal page is allowed to know, resolved from the session on
@@ -13,8 +13,9 @@ import { getCurrentTenantAccountId } from "@/lib/session";
 export type TenantSession = NonNullable<Awaited<ReturnType<typeof requireTenantSession>>>;
 
 export async function requireTenantSession() {
-  const accountId = await getCurrentTenantAccountId();
-  if (!accountId) return null;
+  const current = await getCurrentTenantSession();
+  if (!current) return null;
+  const accountId = current.accountId;
 
   const account = await prisma.tenantAccount.findUnique({
     where: { id: accountId },
@@ -35,6 +36,8 @@ export async function requireTenantSession() {
     },
   });
   if (!account) return null;
+  // Signed out everywhere since this token was issued.
+  if (account.sessionVersion !== current.sv) return null;
 
   // Re-checked here rather than only at login: a tenant marked moved out
   // mid-session is out on their next click, not whenever the token expires.

@@ -2834,3 +2834,60 @@ tr:hover .rowDel {
     letter-spacing: -0.02em;
   }
 }
+
+/* ---------- Account & security ---------- */
+
+.qrWrap {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.qr {
+  width: 176px;
+  height: 176px;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 6px;
+  flex: none;
+}
+
+.qrSide {
+  flex: 1 1 200px;
+  min-width: 0;
+}
+
+.secretKey,
+.backupCodes code {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  overflow-wrap: anywhere;
+}
+
+.secretKey {
+  display: block;
+  padding: 8px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+.backupCodes {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 16px;
+  margin: 0;
+  padding: 12px 12px 12px 32px;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+
+@media (max-width: 420px) {
+  .backupCodes {
+    grid-template-columns: 1fr;
+  }
+}

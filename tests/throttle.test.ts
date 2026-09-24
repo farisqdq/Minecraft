@@ -94,3 +94,17 @@ test("the pause message never says zero minutes", () => {
   assert.equal(pauseMessage(61), "Too many attempts. Try again in 2 minutes.");
   assert.equal(pauseMessage(900), "Too many attempts. Try again in 15 minutes.");
 });
+
+import { loginThrottleKeys } from "../lib/login-rules.ts";
+
+test("a trusted device is judged only on its own count", () => {
+  const keys = loginThrottleKeys({ kind: "user", email: "Faris@Example.com", ip: "1.2.3.4", trustedSince: 1700000000 });
+  assert.equal(keys.length, 1);
+  assert.match(keys[0].key ?? "", /^device:user:faris@example\.com:1700000000$/);
+});
+
+test("an unknown device is judged on the account and the address", () => {
+  const keys = loginThrottleKeys({ kind: "user", email: "faris@example.com", ip: "1.2.3.4", trustedSince: null });
+  assert.equal(keys.length, 2);
+  assert.ok(keys.every((k) => k.key));
+});

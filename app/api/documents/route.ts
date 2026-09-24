@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser, requireCompany, requireProperty, requireTenant, requireVendor } from "@/lib/access";
 import { BLOB_SETUP_MESSAGE, blobConfigured, inspectUpload } from "@/lib/blob";
+import { storeFile } from "@/lib/storage";
 import { normalizeKind } from "@/lib/documents";
 import { documentInclude, documentsWhere, parseDay, serializeDocument } from "@/lib/documents-db";
 
@@ -100,14 +100,9 @@ export async function POST(req: Request) {
   const safeName = (file.name || "document").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-80);
   let blob;
   try {
-    blob = await put(`documents/${companyId}/${safeName}`, file, {
-      access: "public",
-      contentType,
-      // Files here are served from public URLs, so the URL is the only lock
-      // on them. The library doesn't add randomness by default; a lease with
-      // a tenant's SSN on it needs more than a guessable path.
-      addRandomSuffix: true,
-    });
+    // A lease can carry a tenant's SSN: private storage, a random name, and
+    // only ever shown through /api/files.
+    blob = await storeFile(`documents/${companyId}/${safeName}`, file, contentType);
   } catch (err) {
     console.error("Blob upload failed", err);
     return NextResponse.json(

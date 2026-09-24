@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { put } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
 import { BLOB_SETUP_MESSAGE, blobConfigured, inspectUpload } from "@/lib/blob";
+import { storeFile } from "@/lib/storage";
+import { fileLink } from "@/lib/file-links";
 import { MAX_PHOTOS } from "@/lib/maintenance";
 import { requestForTenant } from "@/lib/requests";
 
@@ -47,12 +48,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   let blob;
   try {
-    blob = await put(`requests/${id}/${Date.now()}-${safeName}`, file, {
-      access: "public",
-      contentType,
-      // These can show the inside of someone's home; the URL must not be guessable.
-      addRandomSuffix: true,
-    });
+    // These can show the inside of someone's home: private storage, and a
+    // name nobody can work out.
+    blob = await storeFile(`requests/${id}/${safeName}`, file, contentType);
   } catch (err) {
     console.error("Blob upload failed", err);
     return NextResponse.json({ error: "Couldn't save that photo. Try again." }, { status: 502 });
@@ -70,7 +68,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   });
 
   return NextResponse.json(
-    { id: photo.id, url: photo.url, filename: photo.filename, contentType: photo.contentType },
+    { id: photo.id, url: fileLink("photo", photo.id), filename: photo.filename, contentType: photo.contentType },
     { status: 201 }
   );
 }

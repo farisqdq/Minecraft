@@ -1,6 +1,6 @@
-import { del } from "@vercel/blob";
 import { prisma } from "@/lib/prisma";
-import { blobConfigured } from "@/lib/blob";
+import { deleteFile } from "@/lib/storage";
+import { storageAccessOf } from "@/lib/file-links";
 
 /**
  * Remove a stored file — but only when nothing else still points at it.
@@ -16,9 +16,9 @@ import { blobConfigured } from "@/lib/blob";
  * is no longer counted. Returns whether the file was removed.
  */
 export async function releaseBlob(url: string): Promise<boolean> {
-  if (!url || !blobConfigured()) return false;
+  if (!url || !storageAccessOf(url)) return false;
   if ((await blobReferences(url)) > 0) return false;
-  await del(url).catch(() => undefined);
+  await deleteFile(url);
   return true;
 }
 
@@ -30,19 +30,4 @@ export async function blobReferences(url: string): Promise<number> {
     prisma.document.count({ where: { url } }),
   ]);
   return attachments + photos + documents;
-}
-
-/**
- * Whether a link from a backup file points at Vercel Blob storage, the only
- * place this app ever stores files. Anything else — another website, a
- * tracking pixel, a phishing page — is dropped on import rather than shown
- * as a receipt or a lease.
- */
-export function isBlobUrl(raw: string): boolean {
-  try {
-    const url = new URL(raw);
-    return url.protocol === "https:" && /\.public\.blob\.vercel-storage\.com$/i.test(url.hostname);
-  } catch {
-    return false;
-  }
 }

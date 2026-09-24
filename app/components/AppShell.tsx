@@ -41,6 +41,16 @@ function IconBackup(props: { className?: string }) {
   );
 }
 
+function IconShield(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M12 3.5 5 6.2v5.3c0 4.3 2.9 7.6 7 9 4.1-1.4 7-4.7 7-9V6.2Z" />
+      <path d="m9 12 2.2 2.2L15.5 10" />
+    </svg>
+  );
+}
+
 function IconCalendar(props: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
@@ -136,7 +146,19 @@ export default function AppShell({
 
           <span className={styles.spacer} />
           <PropertySearch />
-          {userLabel && <span className={styles.who}>{userLabel}</span>}
+          {userLabel && (
+            <Link href="/dashboard/account" className={styles.who} title="Account & security">
+              {userLabel}
+            </Link>
+          )}
+          <Link
+            href="/dashboard/account"
+            className={`${styles.accountBtn} ${isOn("/dashboard/account") ? styles.on : ""}`}
+            aria-label="Account & security"
+            title="Account & security"
+          >
+            <IconShield className={styles.accountIcon} />
+          </Link>
           <button type="button" className={styles.signOut} onClick={() => signOut({ callbackUrl: "/login" })}>
             Sign out
           </button>

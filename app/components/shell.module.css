@@ -534,3 +534,33 @@
   line-height: 15px;
   text-align: center;
 }
+
+/* The way to Account & security. Always visible — on a phone the name next
+   to it is hidden, so this is the only way there. */
+.accountBtn {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  flex: none;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  transition: border-color var(--fast);
+}
+
+.accountBtn:hover,
+.accountBtn.on {
+  border-color: var(--ink);
+}
+
+.accountIcon {
+  width: 17px;
+  height: 17px;
+}
+
+a.who:hover {
+  color: var(--ink);
+  text-decoration: underline;
+}
