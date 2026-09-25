@@ -7,6 +7,19 @@ import { signOutTo } from "./sign-out";
 import PropertySearch from "./PropertySearch";
 import styles from "./shell.module.css";
 
+/** The pill beside a page title that opens its edit form. */
+export function TitleEditButton({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button type="button" className={styles.titleEdit} onClick={onClick} aria-label={label} title={label}>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M12 20h9" />
+        <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+      </svg>
+      Edit
+    </button>
+  );
+}
+
 function IconHome(props: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
@@ -101,6 +114,7 @@ const NAV = [
 export default function AppShell({
   title,
   tagline,
+  titleAction,
   actions,
   back,
   userLabel,
@@ -109,6 +123,8 @@ export default function AppShell({
 }: {
   title: string;
   tagline?: string;
+  /** A small control that sits beside the title — "Edit" for the thing the page is about. */
+  titleAction?: ReactNode;
   actions?: ReactNode;
   back?: { href: string; label: string };
   userLabel?: string;
@@ -173,7 +189,14 @@ export default function AppShell({
                 ← {back.label}
               </Link>
             )}
-            <h1>{title}</h1>
+            {titleAction ? (
+              <div className={styles.titleRow}>
+                <h1>{title}</h1>
+                {titleAction}
+              </div>
+            ) : (
+              <h1>{title}</h1>
+            )}
             {tagline && <p className={styles.tagline}>{tagline}</p>}
           </div>
           {actions && <div className={styles.headActions}>{actions}</div>}

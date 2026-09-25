@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import AppShell from "../../../components/AppShell";
+import AppShell, { TitleEditButton } from "../../../components/AppShell";
 import CashFlowChart from "../../../components/CashFlowChart";
 import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
 import Modal from "../../../components/Modal";
@@ -79,14 +79,14 @@ export default function PropertyManageClient({
   canManage,
   serverToday,
   serverNow,
-  property,
+  property: initialProperty,
   initialUnits,
   initialRecurring,
   initialTenants,
   initialBalances,
   initialDocuments,
   storageReady,
-  rentChanges,
+  rentChanges: initialRentChanges,
   transactions: initialTransactions,
   initialPortal,
   initialRequests,
@@ -128,6 +128,11 @@ export default function PropertyManageClient({
   // Same split as the dashboard: `now` is a day, this is a moment.
   const clock = useNow(serverNow);
 
+  const [property, setProperty] = useState<Property>(initialProperty);
+  const [rentChanges, setRentChanges] = useState<RentChangeDTO[]>(initialRentChanges);
+  const [propertyOpen, setPropertyOpen] = useState(false);
+  const [propertySaving, setPropertySaving] = useState(false);
+  const [propertyForm, setPropertyForm] = useState({ name: "", address: "", monthlyRent: "", vacant: false });
   const [transactions, setTransactions] = useState<LedgerEntry[]>(initialTransactions);
   const [units, setUnits] = useState<Unit[]>(initialUnits);
   const [recurring, setRecurring] = useState<RecurringExpense[]>(initialRecurring);
@@ -269,6 +274,54 @@ export default function PropertyManageClient({
     setRDay("1");
     setRMonth("1");
     setAddingRecurring(false);
+  }
+
+  function openPropertyEdit() {
+    setPropertyForm({
+      name: property.name,
+      address: property.address,
+      monthlyRent: property.monthlyRent ? String(property.monthlyRent) : "",
+      vacant: property.vacant,
+    });
+    setError("");
+    setPropertyOpen(true);
+  }
+
+  async function saveProperty(e: FormEvent) {
+    e.preventDefault();
+    const name = propertyForm.name.trim();
+    if (!name) return;
+    setError("");
+    setPropertySaving(true);
+    const res = await fetch(`/api/properties/${property.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name,
+        address: propertyForm.address.trim(),
+        monthlyRent: parseFloat(propertyForm.monthlyRent) || 0,
+        vacant: propertyForm.vacant,
+      }),
+    });
+    const data = await res.json().catch(() => ({}));
+    setPropertySaving(false);
+    if (!res.ok) {
+      setError(data?.error || "Couldn't save those changes.");
+      return;
+    }
+    // A rent change comes back with the history it started, so the rent
+    // trail and what's expected this month update without a reload.
+    const { rentChanges: history, ...fields } = data as Property & { rentChanges?: RentChangeDTO[] };
+    setProperty((prev) => ({ ...prev, ...fields, address: fields.address ?? "" }));
+    if (history) {
+      setRentChanges((prev) => [
+        ...prev.filter((c) => !(c.propertyId === property.id && c.unitId === null)),
+        ...history,
+      ]);
+    }
+    setPropertyOpen(false);
+    push("Property updated.");
+    router.refresh();
   }
 
   async function toggleRecurringActive(r: RecurringExpense) {
@@ -721,6 +774,7 @@ export default function PropertyManageClient({
       title={property.name}
       tagline={[property.address, companyName].filter(Boolean).join(" · ") || "Units, tenants and bills"}
       back={{ href: "/dashboard", label: "All properties" }}
+      titleAction={<TitleEditButton label="Edit property" onClick={openPropertyEdit} />}
       actions={
         <>
           <button type="button" className={styles.btn} onClick={() => openTenant()}>
@@ -1816,6 +1870,77 @@ export default function PropertyManageClient({
             }
           />
         )}
+      </Modal>
+
+      <Modal
+        open={propertyOpen}
+        title="Edit property"
+        subtitle="The name and address show on this page, the overview, and to tenants in the portal."
+        onClose={() => setPropertyOpen(false)}
+      >
+        <form onSubmit={saveProperty}>
+          <div className={`${styles.fieldGrid} ${styles.modalGrid}`}>
+            <div className={`${styles.field} ${styles.wide}`}>
+              <label htmlFor="p-name">Property name</label>
+              <input
+                id="p-name"
+                type="text"
+                required
+                maxLength={120}
+                value={propertyForm.name}
+                onChange={(e) => setPropertyForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <div className={`${styles.field} ${styles.wide}`}>
+              <label htmlFor="p-address">Address</label>
+              <input
+                id="p-address"
+                type="text"
+                maxLength={200}
+                placeholder="Street, city"
+                value={propertyForm.address}
+                onChange={(e) => setPropertyForm((f) => ({ ...f, address: e.target.value }))}
+              />
+            </div>
+            {units.length === 0 && (
+              <div className={`${styles.field} ${styles.wide}`}>
+                <label htmlFor="p-rent">Monthly rent ($)</label>
+                <input
+                  id="p-rent"
+                  type="number"
+                  inputMode="decimal"
+                  min="0"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={propertyForm.monthlyRent}
+                  onChange={(e) => setPropertyForm((f) => ({ ...f, monthlyRent: e.target.value }))}
+                />
+                <span className={styles.helpText}>
+                  A new amount applies from this month on; past months keep what they were.
+                </span>
+              </div>
+            )}
+            {units.length === 0 && (
+              <label className={styles.checkboxField} style={{ gridColumn: "1 / -1" }}>
+                <input
+                  type="checkbox"
+                  checked={propertyForm.vacant}
+                  onChange={(e) => setPropertyForm((f) => ({ ...f, vacant: e.target.checked }))}
+                />
+                Vacant — no rent expected until it&apos;s let again
+              </label>
+            )}
+          </div>
+          {error && <div className={styles.errorBar}>{error}</div>}
+          <div className={styles.formFoot}>
+            <button type="button" className={styles.btn} onClick={() => setPropertyOpen(false)}>
+              Cancel
+            </button>
+            <button type="submit" className={`${styles.btn} ${styles.accent}`} disabled={propertySaving}>
+              {propertySaving ? "Saving\u2026" : "Save changes"}
+            </button>
+          </div>
+        </form>
       </Modal>
 
       <ConfirmDialog request={confirming} onCancel={() => setConfirming(null)} />

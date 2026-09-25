@@ -345,6 +345,39 @@
   color: var(--gold);
 }
 
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.titleEdit {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.titleEdit:hover {
+  color: var(--ink);
+  border-color: var(--muted);
+}
+
+.titleEdit svg {
+  width: 14px;
+  height: 14px;
+}
+
 .pageHead h1 {
   font-size: clamp(26px, 4vw, 34px);
   font-weight: 600;
