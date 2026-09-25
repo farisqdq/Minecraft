@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { signOut } from "next-auth/react";
+import { signOutTo } from "../../components/sign-out";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
@@ -146,7 +146,7 @@ export default function AccountClient({
     setBusy(false);
     if (!ok) return setError(data?.error || "Couldn't change it.");
     // Every session has just ended on the server, this one included.
-    await signOut({ callbackUrl: "/login" });
+    await signOutTo("/login");
   }
 
   function signOutEverywhere() {
@@ -159,7 +159,7 @@ export default function AccountClient({
         const { ok } = await post("/api/account/sign-out-everywhere");
         setConfirming(null);
         if (!ok) return push("Couldn't do that.", "bad");
-        await signOut({ callbackUrl: "/login" });
+        await signOutTo("/login");
       },
     });
   }

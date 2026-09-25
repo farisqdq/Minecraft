@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { signOut } from "next-auth/react";
+import { signOutTo } from "../components/sign-out";
 import styles from "./portal.module.css";
 
 /** The tenant frame: a brand, who you are, and the way out. */
@@ -20,7 +20,7 @@ export default function PortalShell({ who, children }: { who: string; children: 
         <button
           type="button"
           className={styles.signOut}
-          onClick={() => signOut({ callbackUrl: "/portal/login" })}
+          onClick={() => signOutTo("/portal/login")}
         >
           Sign out
         </button>

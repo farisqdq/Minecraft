@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
+import { signOutTo } from "./sign-out";
 import PropertySearch from "./PropertySearch";
 import styles from "./shell.module.css";
 
@@ -159,7 +159,7 @@ export default function AppShell({
           >
             <IconShield className={styles.accountIcon} />
           </Link>
-          <button type="button" className={styles.signOut} onClick={() => signOut({ callbackUrl: "/login" })}>
+          <button type="button" className={styles.signOut} onClick={() => signOutTo("/login")}>
             Sign out
           </button>
         </div>
