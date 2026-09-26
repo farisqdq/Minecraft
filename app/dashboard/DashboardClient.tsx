@@ -13,6 +13,9 @@ import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref
 import { byUrgency, expiryLabel, expiryState, type DocumentDTO } from "@/lib/documents";
 import { isDue as loanIsDue, missedMonths, suggestPayment } from "@/lib/loans";
 import type { LoanDTO, LoanPaymentDTO } from "@/lib/loans-db";
+import type { MoveOutDTO } from "@/lib/move-outs-db";
+import { returnLabel, returnState } from "@/lib/move-out";
+import { MarkReturnedDialog } from "../components/MoveOut";
 import AppShell from "../components/AppShell";
 import CashFlowChart from "../components/CashFlowChart";
 import CategoryBars from "../components/CategoryBars";
@@ -190,6 +193,7 @@ export default function DashboardClient({
   initialTenants,
   initialTransactions,
   initialLoans,
+  initialDeposits,
 }: {
   /** Repairs waiting on you, for the nav badge. */
   openRepairs?: number;
@@ -213,6 +217,8 @@ export default function DashboardClient({
   initialTransactions: Transaction[];
   /** Open mortgages, with their payments, so a due one can be logged split. */
   initialLoans: LoanDTO[];
+  /** Deposits still to go back to someone who moved out, with who and where. */
+  initialDeposits: (MoveOutDTO & { tenantName: string; propertyId: string })[];
 }) {
   // The server renders with its own clock; the browser may be on a different
   // calendar day. Starting from the server's value keeps the first client
@@ -328,6 +334,8 @@ export default function DashboardClient({
   const [error, setError] = useState("");
 
   const [recurringBusyId, setRecurringBusyId] = useState("");
+  const [deposits, setDeposits] = useState(initialDeposits);
+  const [returningId, setReturningId] = useState("");
 
   const [periodKind, setPeriodKind] = useState<PeriodKind>("month");
   const [selectedMonth, setSelectedMonth] = useState(serverToday.slice(0, 7));
@@ -1316,7 +1324,14 @@ export default function DashboardClient({
     ),
     todayKey
   );
+  // A deposit owed back is a legal deadline, not a nice-to-have: overdue first.
+  const depositAlerts = deposits
+    .filter((d) => !d.returnedOn && visibleIds.has(d.propertyId))
+    .map((d) => ({ ...d, state: returnState(d, todayKey) }))
+    .sort((a, b) => (a.returnBy ?? "9999").localeCompare(b.returnBy ?? "9999"));
+
   const attentionCount =
+    depositAlerts.length +
     repairAlerts.length +
     unpaidThisMonth.length +
     leaseAlerts.length +
@@ -1838,6 +1853,37 @@ export default function DashboardClient({
                           onClick={() => logRecurring(r.id)}
                         >
                           {recurringBusyId === r.id ? "Logging…" : "Log it"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {depositAlerts.map((d) => (
+                    <div key={`d-${d.id}`} className={styles.attnRow}>
+                      <div className={styles.attnMain}>
+                        <div className={styles.attnLabel}>
+                          {d.tenantName}&apos;s deposit{" "}
+                          <span className={`${styles.pill} ${d.state.kind === "overdue" ? styles.bill : styles.owed}`}>
+                            {returnLabel(d.state)}
+                          </span>
+                        </div>
+                        <div className={styles.attnSub}>
+                          {propName_(d.propertyId)} · moved out {formatDay(d.movedOutOn)}
+                          {d.returnBy ? ` · return by ${formatDay(d.returnBy)}` : ""}
+                          {d.refund === 0 ? " · all kept, the itemized list still goes out" : ""}
+                        </div>
+                      </div>
+                      <span className={`${styles.attnAmt} num`}>{money(d.refund)}</span>
+                      <div className={styles.attnActions}>
+                        <Link href={`/dashboard/move-outs/${d.id}`} className={`${styles.btn} ${styles.small}`}>
+                          Statement
+                        </Link>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small}`}
+                          onClick={() => setReturningId(d.id)}
+                        >
+                          Mark sent
                         </button>
                       </div>
                     </div>
@@ -2581,6 +2627,18 @@ export default function DashboardClient({
           </form>
         </div>
       </Modal>
+
+      <MarkReturnedDialog
+        moveOut={deposits.find((d) => d.id === returningId) ?? null}
+        tenantName={deposits.find((d) => d.id === returningId)?.tenantName ?? ""}
+        today={todayKey}
+        onClose={() => setReturningId("")}
+        onDone={(m) => {
+          setDeposits((prev) => prev.map((d) => (d.id === m.id ? { ...d, ...m } : d)));
+          setReturningId("");
+          push("Deposit marked returned.");
+        }}
+      />
 
       <ConfirmDialog request={confirming} onCancel={() => setConfirming(null)} />
       <Toasts toasts={toasts} onDismiss={dismiss} />

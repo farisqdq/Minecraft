@@ -6,7 +6,7 @@ import { backupFileKey } from "@/lib/backup-files";
 import { storageAccessOf } from "@/lib/file-links";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 11;
+export const BACKUP_VERSION = 12;
 
 /** Signs a private file's link for the account exporting it; see lib/backup-files. */
 type FileKey = (url: string) => string | undefined;
@@ -21,6 +21,7 @@ type TxnRow = {
   attachments: { url: string; filename: string; contentType: string; size: number }[];
   vendor: { name: string } | null;
   loanPayment: { loanId: string; month: string } | null;
+  moveOut: { tenant: { name: string } } | null;
 };
 
 /** Position of each of a property's loans in its `loans` list, by id. */
@@ -44,6 +45,9 @@ function serializeTxns(txns: TxnRow[], key: FileKey, loanIndex: LoanIndex) {
       t.loanPayment && loanIndex.has(t.loanPayment.loanId)
         ? { loan: loanIndex.get(t.loanPayment.loanId), month: t.loanPayment.month }
         : null,
+    // Deposit money kept at a move-out, by the tenant's name — which is how
+    // the restore finds the move-out it belongs to again.
+    moveOutOf: t.moveOut?.tenant.name ?? "",
     // Links to the stored files, not the files themselves — they stay in
     // blob storage and keep working as long as the app does.
     attachments: t.attachments.map((a) => ({
@@ -124,7 +128,26 @@ function serializeLoans(rows: LoanRow[]) {
 
 type TenantRow = {
   notices?: { kind: string; month: string | null; amount: number | null; body: string; createdAt: Date; readAt: Date | null }[];
-  charges?: { month: string; kind: string; label: string; amount: number; createdAt: Date; ruleId: string | null }[];
+  charges?: {
+    month: string;
+    kind: string;
+    label: string;
+    amount: number;
+    createdAt: Date;
+    ruleId: string | null;
+    moveOutId: string | null;
+  }[];
+  moveOut?: {
+    movedOutOn: Date;
+    lastRentMonth: string;
+    deposit: number;
+    refund: number;
+    returnBy: Date | null;
+    returnedOn: Date | null;
+    returnNote: string | null;
+    forwardingAddress: string | null;
+    deductions: { kind: string; label: string; amount: number }[];
+  } | null;
   rules?: {
     id: string;
     kind: string;
@@ -177,7 +200,25 @@ function serializeTenants(rows: TenantRow[]) {
       // Which rule made it, by its position in `rules` below — ids don't
       // survive a restore into a fresh database, positions do.
       rule: c.ruleId ? (t.rules ?? []).findIndex((r) => r.id === c.ruleId) : -1,
+      // A charge the deposit paid at move-out, so a restore keeps the pair.
+      moveOut: Boolean(c.moveOutId),
     })),
+    // How the tenancy ended and where the deposit went. The part of it kept
+    // is in the ledger already; this is the rest — the itemized list, what
+    // was owed back, and whether it went.
+    moveOut: t.moveOut
+      ? {
+          movedOutOn: t.moveOut.movedOutOn.toISOString().slice(0, 10),
+          lastRentMonth: t.moveOut.lastRentMonth,
+          deposit: t.moveOut.deposit,
+          refund: t.moveOut.refund,
+          returnBy: t.moveOut.returnBy ? t.moveOut.returnBy.toISOString().slice(0, 10) : "",
+          returnedOn: t.moveOut.returnedOn ? t.moveOut.returnedOn.toISOString().slice(0, 10) : "",
+          returnNote: t.moveOut.returnNote ?? "",
+          forwardingAddress: t.moveOut.forwardingAddress ?? "",
+          deductions: t.moveOut.deductions.map((d) => ({ kind: d.kind, label: d.label, amount: d.amount })),
+        }
+      : null,
     // Standing rules, with the months each has already run for. The runs
     // matter as much as the rules: without them a restore would bill again
     // every rule charge you had deleted.
@@ -345,6 +386,7 @@ export async function GET() {
               attachments: { orderBy: { createdAt: "asc" } },
               vendor: { select: { name: true } },
               loanPayment: { select: { loanId: true, month: true } },
+              moveOut: { select: { tenant: { select: { name: true } } } },
             },
           },
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
@@ -355,6 +397,7 @@ export async function GET() {
             include: {
               notices: { orderBy: { createdAt: "asc" } },
               charges: { orderBy: { createdAt: "asc" } },
+              moveOut: { include: { deductions: { orderBy: { id: "asc" } } } },
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
             },
           },
@@ -370,6 +413,7 @@ export async function GET() {
               attachments: { orderBy: { createdAt: "asc" } },
               vendor: { select: { name: true } },
               loanPayment: { select: { loanId: true, month: true } },
+              moveOut: { select: { tenant: { select: { name: true } } } },
             },
               },
               recurringExpenses: { orderBy: { createdAt: "asc" } },
@@ -378,6 +422,7 @@ export async function GET() {
                 include: {
                   notices: { orderBy: { createdAt: "asc" } },
                   charges: { orderBy: { createdAt: "asc" } },
+                  moveOut: { include: { deductions: { orderBy: { id: "asc" } } } },
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
                 },
               },

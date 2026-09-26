@@ -1,0 +1,136 @@
+.page {
+  min-height: 100vh;
+  background: var(--bg);
+  padding: 24px 16px 48px;
+}
+
+.toolbar {
+  max-width: 720px;
+  margin: 0 auto 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  font-size: 14px;
+}
+.toolbar a {
+  color: var(--muted);
+  text-decoration: none;
+  font-weight: 600;
+}
+.toolbar button {
+  font: inherit;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+
+/* The letter itself stays paper-coloured in dark mode: it's a document
+   that will be printed, and what's on screen should be what comes out. */
+.sheet {
+  max-width: 720px;
+  margin: 0 auto;
+  background: #fff;
+  color: #1e1a14;
+  border-radius: 6px;
+  box-shadow: var(--shadow-lg);
+  padding: 56px 64px;
+  font-size: 14.5px;
+  line-height: 1.55;
+}
+
+.letterhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.from,
+.to {
+  display: flex;
+  flex-direction: column;
+}
+.dated {
+  color: #736e5e;
+}
+.to {
+  margin-top: 32px;
+}
+.blank {
+  display: inline-block;
+  min-width: 240px;
+  border-bottom: 1px solid #c9c2b2;
+  color: #b0a893;
+  font-size: 12px;
+}
+
+.sheet h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 22px;
+  margin: 36px 0 8px;
+}
+.lede {
+  margin: 0 0 20px;
+}
+
+.items {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 8px 0 20px;
+}
+.items td {
+  padding: 9px 0;
+  border-bottom: 1px solid #ebe6da;
+}
+.amt {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  padding-left: 16px;
+}
+.less {
+  padding-left: 16px !important;
+}
+.total td {
+  border-top: 2px solid #1e1a14;
+  border-bottom: 0;
+  font-weight: 700;
+  font-size: 16px;
+}
+.owed {
+  font-weight: 600;
+}
+
+.sign {
+  margin-top: 56px;
+  padding-top: 8px;
+  border-top: 1px solid #1e1a14;
+  width: 260px;
+  font-size: 13px;
+  color: #4a443a;
+}
+
+@media (max-width: 600px) {
+  .sheet {
+    padding: 28px 20px;
+  }
+}
+
+@media print {
+  .page {
+    padding: 0;
+    background: #fff;
+  }
+  .toolbar {
+    display: none;
+  }
+  .sheet {
+    box-shadow: none;
+    padding: 0;
+    max-width: none;
+  }
+}

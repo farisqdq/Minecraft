@@ -7,6 +7,10 @@ import { validAmount } from "@/lib/money";
 import { fileLink } from "@/lib/file-links";
 import { shortMonth } from "@/lib/loans-db";
 
+/** Deposit money kept at a move-out: undone with the move-out, never alone. */
+const MOVE_OUT_MESSAGE =
+  "This is security deposit money kept at a move-out. To change it, undo the move-out on the tenant's card and record it again — the deposit settlement, its charges and this entry go together.";
+
 /**
  * The interest and escrow a mortgage payment wrote are one payment, split —
  * the principal only exists on the payment itself. Changing or deleting one
@@ -69,6 +73,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "Pick a category for this expense." }, { status: 400 });
   }
 
+  if (existing.moveOutId) {
+    const changed =
+      type !== existing.type ||
+      propertyId !== existing.propertyId ||
+      unitId !== existing.unitId ||
+      Math.round(amount * 100) !== Math.round(existing.amount * 100);
+    if (changed) return NextResponse.json({ error: MOVE_OUT_MESSAGE }, { status: 409 });
+  }
   if (existing.loanPaymentId) {
     const changed =
       type !== existing.type ||
@@ -130,6 +142,9 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
+  if (transaction.moveOutId) {
+    return NextResponse.json({ error: MOVE_OUT_MESSAGE }, { status: 409 });
+  }
   if (transaction.loanPaymentId) {
     const message = await loanPaymentMessage(transaction.loanPaymentId, "remove");
     if (message) return NextResponse.json({ error: message }, { status: 409 });

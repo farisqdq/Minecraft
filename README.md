@@ -106,6 +106,36 @@ Someone who moves out is kept as a **past tenant** rather than deleted, so
 their history and their old ledger entries still make sense and the next
 tenant is a new record rather than an overwrite.
 
+### Moving out, and the deposit
+
+**Move out** on a tenant's card ends the tenancy properly rather than just
+flipping them to past:
+
+- **The last month of rent.** Rent stops after the month you pick. Before
+  this, a tenant marked moved out was charged to the end of their lease, so
+  leaving three months early read as three months of arrears.
+- **Where the deposit goes.** The form shows the deposit held and what they
+  owe through that month, and suggests putting the deposit toward that rent.
+  Add itemized lines for damage or cleaning. It won't let you keep more than
+  you hold, or apply the deposit to rent they don't owe; anything they still
+  owe past the deposit stays on their balance.
+- **The books.** Every dollar kept is entered as rental income on the
+  move-out date — the IRS treats a kept deposit as rent — and a damage line
+  is also added to their account as a charge, so their statement reads
+  "charged $185.50 for cleaning, paid from the deposit". Money returned never
+  touches the ledger, because a deposit held was never income.
+- **The deadline.** Most states give 14 to 45 days to return a deposit with
+  an itemized list. The return-by date defaults to 30 days; until it's marked
+  sent, the deposit waits in **Needs attention**, overdue ones in red.
+- **The itemized statement.** A letter-style page with what was held, each
+  deduction and what's coming back, laid out to print or save as a PDF and
+  send to their forwarding address.
+
+**Undo move-out** takes all of it back: the income and charges come out and
+they're current again. It's refused if someone else now lives there. The
+income and charges can't be deleted on their own from the ledger or the
+statement, for the same reason as a mortgage payment's parts.
+
 ## The tenant portal
 
 A tenant can be given a login of their own at `/portal`. From their card on a

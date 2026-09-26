@@ -10,6 +10,8 @@ import Modal from "../../../components/Modal";
 import StatementPanel from "../../../components/StatementPanel";
 import DocumentsPanel from "../../../components/DocumentsPanel";
 import LoansPanel from "../../../components/LoansPanel";
+import { MarkReturnedDialog, MoveOutDialog, MoveOutSummary } from "../../../components/MoveOut";
+import type { MoveOutDTO } from "@/lib/move-outs-db";
 import type { LoanDTO } from "@/lib/loans-db";
 import type { DocumentDTO } from "@/lib/documents";
 import { Toasts, useToasts } from "../../../components/Toasts";
@@ -90,6 +92,7 @@ export default function PropertyManageClient({
   initialBalances,
   initialDocuments,
   initialLoans,
+  initialMoveOuts,
   storageReady,
   rentChanges: initialRentChanges,
   transactions: initialTransactions,
@@ -114,6 +117,8 @@ export default function PropertyManageClient({
   initialDocuments: DocumentDTO[];
   /** Mortgages on this property, with their payments. */
   initialLoans: LoanDTO[];
+  /** Recorded move-outs, by tenant id. */
+  initialMoveOuts: Record<string, MoveOutDTO>;
   storageReady: boolean;
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
@@ -434,6 +439,9 @@ export default function PropertyManageClient({
    * say the new one without a round trip to the server.
    */
   const [balances, setBalances] = useState(initialBalances);
+  const [moveOuts, setMoveOuts] = useState(initialMoveOuts);
+  const [movingOut, setMovingOut] = useState<TenantDTO | null>(null);
+  const [returningFor, setReturningFor] = useState("");
   const [statementFor, setStatementFor] = useState<TenantDTO | null>(null);
 
   const [portal, setPortal] = useState<Record<string, PortalAccess>>(initialPortal);
@@ -522,6 +530,52 @@ export default function PropertyManageClient({
     setTenants((prev) => prev.map((x) => (x.id === t.id ? data : x)));
     push(active ? `${t.name} is current again.` : `${t.name} moved to past tenants.`);
     router.refresh();
+  }
+
+  /** Re-reads one tenant's balance after something on the server moved it. */
+  async function refreshBalance(tenantId: string) {
+    const res = await fetch(`/api/tenants/${tenantId}/statement`);
+    if (!res.ok) return;
+    const d = await res.json().catch(() => null);
+    if (!d?.statement) return;
+    setBalances((prev) => ({
+      ...prev,
+      [tenantId]: { balance: d.statement.balance, behindSince: d.statement.behindSince, problem: d.problem ?? "" },
+    }));
+  }
+
+  function undoMoveOut(t: TenantDTO) {
+    const m = moveOuts[t.id];
+    if (!m) return;
+    const kept = Math.round((m.deposit - m.refund) * 100) / 100;
+    setConfirming({
+      title: `Undo ${t.name}\u2019s move-out?`,
+      body: `${t.name} becomes the current tenant again and rent is charged as before.${
+        kept > 0 ? ` The ${money(kept)} kept from the deposit comes out of the ledger, and so do the charges it paid.` : ""
+      }`,
+      confirmLabel: "Undo move-out",
+      danger: true,
+      onConfirm: async () => {
+        const res = await fetch(`/api/tenants/${t.id}/move-out`, { method: "DELETE" });
+        const data = await res.json().catch(() => ({}));
+        setConfirming(null);
+        if (!res.ok) {
+          push(data?.error || "Couldn't undo that.", "bad");
+          return;
+        }
+        setTenants((prev) => prev.map((x) => (x.id === t.id ? data.tenant : x)));
+        setMoveOuts((prev) => {
+          const next = { ...prev };
+          delete next[t.id];
+          return next;
+        });
+        const gone: string[] = data.transactionIds ?? [];
+        setTransactions((prev) => prev.filter((x) => !gone.includes(x.id)));
+        await refreshBalance(t.id);
+        push(`${t.name} is current again.`);
+        router.refresh();
+      },
+    });
   }
 
   function removeTenant(t: TenantDTO) {
@@ -925,7 +979,10 @@ export default function PropertyManageClient({
                     </div>
                     <div className={styles.figure}>
                       <span className={styles.figureLabel}>Deposit</span>
-                      <span className={styles.figureValue}>{money(t.deposit)}</span>
+                      <span className={styles.figureValue}>
+                        {money(t.deposit)}
+                        {!t.active && moveOuts[t.id] && t.deposit > 0 ? " settled" : ""}
+                      </span>
                     </div>
                   </div>
 
@@ -968,6 +1025,15 @@ export default function PropertyManageClient({
                   })()}
 
                   {t.note && <div className={styles.note}>{t.note}</div>}
+
+                  {!t.active && moveOuts[t.id] && (
+                    <MoveOutSummary
+                      moveOut={moveOuts[t.id]}
+                      today={todayKey}
+                      onMarkReturned={() => setReturningFor(t.id)}
+                      onUndo={() => undoMoveOut(t)}
+                    />
+                  )}
 
                   {t.active && (() => {
                     const access = accessFor(t.id);
@@ -1059,13 +1125,25 @@ export default function PropertyManageClient({
                     >
                       Edit
                     </button>
-                    <button
-                      type="button"
-                      className={`${styles.btn} ${styles.small} ${styles.quiet}`}
-                      onClick={() => setTenantActive(t, !t.active)}
-                    >
-                      {t.active ? "Moved out" : "Moved back in"}
-                    </button>
+                    {t.active ? (
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                        onClick={() => setMovingOut(t)}
+                      >
+                        Move out
+                      </button>
+                    ) : (
+                      !moveOuts[t.id] && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                          onClick={() => setTenantActive(t, true)}
+                        >
+                          Moved back in
+                        </button>
+                      )
+                    )}
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`}
@@ -1891,6 +1969,39 @@ export default function PropertyManageClient({
           </div>
         </form>
       </Modal>
+
+      <MoveOutDialog
+        tenant={movingOut}
+        today={todayKey}
+        onClose={() => setMovingOut(null)}
+        onDone={async (r) => {
+          setMovingOut(null);
+          setTenants((prev) => prev.map((x) => (x.id === r.tenant.id ? r.tenant : x)));
+          setMoveOuts((prev) => ({ ...prev, [r.tenant.id]: r.moveOut }));
+          if (r.transactions.length) {
+            setTransactions((prev) => [...r.transactions, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+          }
+          await refreshBalance(r.tenant.id);
+          push(
+            r.moveOut.deposit > 0
+              ? `${r.tenant.name} moved out. ${money(r.moveOut.refund)} of the deposit to return.`
+              : `${r.tenant.name} moved out.`
+          );
+          router.refresh();
+        }}
+      />
+
+      <MarkReturnedDialog
+        moveOut={returningFor ? (moveOuts[returningFor] ?? null) : null}
+        tenantName={tenants.find((t) => t.id === returningFor)?.name ?? ""}
+        today={todayKey}
+        onClose={() => setReturningFor("")}
+        onDone={(m) => {
+          setMoveOuts((prev) => ({ ...prev, [m.tenantId]: m }));
+          setReturningFor("");
+          push(m.returnedOn ? "Deposit marked returned." : "Marked as not returned yet.");
+        }}
+      />
 
       <Modal
         open={Boolean(statementFor)}

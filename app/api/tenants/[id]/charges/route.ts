@@ -62,6 +62,18 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   const chargeId = new URL(req.url).searchParams.get("charge") ?? "";
   // Scoped to this tenant as well as to the id, so a charge on someone else's
   // books can't be removed by passing its id to a tenant you can reach.
+  // A charge the deposit paid is one half of a pair — the other half is the
+  // income in the ledger — so it only goes when the move-out is undone.
+  const fromDeposit = await prisma.tenantCharge.findFirst({
+    where: { id: chargeId, tenantId: id, moveOutId: { not: null } },
+    select: { id: true },
+  });
+  if (fromDeposit) {
+    return NextResponse.json(
+      { error: "The deposit paid this charge at move-out. Undo the move-out to take it off, so the deposit comes back with it." },
+      { status: 409 }
+    );
+  }
   const removed = await prisma.tenantCharge.deleteMany({ where: { id: chargeId, tenantId: id } });
   if (removed.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

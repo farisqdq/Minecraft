@@ -48,6 +48,7 @@ model User {
   documentsUploaded   Document[]
   loansAdded          Loan[]
   loanPayments        LoanPayment[]
+  moveOuts            MoveOut[]
 }
 
 model Company {
@@ -197,6 +198,7 @@ model Tenant {
   charges   TenantCharge[]
   rules     TenantChargeRule[]
   documents Document[]
+  moveOut   MoveOut?
 
   // What they owed on the day you started keeping books here, and the first
   // month to charge rent for. Without these, a lease that began in 2023 and a
@@ -283,12 +285,69 @@ model Transaction {
   // a payment removes its entries explicitly.
   loanPaymentId      String?
   loanPayment        LoanPayment?      @relation(fields: [loanPaymentId], references: [id], onDelete: SetNull)
+  // Set on the income a move-out kept from a security deposit, so undoing the
+  // move-out takes it back out and the ledger can't delete it on its own.
+  moveOutId          String?
+  moveOut            MoveOut?          @relation(fields: [moveOutId], references: [id], onDelete: SetNull)
 
   @@index([propertyId])
   @@index([unitId])
   @@index([recurringExpenseId])
   @@index([vendorId])
   @@index([loanPaymentId])
+  @@index([moveOutId])
+}
+
+// The end of a tenancy, and what happened to the security deposit.
+//
+// A deposit is not income while it's held — it's the tenant's money. At
+// move-out it splits three ways: some pays rent they still owe, some covers
+// damage, and the rest goes back to them, usually within a deadline set by
+// state law, with an itemized list of what was kept. Money kept becomes rental
+// income on the day it's kept (Transaction.moveOutId); money returned never
+// touches the ledger at all.
+//
+// It also records the last month rent is owed for. Before this, a tenant
+// marked moved out kept being charged to the end of their lease, so leaving
+// three months early read as three months of arrears.
+model MoveOut {
+  id                String    @id @default(cuid())
+  tenantId          String    @unique
+  tenant            Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  movedOutOn        DateTime
+  /// YYYY-MM: the last month rent is charged for.
+  lastRentMonth     String
+  /// The deposit held on the day they left, frozen so later edits can't change the statement.
+  deposit           Float
+  /// What's owed back: the deposit less deductions, never below zero.
+  refund            Float
+  /// The deadline for returning it and sending the itemized list.
+  returnBy          DateTime?
+  returnedOn        DateTime?
+  /// How it went back: "Check #1042", "Zelle".
+  returnNote        String?
+  /// Where to send it — the one thing a landlord always has to chase.
+  forwardingAddress String?
+  createdById       String?
+  createdBy         User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt         DateTime  @default(now())
+
+  deductions   MoveOutDeduction[]
+  transactions Transaction[]
+  charges      TenantCharge[]
+}
+
+// One line of the itemized list: rent the deposit paid, or a charge it covered.
+model MoveOutDeduction {
+  id        String  @id @default(cuid())
+  moveOutId String
+  moveOut   MoveOut @relation(fields: [moveOutId], references: [id], onDelete: Cascade)
+  /// "rent" pays down what they owe; "charge" is damage, cleaning or the like.
+  kind      String
+  label     String
+  amount    Float
+
+  @@index([moveOutId])
 }
 
 // A mortgage, stored as the figures printed on its monthly statement.
@@ -634,6 +693,9 @@ model TenantCharge {
   /// it, and what stops a rule writing it again is TenantRuleRun, not this.
   ruleId     String?
   rule       TenantChargeRule? @relation(fields: [ruleId], references: [id], onDelete: SetNull)
+  /// Set on a damage or cleaning charge a move-out raised against the deposit.
+  moveOutId  String?
+  moveOut    MoveOut?          @relation(fields: [moveOutId], references: [id], onDelete: SetNull)
   createdAt  DateTime          @default(now())
 
   @@index([tenantId])

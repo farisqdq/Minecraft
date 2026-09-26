@@ -87,13 +87,21 @@ const ruleDTO = (r: RuleRow): ChargeRule => ({
 
 export async function statementForTenant(
   tenantId: string,
-  now = new Date()
+  now = new Date(),
+  opts: {
+    /**
+     * Treat the tenancy as ending after this month — how a move-out asks
+     * "what will they owe if rent stops here?" before it's recorded.
+     */
+    lastRentMonth?: string;
+  } = {}
 ): Promise<StatementResult | null> {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     include: {
       property: { select: { id: true, monthlyRent: true, vacant: true } },
       unit: { select: { id: true, monthlyRent: true, vacant: true } },
+      moveOut: { select: { lastRentMonth: true } },
       charges: { orderBy: { createdAt: "asc" } },
       rules: {
         orderBy: { createdAt: "asc" },
@@ -144,11 +152,16 @@ export async function statementForTenant(
     currentMonth,
   });
 
-  // A tenant who has moved out stops being charged at the end of their lease,
-  // or at their last payment if no end date was ever recorded.
-  const lastRentMonth = tenant.active
+  // A tenant who has moved out stops being charged in the month their move-out
+  // says. One marked moved out before move-outs were recorded stops at the end
+  // of their lease, or at their last payment if no end date was ever set.
+  const lastRentMonth = opts.lastRentMonth
+    ? opts.lastRentMonth
+    : tenant.active
     ? null
-    : tenant.leaseEnd
+    : tenant.moveOut
+      ? tenant.moveOut.lastRentMonth
+      : tenant.leaseEnd
       ? monthOf(tenant.leaseEnd)
       : payments.length
         ? monthOf(payments[payments.length - 1].date)

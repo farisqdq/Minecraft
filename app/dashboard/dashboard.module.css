@@ -3055,3 +3055,97 @@ tr:hover .rowDel {
 .loanHistoryLeft {
   margin-left: auto;
 }
+
+/* ---------- Move-out and the deposit ---------- */
+.moSummary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+}
+.moSummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.moHeading {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 18px 0 8px;
+}
+
+.moLines {
+  list-style: none;
+  margin: 0 0 10px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.moLines li {
+  display: grid;
+  grid-template-columns: 1fr 120px 28px;
+  gap: 8px;
+  align-items: center;
+}
+.moLines input {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  width: 100%;
+  min-width: 0;
+}
+.moLines input:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.moRentLabel {
+  font-size: 14px;
+  padding-left: 2px;
+}
+
+.moResult {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+.moResult b {
+  font-size: 18px;
+  font-weight: 650;
+}
+
+.moCard {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+  font-size: 13px;
+}
+.moCardLine b {
+  font-weight: 650;
+}
+.moDue {
+  color: var(--gold);
+}
+.moCardActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 4px;
+}

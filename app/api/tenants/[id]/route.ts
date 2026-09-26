@@ -31,7 +31,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if ("leaseEnd" in body) data.leaseEnd = parseDay(body.leaseEnd);
   if ("deposit" in body) data.deposit = Math.max(0, Number(body.deposit) || 0);
   if ("dueDay" in body) data.dueDay = clampDueDay(body.dueDay);
-  if ("active" in body) data.active = body.active !== false;
+  if ("active" in body) {
+    data.active = body.active !== false;
+    // A recorded move-out settled their deposit and stopped their rent;
+    // making them current again has to take that back too, which is what
+    // undoing the move-out does.
+    if (data.active && !existing.active) {
+      const moveOut = await prisma.moveOut.findUnique({ where: { tenantId: id }, select: { id: true } });
+      if (moveOut) {
+        return NextResponse.json(
+          { error: "They have a recorded move-out. Undo it instead, so the deposit settlement comes off the books too." },
+          { status: 409 }
+        );
+      }
+    }
+  }
 
   if ("unitId" in body) {
     const raw = body.unitId;

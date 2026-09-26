@@ -37,6 +37,19 @@ type CleanTransaction = {
   vendorName: string;
   /** The mortgage payment that wrote it: the loan's position in `loans`, and the month. */
   loanRef: string | null;
+  /** Deposit kept at this tenant's move-out, by name. */
+  moveOutOf: string;
+};
+type CleanMoveOut = {
+  movedOutOn: Date;
+  lastRentMonth: string;
+  deposit: number;
+  refund: number;
+  returnBy: Date | null;
+  returnedOn: Date | null;
+  returnNote: string | null;
+  forwardingAddress: string | null;
+  deductions: { kind: string; label: string; amount: number }[];
 };
 type CleanLoanPayment = { month: string; date: Date; principal: number; interest: number; escrow: number };
 type CleanLoan = {
@@ -78,6 +91,8 @@ type CleanCharge = {
   createdAt: Date;
   /** Position in the tenant's `rules`, or -1 for a charge typed by hand. */
   rule: number;
+  /** Paid from the deposit at move-out. */
+  moveOut: boolean;
 };
 type CleanRule = {
   kind: string;
@@ -91,6 +106,7 @@ type CleanRule = {
   runs: { month: string; amount: number; ranAt: Date }[];
 };
 type CleanTenant = {
+  moveOut: CleanMoveOut | null;
   notices: CleanNotice[];
   charges: CleanCharge[];
   rules: CleanRule[];
@@ -257,6 +273,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           : null;
       out.push({
         loanRef,
+        moveOutOf: type === "rent" ? str(t.moveOutOf, 120) : "",
         type,
         date,
         amount,
@@ -379,6 +396,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           amount,
           createdAt: stamp(c.createdAt) ?? new Date(),
           rule: Number.isFinite(ruleAt) && ruleAt >= 0 ? ruleAt : -1,
+          moveOut: c.moveOut === true,
         });
       }
 
@@ -415,7 +433,37 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         });
       }
 
+      let moveOut: CleanMoveOut | null = null;
+      const mo = (t.moveOut ?? null) as Record<string, unknown> | null;
+      const movedOutOn = mo ? day(mo.movedOutOn) : null;
+      const lastRentMonth = mo ? str(mo.lastRentMonth, 7) : "";
+      if (mo && movedOutOn && /^\d{4}-(0[1-9]|1[0-2])$/.test(lastRentMonth)) {
+        const deductions = (Array.isArray(mo.deductions) ? mo.deductions : [])
+          .slice(0, 20)
+          .map((raw) => {
+            const d = (raw ?? {}) as Record<string, unknown>;
+            return {
+              kind: d.kind === "rent" ? "rent" : "charge",
+              label: str(d.label, 120) || (d.kind === "rent" ? "Unpaid rent" : "Deduction"),
+              amount: Math.min(MAX_AMOUNT, num(d.amount)),
+            };
+          })
+          .filter((d) => d.amount > 0);
+        moveOut = {
+          movedOutOn,
+          lastRentMonth,
+          deposit: Math.min(MAX_AMOUNT, num(mo.deposit)),
+          refund: Math.min(MAX_AMOUNT, num(mo.refund)),
+          returnBy: day(mo.returnBy),
+          returnedOn: day(mo.returnedOn),
+          returnNote: str(mo.returnNote, 200) || null,
+          forwardingAddress: str(mo.forwardingAddress, 300) || null,
+          deductions,
+        };
+      }
+
       out.push({
+        moveOut,
         notices,
         charges,
         rules,
@@ -678,7 +726,15 @@ export async function POST(req: Request) {
     requests: 0,
     loans: 0,
     loanPayments: 0,
+    moveOuts: 0,
   };
+
+  /**
+   * Move-outs written for the tenants of the place being restored, by
+   * tenant name — how the deposit income in its ledger finds them. Reset
+   * for each property and each unit, like the tenants themselves.
+   */
+  let moveOutsByTenant = new Map<string, string>();
 
   /** This company's vendors by name, reset as each company is written. */
   let vendorsByName = new Map<string, string>();
@@ -734,6 +790,7 @@ export async function POST(req: Request) {
           category: t.category,
           vendorId: (t.vendorName && vendorsByName.get(t.vendorName)) || null,
           loanPaymentId: (t.loanRef && loanPayments.get(t.loanRef)) || null,
+          moveOutId: (t.moveOutOf && moveOutsByTenant.get(t.moveOutOf)) || null,
         },
       });
       created.transactions += 1;
@@ -796,10 +853,21 @@ export async function POST(req: Request) {
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
-      const { notices, charges, rules, ...fields } = t;
+      const { notices, charges, rules, moveOut, ...fields } = t;
       const row = await tx.tenant.create({
         data: { ...fields, propertyId, unitId, createdById: userId },
       });
+      // Before the charges, so the ones the deposit paid can point at it.
+      let moveOutId: string | null = null;
+      if (moveOut) {
+        const { deductions, ...moFields } = moveOut;
+        const made = await tx.moveOut.create({
+          data: { ...moFields, tenantId: row.id, createdById: userId, deductions: { create: deductions } },
+        });
+        moveOutId = made.id;
+        created.moveOuts += 1;
+        if (!moveOutsByTenant.has(row.name)) moveOutsByTenant.set(row.name, made.id);
+      }
       // Rules first, so their charges can point back at them, and their runs
       // with them — otherwise every rule charge ever deleted would be billed
       // again the first time this tenant's statement loaded.
@@ -824,11 +892,12 @@ export async function POST(req: Request) {
       }
       if (charges.length > 0) {
         await tx.tenantCharge.createMany({
-          data: charges.map(({ rule, ...c }) => ({
+          data: charges.map(({ rule, moveOut: fromDeposit, ...c }) => ({
             ...c,
             tenantId: row.id,
             raisedById: userId,
             ruleId: rule >= 0 ? (ruleIds[rule] ?? null) : null,
+            moveOutId: fromDeposit ? moveOutId : null,
           })),
         });
         created.charges += charges.length;
@@ -973,9 +1042,12 @@ export async function POST(req: Request) {
         // Loans before the ledger, so interest entries can point at the
         // payment that wrote them.
         const loanPayments = await createLoans(tx, prop.id, property.loans);
+        // Tenants before the ledger too, so deposit money kept at a move-out
+        // can point at the move-out that kept it.
+        moveOutsByTenant = new Map();
+        const propertyTenants = await createTenants(tx, prop.id, null, property.tenants);
         await createTransactions(tx, prop.id, null, property.transactions, loanPayments);
         await createRecurring(tx, prop.id, null, property.recurringExpenses);
-        const propertyTenants = await createTenants(tx, prop.id, null, property.tenants);
         await createRentChanges(tx, prop.id, null, property.rentChanges);
         await createRequests(tx, prop.id, null, property.requests, propertyTenants);
         const everyTenant = new Map(propertyTenants);
@@ -991,9 +1063,10 @@ export async function POST(req: Request) {
           });
           created.units += 1;
 
+          moveOutsByTenant = new Map();
+          const unitTenants = await createTenants(tx, prop.id, u.id, unit.tenants);
           await createTransactions(tx, prop.id, u.id, unit.transactions, loanPayments);
           await createRecurring(tx, prop.id, u.id, unit.recurringExpenses);
-          const unitTenants = await createTenants(tx, prop.id, u.id, unit.tenants);
           await createRentChanges(tx, prop.id, u.id, unit.rentChanges);
           await createRequests(tx, prop.id, u.id, unit.requests, unitTenants);
           for (const [name, id] of unitTenants) if (!everyTenant.has(name)) everyTenant.set(name, id);

@@ -10,6 +10,7 @@ import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
 import { loansWhere } from "@/lib/loans-db";
+import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
@@ -72,6 +73,11 @@ export default async function DashboardPage() {
   ]);
 
   const loans = await loansWhere({ property: { companyId: { in: companyIds } }, active: true });
+  const deposits = await prisma.moveOut.findMany({
+    where: { returnedOn: null, deposit: { gt: 0 }, tenant: { property: { companyId: { in: companyIds } } } },
+    include: { ...moveOutInclude, tenant: { select: { name: true, propertyId: true } } },
+    orderBy: { returnBy: "asc" },
+  });
 
   return (
     <DashboardClient
@@ -137,6 +143,11 @@ export default async function DashboardPage() {
       }))}
       initialTenants={tenants.map(serializeTenant)}
       initialLoans={loans}
+      initialDeposits={deposits.map((d) => ({
+        ...serializeMoveOut(d),
+        tenantName: d.tenant.name,
+        propertyId: d.tenant.propertyId,
+      }))}
       initialTransactions={transactions.map((t) => ({
         id: t.id,
         propertyId: t.propertyId,
