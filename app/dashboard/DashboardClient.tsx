@@ -97,8 +97,21 @@ type Target = {
   vacant: boolean;
 };
 
-const fmtDate = (iso: string) =>
-  new Date(iso + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+// toLocaleDateString builds a new Intl formatter on every call, and that is
+// nearly all of what formatting a date costs. With a few years of ledger the
+// search box formats thousands of dates per keystroke — profiled at 300ms of
+// a 700ms keystroke — so each formatter is built once and each date string is
+// formatted once. Same options, same output.
+const DAY_FORMAT = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric" });
+const dayLabels = new Map<string, string>();
+const fmtDate = (iso: string) => {
+  let label = dayLabels.get(iso);
+  if (label === undefined) {
+    label = DAY_FORMAT.format(new Date(iso + "T00:00:00"));
+    dayLabels.set(iso, label);
+  }
+  return label;
+};
 type PeriodKind = "month" | "year" | "all";
 
 /* ---------- Sorting the ledger ---------- */
@@ -141,8 +154,10 @@ const SORT_CHOICES: { key: SortKey; dir: SortDir; label: string }[] = [
 
 // numeric so "Apt 2" lands before "Apt 10", and case-blind so a stray
 // capital doesn't drop a property to the bottom of the list.
-const compareText = (a: string, b: string) =>
-  a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+// One collator rather than localeCompare with options, which builds one per
+// comparison — thousands of them to sort a searched ledger.
+const COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: "base" });
+const compareText = (a: string, b: string) => COLLATOR.compare(a, b);
 
 /** The words the Details column actually shows, which is what it sorts on. */
 const detailsText = (t: Transaction) =>
@@ -151,17 +166,18 @@ const detailsText = (t: Transaction) =>
 const STORAGE_HINT =
   "Proof uploads need file storage. In Vercel, open this project's Storage tab, add Blob, then redeploy.";
 
+const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
+const MONTH_ONLY = new Intl.DateTimeFormat("en-US", { month: "long" });
+const MONTH_SHORT = new Intl.DateTimeFormat("en-US", { month: "short" });
+
 function monthName(key: string, withYear = true) {
   const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-US", {
-    month: "long",
-    ...(withYear ? { year: "numeric" } : {}),
-  });
+  return (withYear ? MONTH_YEAR : MONTH_ONLY).format(new Date(y, m - 1, 1));
 }
 
 function shortMonth(key: string) {
   const [y, m] = key.split("-").map(Number);
-  return new Date(y, m - 1, 1).toLocaleDateString("en-US", { month: "short" });
+  return MONTH_SHORT.format(new Date(y, m - 1, 1));
 }
 
 /** Steps a YYYY-MM key by whole months, rolling the year over as needed. */
@@ -371,6 +387,24 @@ export default function DashboardClient({
     [transactions, visibleIds]
   );
 
+  // One pass over the ledger each time it changes, so that rendering asks a
+  // map instead of rescanning every entry once per card, per unit, per
+  // recurring bill. Sums run in ledger order, so the figures are the same to
+  // the last floating-point bit as the scans they replace.
+  const ledgerIndex = useMemo(() => {
+    const rent = new Map<string, number>();
+    const recurringLogged = new Set<string>();
+    for (const t of transactions) {
+      const month = t.date.slice(0, 7);
+      if (t.type === "rent") {
+        const key = `${t.propertyId}|${t.unitId ?? ""}|${month}`;
+        rent.set(key, (rent.get(key) ?? 0) + t.amount);
+      }
+      if (t.recurringExpenseId) recurringLogged.add(`${t.recurringExpenseId}|${month}`);
+    }
+    return { rent, recurringLogged };
+  }, [transactions]);
+
   function unitsForProperty(propertyId: string) {
     return units.filter((u) => u.propertyId === propertyId);
   }
@@ -478,6 +512,23 @@ export default function DashboardClient({
 
   const overall = totalsFor(visibleIds, scopedTransactions);
 
+  // Each property card's totals for the period, from one pass rather than one
+  // pass per card.
+  const totalsByProperty = useMemo(() => {
+    const out = new Map<string, { rent: number; expense: number; net: number }>();
+    for (const t of inScopeTransactions) {
+      let totals = out.get(t.propertyId);
+      if (!totals) {
+        totals = { rent: 0, expense: 0, net: 0 };
+        out.set(t.propertyId, totals);
+      }
+      if (t.type === "rent") totals.rent += t.amount;
+      else totals.expense += t.amount;
+    }
+    for (const totals of out.values()) totals.net = totals.rent - totals.expense;
+    return out;
+  }, [inScopeTransactions]);
+
   const perCompany = useMemo(
     () =>
       companies.map((c) => {
@@ -539,11 +590,7 @@ export default function DashboardClient({
   }
 
   function rentInMonth(propertyId: string, unitId: string | null, month: string) {
-    return transactions
-      .filter(
-        (t) => t.propertyId === propertyId && t.unitId === unitId && t.type === "rent" && t.date.startsWith(month)
-      )
-      .reduce((sum, t) => sum + t.amount, 0);
+    return ledgerIndex.rent.get(`${propertyId}|${unitId ?? ""}|${month}`) ?? 0;
   }
 
   function rentInBarMonth(propertyId: string) {
@@ -601,9 +648,9 @@ export default function DashboardClient({
       .filter((r) => r.frequency === "monthly" || r.month === monthNum)
       .filter(
         (r) =>
-          !transactions.some((t) => t.recurringExpenseId === r.id && t.date.startsWith(barMonth))
+          !ledgerIndex.recurringLogged.has(`${r.id}|${barMonth}`)
       );
-  }, [recurring, transactions, barMonth, visibleIds]);
+  }, [recurring, ledgerIndex, barMonth, visibleIds]);
 
   // Mortgage payments due this month and not recorded, each with the split
   // "Log it" would write — shown before it's written, not discovered after.
@@ -648,6 +695,21 @@ export default function DashboardClient({
 
   const search = query.trim().toLowerCase();
 
+  // What the search box matches each entry against, built when the ledger or
+  // the names in it change — not on every keystroke.
+  const haystacks = useMemo(
+    () =>
+      new Map(
+        transactions.map((t) => [
+          t.id,
+          [targetLabel(t), t.detail, t.note, t.category, t.amount.toFixed(2), fmtDate(t.date)].join(" ").toLowerCase(),
+        ])
+      ),
+    // targetLabel reads properties and units.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [transactions, properties, units]
+  );
+
   // A search looks across every month. Hunting for "that plumber invoice" and
   // being told there's nothing in September — when it was in March — is the
   // opposite of useful, so the period only applies when you aren't searching.
@@ -656,20 +718,7 @@ export default function DashboardClient({
     return base
       .filter((t) => !filterProperty || t.propertyId === filterProperty)
       .filter((t) => !filterType || t.type === filterType)
-      .filter((t) => {
-        if (!search) return true;
-        const haystack = [
-          targetLabel(t),
-          t.detail,
-          t.note,
-          t.category,
-          t.amount.toFixed(2),
-          fmtDate(t.date),
-        ]
-          .join(" ")
-          .toLowerCase();
-        return haystack.includes(search);
-      })
+      .filter((t) => !search || (haystacks.get(t.id) ?? "").includes(search))
       .slice()
       .sort((a, b) => {
         const by = sortDir === "asc" ? 1 : -1;
@@ -695,7 +744,7 @@ export default function DashboardClient({
         // shuffles between renders of the same data.
         return by * first || b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
       });
-  }, [scopedTransactions, visibleTransactions, filterProperty, filterType, search, sortKey, sortDir]);
+  }, [scopedTransactions, visibleTransactions, filterProperty, filterType, search, sortKey, sortDir, haystacks]);
 
   const searchTotals = useMemo(() => totalsFor(null, rows), [rows]);
 
@@ -1982,8 +2031,7 @@ export default function DashboardClient({
             </div>
             <div className={styles.properties}>
               {visibleProperties.map((p) => {
-                const ids = new Set([p.id]);
-                const t = totalsFor(ids, inScopeTransactions);
+                const t = totalsByProperty.get(p.id) ?? { rent: 0, expense: 0, net: 0 };
                 const propUnits = unitsForProperty(p.id);
                 const target = expectedRent({ propertyId: p.id, unitId: null, monthlyRent: p.monthlyRent }, barMonth);
                 const paidThisMonth = rentInBarMonth(p.id);
