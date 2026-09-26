@@ -38,7 +38,9 @@ type CleanTransaction = {
   vendorName: string;
   /** The mortgage payment that wrote it: the loan's position in `loans`, and the month. */
   loanRef: string | null;
-  /** Deposit kept at this tenant's move-out, by name. */
+  /** Deposit kept at a move-out: the tenant's position in the place's `tenants`. */
+  moveOutTenant: number | null;
+  /** The same by name, which is all backups before v15 carry. */
   moveOutOf: string;
 };
 type CleanMoveOut = {
@@ -108,6 +110,8 @@ type CleanRule = {
   runs: { month: string; amount: number; ranAt: Date }[];
 };
 type CleanTenant = {
+  /** Where it sat in the file's list, which is what the ledger points at. */
+  at: number;
   moveOut: CleanMoveOut | null;
   notices: CleanNotice[];
   charges: CleanCharge[];
@@ -278,6 +282,10 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           : null;
       out.push({
         loanRef,
+        moveOutTenant:
+          type === "rent" && Number.isInteger(t.moveOutTenant) && (t.moveOutTenant as number) >= 0
+            ? (t.moveOutTenant as number)
+            : null,
         moveOutOf: type === "rent" ? str(t.moveOutOf, 120) : "",
         type,
         date,
@@ -363,7 +371,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
 
   function parseTenants(raw: unknown): CleanTenant[] {
     const out: CleanTenant[] = [];
-    for (const rawT of Array.isArray(raw) ? raw : []) {
+    for (const [at, rawT] of (Array.isArray(raw) ? raw : []).entries()) {
       const t = (rawT ?? {}) as Record<string, unknown>;
       const name = str(t.name, 120);
       if (!name) continue;
@@ -469,6 +477,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
       }
 
       out.push({
+        at,
         moveOut,
         notices,
         charges,
@@ -749,6 +758,8 @@ export async function POST(req: Request) {
    * for each property and each unit, like the tenants themselves.
    */
   let moveOutsByTenant = new Map<string, string>();
+  /** The same, by the tenant's position in the file — what v15 backups use. */
+  let moveOutsByPosition = new Map<number, string>();
 
   /** This company's vendors by name, reset as each company is written. */
   let vendorsByName = new Map<string, string>();
@@ -804,7 +815,10 @@ export async function POST(req: Request) {
           category: t.category,
           vendorId: (t.vendorName && vendorsByName.get(t.vendorName)) || null,
           loanPaymentId: (t.loanRef && loanPayments.get(t.loanRef)) || null,
-          moveOutId: (t.moveOutOf && moveOutsByTenant.get(t.moveOutOf)) || null,
+          moveOutId:
+            (t.moveOutTenant !== null
+              ? moveOutsByPosition.get(t.moveOutTenant)
+              : t.moveOutOf && moveOutsByTenant.get(t.moveOutOf)) || null,
         },
       });
       created.transactions += 1;
@@ -867,7 +881,7 @@ export async function POST(req: Request) {
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
-      const { notices, charges, rules, moveOut, ...fields } = t;
+      const { notices, charges, rules, moveOut, at, ...fields } = t;
       const row = await tx.tenant.create({
         data: { ...fields, propertyId, unitId, createdById: userId },
       });
@@ -881,6 +895,7 @@ export async function POST(req: Request) {
         moveOutId = made.id;
         created.moveOuts += 1;
         if (!moveOutsByTenant.has(row.name)) moveOutsByTenant.set(row.name, made.id);
+        moveOutsByPosition.set(at, made.id);
       }
       // Rules first, so their charges can point back at them, and their runs
       // with them — otherwise every rule charge ever deleted would be billed
@@ -1066,6 +1081,7 @@ export async function POST(req: Request) {
         // Tenants before the ledger too, so deposit money kept at a move-out
         // can point at the move-out that kept it.
         moveOutsByTenant = new Map();
+        moveOutsByPosition = new Map();
         const propertyTenants = await createTenants(tx, prop.id, null, property.tenants);
         await createTransactions(tx, prop.id, null, property.transactions, loanPayments);
         await createRecurring(tx, prop.id, null, property.recurringExpenses);
@@ -1086,6 +1102,7 @@ export async function POST(req: Request) {
           created.units += 1;
 
           moveOutsByTenant = new Map();
+          moveOutsByPosition = new Map();
           const unitTenants = await createTenants(tx, prop.id, u.id, unit.tenants);
           await createTransactions(tx, prop.id, u.id, unit.transactions, loanPayments);
           await createRecurring(tx, prop.id, u.id, unit.recurringExpenses);

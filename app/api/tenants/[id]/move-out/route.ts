@@ -13,6 +13,17 @@ import { vacancyStart } from "@/lib/vacancy";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
+/** Midnight UTC on the 1st of the month after `month`. */
+function firstDayAfter(month: string) {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m, 1));
+}
+
+/** YYYY-MM-DD of the last day of `month`. */
+function lastDayOf(month: string) {
+  return new Date(firstDayAfter(month).getTime() - 86_400_000).toISOString().slice(0, 10);
+}
+
 /**
  * What they'd owe if rent stopped after `through`, and the deposit held —
  * the two numbers the move-out form is built around. Worked out by the same
@@ -31,11 +42,26 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
 
   const result = await statementForTenant(id, new Date(), { lastRentMonth: through });
   const owed = Math.max(0, result?.statement.balance ?? 0);
+  // Rent is booked to a place, not a person, so money that arrived after the
+  // last rent month isn't counted toward what they owe — it might be the next
+  // tenant's. If it was theirs, applying the deposit to "unpaid" rent would
+  // collect it twice, so the form says what came in.
+  const later = await prisma.transaction.aggregate({
+    where: {
+      propertyId: tenant.propertyId,
+      unitId: tenant.unitId,
+      type: "rent",
+      moveOutId: null,
+      date: { gte: firstDayAfter(through) },
+    },
+    _sum: { amount: true },
+  });
   return NextResponse.json({
     deposit: tenant.deposit,
     owed,
     suggestedRent: suggestRentDeduction(tenant.deposit, owed),
     problem: result?.problem ?? "",
+    receivedAfter: Math.round((later._sum.amount ?? 0) * 100) / 100,
   });
 }
 
@@ -62,7 +88,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const now = new Date();
   // A day's grace for time zones: "today" in Hawaii is tomorrow on the server.
   if (input.movedOutOn > isoDay(new Date(now.getTime() + 86_400_000))) {
-    return NextResponse.json({ error: "Record a move-out once they've gone — that date is still to come." }, { status: 400 });
+    return NextResponse.json(
+      { error: "Record a move-out once they've gone — that date is still to come." },
+      { status: 400 }
+    );
   }
   if (input.lastRentMonth > currentMonthOf(now)) {
     return NextResponse.json(
@@ -80,75 +109,90 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const settled = settle(tenant.deposit, owed, input.deductions);
   if (!settled.ok) return NextResponse.json({ error: settled.error }, { status: 400 });
 
-  const date = new Date(`${input.movedOutOn}T00:00:00.000Z`);
-  const month = input.movedOutOn.slice(0, 7);
+  // The deposit's entries land inside the tenancy's last rent month, even when
+  // the keys came back later: the statement stops at that month (anything
+  // after it at this place could be the next tenant's), so an entry dated
+  // after it would be income in the ledger that never reached their account.
+  const entryDay =
+    input.movedOutOn < lastDayOf(input.lastRentMonth) ? input.movedOutOn : lastDayOf(input.lastRentMonth);
+  const date = new Date(`${entryDay}T00:00:00.000Z`);
+  const month = entryDay.slice(0, 7);
   const note = `Kept from ${tenant.name}'s deposit`;
 
-  const made = await prisma.$transaction(async (tx) => {
-    const moveOut = await tx.moveOut.create({
-      data: {
-        tenantId: id,
-        movedOutOn: date,
-        lastRentMonth: input.lastRentMonth,
-        deposit: settled.value.deposit,
-        refund: settled.value.refund,
-        returnBy: input.returnBy ? new Date(`${input.returnBy}T00:00:00.000Z`) : null,
-        forwardingAddress: input.forwardingAddress,
-        createdById: userId,
-        deductions: { create: input.deductions },
-      },
-      include: moveOutInclude,
-    });
+  let made;
+  try {
+    made = await prisma.$transaction(async (tx) => {
+      const moveOut = await tx.moveOut.create({
+        data: {
+          tenantId: id,
+          movedOutOn: date,
+          lastRentMonth: input.lastRentMonth,
+          deposit: settled.value.deposit,
+          refund: settled.value.refund,
+          returnBy: input.returnBy ? new Date(`${input.returnBy}T00:00:00.000Z`) : null,
+          forwardingAddress: input.forwardingAddress,
+          createdById: userId,
+          deductions: { create: input.deductions },
+        },
+        include: moveOutInclude,
+      });
 
-    // Every dollar kept is income, as a rent entry against their place — so
-    // it counts toward what they've paid, and toward the year's rental
-    // income on the tax export, which is where the IRS says it belongs.
-    // A damage charge is also added to what they owe, so the two cancel on
-    // their statement and it reads: charged $185 for cleaning, paid from
-    // the deposit.
-    const entries = [];
-    for (const d of input.deductions) {
-      if (d.kind === "charge") {
-        await tx.tenantCharge.create({
-          data: {
-            tenantId: id,
-            kind: "fee",
-            month,
-            label: d.label,
-            amount: d.amount,
-            raisedById: userId,
-            moveOutId: moveOut.id,
-          },
-        });
+      // Every dollar kept is income, as a rent entry against their place — so
+      // it counts toward what they've paid, and toward the year's rental
+      // income on the tax export, which is where the IRS says it belongs.
+      // A damage charge is also added to what they owe, so the two cancel on
+      // their statement and it reads: charged $185 for cleaning, paid from
+      // the deposit.
+      const entries = [];
+      for (const d of input.deductions) {
+        if (d.kind === "charge") {
+          await tx.tenantCharge.create({
+            data: {
+              tenantId: id,
+              kind: "fee",
+              month,
+              label: d.label,
+              amount: d.amount,
+              raisedById: userId,
+              moveOutId: moveOut.id,
+            },
+          });
+        }
+        entries.push(
+          await tx.transaction.create({
+            data: {
+              propertyId: tenant.propertyId,
+              unitId: tenant.unitId,
+              createdById: userId,
+              type: "rent",
+              date,
+              amount: d.amount,
+              detail: d.kind === "rent" ? "Security deposit applied to rent" : `Security deposit: ${d.label}`,
+              note,
+              moveOutId: moveOut.id,
+            },
+          })
+        );
       }
-      entries.push(
-        await tx.transaction.create({
-          data: {
-            propertyId: tenant.propertyId,
-            unitId: tenant.unitId,
-            createdById: userId,
-            type: "rent",
-            date,
-            amount: d.amount,
-            detail: d.kind === "rent" ? "Security deposit applied to rent" : `Security deposit: ${d.label}`,
-            note,
-            moveOutId: moveOut.id,
-          },
-        })
-      );
-    }
 
-    const updated = await tx.tenant.update({ where: { id }, data: { active: false } });
-    // The place stands empty from when rent stops — so the vacancy's cost
-    // never counts days the tenant was paying for.
-    const madeVacant = await markVacantAfterMoveOut(
-      tx,
-      { propertyId: tenant.propertyId, unitId: tenant.unitId, tenantId: id },
-      new Date(`${vacancyStart(input.movedOutOn, input.lastRentMonth)}T00:00:00.000Z`)
-    );
-    if (madeVacant) await tx.moveOut.update({ where: { id: moveOut.id }, data: { madeVacant } });
-    return { moveOut: { ...moveOut, madeVacant }, entries, tenant: updated, madeVacant };
-  });
+      const updated = await tx.tenant.update({ where: { id }, data: { active: false } });
+      // The place stands empty from when rent stops — so the vacancy's cost
+      // never counts days the tenant was paying for.
+      const madeVacant = await markVacantAfterMoveOut(
+        tx,
+        { propertyId: tenant.propertyId, unitId: tenant.unitId, tenantId: id },
+        new Date(`${vacancyStart(input.movedOutOn, input.lastRentMonth)}T00:00:00.000Z`)
+      );
+      if (madeVacant) await tx.moveOut.update({ where: { id: moveOut.id }, data: { madeVacant } });
+      return { moveOut: { ...moveOut, madeVacant }, entries, tenant: updated, madeVacant };
+    });
+  } catch (e) {
+    // Two taps racing: the unique index on the tenant is what stops a second one.
+    if ((e as { code?: string })?.code === "P2002") {
+      return NextResponse.json({ error: `${tenant.name}'s move-out is already recorded.` }, { status: 409 });
+    }
+    throw e;
+  }
 
   return NextResponse.json(
     {
@@ -229,16 +273,26 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
     );
   }
 
-  const removed = await prisma.transaction.findMany({ where: { moveOutId: existing.id }, select: { id: true } });
-  const updated = await prisma.$transaction(async (tx) => {
-    await tx.transaction.deleteMany({ where: { moveOutId: existing.id } });
-    await tx.tenantCharge.deleteMany({ where: { moveOutId: existing.id } });
-    await tx.moveOut.delete({ where: { id: existing.id } });
-    // Only a vacancy this move-out created: one the landlord set by hand
-    // before it isn't this undo's to clear.
-    if (existing.madeVacant) await clearVacancy(tx, { propertyId: tenant.propertyId, unitId: tenant.unitId });
-    return tx.tenant.update({ where: { id }, data: { active: true } });
-  });
+  let removed: { id: string }[] = [];
+  let updated;
+  try {
+    updated = await prisma.$transaction(async (tx) => {
+      removed = await tx.transaction.findMany({ where: { moveOutId: existing.id }, select: { id: true } });
+      await tx.transaction.deleteMany({ where: { moveOutId: existing.id } });
+      await tx.tenantCharge.deleteMany({ where: { moveOutId: existing.id } });
+      await tx.moveOut.delete({ where: { id: existing.id } });
+      // Only a vacancy this move-out created: one the landlord set by hand
+      // before it isn't this undo's to clear.
+      if (existing.madeVacant) await clearVacancy(tx, { propertyId: tenant.propertyId, unitId: tenant.unitId });
+      return tx.tenant.update({ where: { id }, data: { active: true } });
+    });
+  } catch (e) {
+    // Undone twice at once: the other request already did it.
+    if ((e as { code?: string })?.code === "P2025") {
+      return NextResponse.json({ error: "That move-out was already undone." }, { status: 409 });
+    }
+    throw e;
+  }
   return NextResponse.json({
     tenant: serializeTenant(updated),
     transactionIds: removed.map((t) => t.id),

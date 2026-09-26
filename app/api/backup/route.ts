@@ -6,7 +6,7 @@ import { backupFileKey } from "@/lib/backup-files";
 import { storageAccessOf } from "@/lib/file-links";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 14;
+export const BACKUP_VERSION = 15;
 
 /** Signs a private file's link for the account exporting it; see lib/backup-files. */
 type FileKey = (url: string) => string | undefined;
@@ -21,13 +21,16 @@ type TxnRow = {
   attachments: { url: string; filename: string; contentType: string; size: number }[];
   vendor: { name: string } | null;
   loanPayment: { loanId: string; month: string } | null;
-  moveOut: { tenant: { name: string } } | null;
+  moveOut: { tenantId: string; tenant: { name: string } } | null;
 };
 
 /** Position of each of a property's loans in its `loans` list, by id. */
 type LoanIndex = Map<string, number>;
 
-function serializeTxns(txns: TxnRow[], key: FileKey, loanIndex: LoanIndex) {
+/** Position of each tenant of a place in its `tenants` list, by id. */
+type TenantIndex = Map<string, number>;
+
+function serializeTxns(txns: TxnRow[], key: FileKey, loanIndex: LoanIndex, tenantIndex: TenantIndex) {
   return txns.map((t) => ({
     type: t.type,
     date: t.date.toISOString().slice(0, 10),
@@ -45,8 +48,11 @@ function serializeTxns(txns: TxnRow[], key: FileKey, loanIndex: LoanIndex) {
       t.loanPayment && loanIndex.has(t.loanPayment.loanId)
         ? { loan: loanIndex.get(t.loanPayment.loanId), month: t.loanPayment.month }
         : null,
-    // Deposit money kept at a move-out, by the tenant's name — which is how
-    // the restore finds the move-out it belongs to again.
+    // Deposit money kept at a move-out: whose, by their position in this
+    // place's `tenants` — a returning tenant can appear twice under one name,
+    // and a name would pin both tenancies' money to the first. The name rides
+    // along for anyone reading the file.
+    moveOutTenant: t.moveOut ? (tenantIndex.get(t.moveOut.tenantId) ?? null) : null,
     moveOutOf: t.moveOut?.tenant.name ?? "",
     // Links to the stored files, not the files themselves — they stay in
     // blob storage and keep working as long as the app does.
@@ -388,7 +394,7 @@ export async function GET() {
               attachments: { orderBy: { createdAt: "asc" } },
               vendor: { select: { name: true } },
               loanPayment: { select: { loanId: true, month: true } },
-              moveOut: { select: { tenant: { select: { name: true } } } },
+              moveOut: { select: { tenantId: true, tenant: { select: { name: true } } } },
             },
           },
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
@@ -416,7 +422,7 @@ export async function GET() {
               attachments: { orderBy: { createdAt: "asc" } },
               vendor: { select: { name: true } },
               loanPayment: { select: { loanId: true, month: true } },
-              moveOut: { select: { tenant: { select: { name: true } } } },
+              moveOut: { select: { tenantId: true, tenant: { select: { name: true } } } },
             },
               },
               recurringExpenses: { orderBy: { createdAt: "asc" } },
@@ -464,7 +470,7 @@ export async function GET() {
         monthlyRent: p.monthlyRent,
         vacant: p.vacant,
         vacantSince: p.vacantSince ? p.vacantSince.toISOString().slice(0, 10) : "",
-        transactions: serializeTxns(p.transactions, key, loanIndex),
+        transactions: serializeTxns(p.transactions, key, loanIndex, new Map(p.tenants.map((t, i) => [t.id, i]))),
         recurringExpenses: serializeRecurring(p.recurringExpenses),
         loans: serializeLoans(p.loans),
         // What's being depreciated. Without it a restore would quietly drop
@@ -486,7 +492,7 @@ export async function GET() {
           monthlyRent: u.monthlyRent,
           vacant: u.vacant,
           vacantSince: u.vacantSince ? u.vacantSince.toISOString().slice(0, 10) : "",
-          transactions: serializeTxns(u.transactions, key, loanIndex),
+          transactions: serializeTxns(u.transactions, key, loanIndex, new Map(u.tenants.map((t, i) => [t.id, i]))),
           recurringExpenses: serializeRecurring(u.recurringExpenses),
           tenants: serializeTenants(u.tenants),
           rentChanges: serializeRentChanges(u.rentChanges),

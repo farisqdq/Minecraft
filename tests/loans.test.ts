@@ -238,6 +238,23 @@ test("a payment can't pay off more principal than was owed", () => {
   assert.equal(r.ok, false);
 });
 
+test("a month before the loan's books begin is refused — the opening balance already counts it", () => {
+  assert.equal(parsePaymentInput({ month: "2025-12" }, terms, []).ok, false);
+});
+
+test("principal is capped by what's left overall, not just what was owed that month", () => {
+  // Paying March ahead took the balance to $1,000; February can't then pay $2,000 off.
+  const small = { ...terms, balance: 3000 };
+  const r = parsePaymentInput({ month: "2026-02", principal: "2000" }, small, [paid("2026-03", 2000)]);
+  assert.equal(r.ok, false);
+});
+
+test("year totals go by the date paid when there is one", () => {
+  const payments = [{ ...paid("2027-01", 300, 1500, 0), date: "2026-12-28" }];
+  assert.equal(yearTotals(payments, 2026).interest, 1500);
+  assert.equal(yearTotals(payments, 2027).count, 0);
+});
+
 test("a payment of nothing, or of negative money, is refused", () => {
   const zero = { month: "2026-01", principal: 0, interest: 0, escrowTax: 0, escrowInsurance: 0 };
   assert.equal(parsePaymentInput(zero, terms, []).ok, false);

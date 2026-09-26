@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Modal from "./Modal";
 import styles from "../dashboard/dashboard.module.css";
@@ -13,7 +13,7 @@ import type { TenantDTO } from "@/lib/tenants";
 
 type Line = { key: number; kind: "rent" | "charge"; label: string; amount: string };
 
-type Preview = { deposit: number; owed: number; suggestedRent: number; problem: string };
+type Preview = { deposit: number; owed: number; suggestedRent: number; problem: string; receivedAfter: number };
 
 export type MoveOutResult = {
   moveOut: MoveOutDTO;
@@ -61,8 +61,15 @@ export function MoveOutDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  // What they owe if rent stops after the chosen month. The rent line follows
+  // it until someone types into it; after that, their figure stands. A ref,
+  // not state: the fetch below must see this form's value, not the one left
+  // over from the last tenant the dialog was opened for.
+  const rentTouched = useRef(false);
+
   // Fresh form each time it opens for someone.
   useEffect(() => {
+    rentTouched.current = false;
     if (!tenant) return;
     setMovedOutOn(today);
     setLastRentMonth(today.slice(0, 7));
@@ -73,9 +80,6 @@ export function MoveOutDialog({
     setError("");
   }, [tenant, today]);
 
-  // What they owe if rent stops after the chosen month. The rent line follows
-  // it until someone types into it; after that, their figure stands.
-  const [rentTouched, setRentTouched] = useState(false);
   useEffect(() => {
     if (!tenant || !/^\d{4}-\d{2}$/.test(lastRentMonth)) return;
     let live = true;
@@ -84,7 +88,7 @@ export function MoveOutDialog({
       .then((p: Preview) => {
         if (!live || typeof p?.owed !== "number") return;
         setPreview(p);
-        if (rentTouched) return;
+        if (rentTouched.current) return;
         setLines((prev) => {
           const others = prev.filter((l) => l.kind !== "rent");
           return p.suggestedRent > 0
@@ -96,11 +100,7 @@ export function MoveOutDialog({
     return () => {
       live = false;
     };
-    // rentTouched deliberately left out: typing in the line mustn't refetch.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tenant, lastRentMonth]);
-
-  useEffect(() => setRentTouched(false), [tenant]);
 
   const deposit = preview?.deposit ?? tenant?.deposit ?? 0;
   const owed = preview?.owed ?? 0;
@@ -190,6 +190,13 @@ export function MoveOutDialog({
             </div>
           </div>
           {preview?.problem && <p className={styles.loanMissed}>{preview.problem}</p>}
+          {preview && preview.receivedAfter > 0 && (
+            <p className={styles.loanMissed}>
+              {money(preview.receivedAfter)} of rent came in at this place after {monthName(lastRentMonth)}. It isn&apos;t
+              counted above, because it might be the next tenant&apos;s. If it was {first}&apos;s, make the last month
+              of rent later so it counts — otherwise the deposit could collect it twice.
+            </p>
+          )}
 
           {deposit > 0 && (
             <>
@@ -222,7 +229,7 @@ export function MoveOutDialog({
                       className="num"
                       value={l.amount}
                       onChange={(e) => {
-                        if (l.kind === "rent") setRentTouched(true);
+                        if (l.kind === "rent") rentTouched.current = true;
                         update(l.key, { amount: e.target.value });
                       }}
                     />
@@ -231,7 +238,7 @@ export function MoveOutDialog({
                       className={styles.chargeDel}
                       aria-label="Remove this line"
                       onClick={() => {
-                        if (l.kind === "rent") setRentTouched(true);
+                        if (l.kind === "rent") rentTouched.current = true;
                         setLines((prev) => prev.filter((x) => x.key !== l.key));
                       }}
                     >

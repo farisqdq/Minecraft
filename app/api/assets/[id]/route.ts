@@ -25,6 +25,21 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   });
   if (!parsed.ok) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
+  // The cost, the start month and the class decide every year's deduction,
+  // filed years included — the same reach as deleting it, so the same bar.
+  // A member can still fix the name or the note.
+  const rewritesHistory =
+    Math.round(parsed.value.basis * 100) !== Math.round(existing.basis * 100) ||
+    parsed.value.inService !== existing.inService ||
+    parsed.value.cls !== existing.cls ||
+    parsed.value.kind !== existing.kind;
+  if (rewritesHistory && !(await requireAsset(userId, id, "owner"))) {
+    return NextResponse.json(
+      { error: "Only an owner can change the cost, date or class — it changes years already filed." },
+      { status: 403 }
+    );
+  }
+
   const asset = await prisma.depreciableAsset.update({ where: { id }, data: parsed.value });
   return NextResponse.json(serializeAsset(asset));
 }

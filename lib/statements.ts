@@ -99,8 +99,8 @@ export async function statementForTenant(
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     include: {
-      property: { select: { id: true, monthlyRent: true, vacant: true } },
-      unit: { select: { id: true, monthlyRent: true, vacant: true } },
+      property: { select: { id: true, monthlyRent: true, vacant: true, vacantSince: true } },
+      unit: { select: { id: true, monthlyRent: true, vacant: true, vacantSince: true } },
       moveOut: { select: { lastRentMonth: true } },
       charges: { orderBy: { createdAt: "asc" } },
       rules: {
@@ -141,9 +141,19 @@ export async function statementForTenant(
   }));
 
   const currentRent = tenant.unit ? tenant.unit.monthlyRent : tenant.property.monthlyRent;
-  const vacant = tenant.unit ? tenant.unit.vacant : tenant.property.vacant;
+  const place = tenant.unit ?? tenant.property;
+  // A vacant place expects no rent — but only from when it went vacant, and
+  // never for a tenancy that has a recorded end. A move-out marks the place
+  // vacant itself; zeroing rent across the whole tenancy because of that
+  // would wipe out what the departing tenant still owed. Places marked
+  // vacant before the date was recorded keep the old reading: no rent at all.
+  const tenancyEnded = Boolean(opts.lastRentMonth) || (!tenant.active && Boolean(tenant.moveOut));
+  const vacantFrom =
+    place.vacant && !tenancyEnded ? (place.vacantSince ? monthOf(place.vacantSince) : "0000-00") : null;
   const rentFor = (month: string) =>
-    vacant ? 0 : rentForMonth(changeDTOs, tenant.propertyId, tenant.unitId, month, currentRent);
+    vacantFrom !== null && month >= vacantFrom
+      ? 0
+      : rentForMonth(changeDTOs, tenant.propertyId, tenant.unitId, month, currentRent);
 
   const startMonth = resolveStartMonth({
     explicit: tenant.balanceFrom,

@@ -562,10 +562,12 @@ export default function PropertyManageClient({
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      push("Couldn't update that tenant.", "bad");
+      push(data?.error || "Couldn't update that tenant.", "bad");
       return;
     }
     setTenants((prev) => prev.map((x) => (x.id === t.id ? data : x)));
+    // Back in means the place isn't empty; the server has cleared it.
+    if (active) setVacancy(t.unitId ?? null, null);
     push(active ? `${t.name} is current again.` : `${t.name} moved to past tenants.`);
     router.refresh();
   }

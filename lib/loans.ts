@@ -196,15 +196,21 @@ export function suggestPayment(terms: LoanTerms, payments: LoanPaymentLike[], mo
   };
 }
 
-/** What went where over one calendar year — the figures to hold against the 1098. */
-export function yearTotals(payments: LoanPaymentLike[], year: number) {
+/**
+ * What went where over one calendar year — the figures to hold against the
+ * 1098. By the date paid when there is one, as the lender's form and the
+ * ledger both count it: a January payment sent on December 28th is last
+ * year's interest.
+ */
+export function yearTotals(payments: (LoanPaymentLike & { date?: string | Date })[], year: number) {
   const prefix = `${year}-`;
   let principal = 0;
   let interest = 0;
   let escrow = 0;
   let count = 0;
   for (const p of payments) {
-    if (!p.month.startsWith(prefix)) continue;
+    const when = p.date instanceof Date ? p.date.toISOString() : (p.date ?? p.month);
+    if (!when.startsWith(prefix)) continue;
     principal += toCents(p.principal);
     interest += toCents(p.interest);
     escrow += toCents(p.escrow);
@@ -315,6 +321,10 @@ export function parsePaymentInput(
   const b = (body ?? {}) as Record<string, unknown>;
   const month = typeof b.month === "string" ? b.month : "";
   if (!MONTH_RE.test(month)) return { ok: false, error: "Missing month." };
+  // The starting balance already reflects every payment before it.
+  if (month < terms.balanceAsOf) {
+    return { ok: false, error: "That month is before this loan's books begin; its payment is already in the starting balance." };
+  }
 
   const suggested = suggestPayment(terms, payments, month);
   const pick = (key: string, fallback: number) => (b[key] === undefined || b[key] === "" ? fallback : numberFrom(b[key]));
@@ -330,10 +340,14 @@ export function parsePaymentInput(
   if (toCents(principal) + toCents(interest) + toCents(escrowTax) + toCents(escrowInsurance) <= 0) {
     return { ok: false, error: "That payment adds up to nothing." };
   }
-  if (toCents(principal) > toCents(suggested.balanceBefore)) {
+  // Never more than is owed — going into that month, or at all once later
+  // months already recorded are counted.
+  const owedNow = currentBalance(terms.balance, payments);
+  const ceiling = Math.min(toCents(suggested.balanceBefore), toCents(owedNow));
+  if (toCents(principal) > ceiling) {
     return {
       ok: false,
-      error: `Only $${suggested.balanceBefore.toFixed(2)} of principal was owed going into that month.`,
+      error: `Only $${toDollars(ceiling).toFixed(2)} of principal is left to pay on this loan.`,
     };
   }
 
