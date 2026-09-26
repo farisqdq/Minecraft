@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clearVacancy } from "@/lib/vacancy-db";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
@@ -44,7 +45,11 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     unitId = unit.id;
   }
 
-  const tenant = await prisma.tenant.create({
+  // A place with someone living in it isn't vacant any more, and the count
+  // of days it stood empty stops here.
+  const tenant = await prisma.$transaction(async (tx) => {
+    await clearVacancy(tx, { propertyId: id, unitId });
+    return tx.tenant.create({
     data: {
       propertyId: id,
       unitId,
@@ -58,6 +63,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       dueDay: clampDueDay(body?.dueDay),
       note: text(body?.note, 500),
     },
+    });
   });
 
   return NextResponse.json(serializeTenant(tenant), { status: 201 });

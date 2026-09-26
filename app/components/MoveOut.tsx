@@ -18,6 +18,8 @@ type Preview = { deposit: number; owed: number; suggestedRent: number; problem: 
 export type MoveOutResult = {
   moveOut: MoveOutDTO;
   tenant: TenantDTO;
+  /** Set when the move-out left the place empty: the day rent stopped. */
+  vacantSince: string | null;
   transactions: {
     id: string;
     unitId: string | null;

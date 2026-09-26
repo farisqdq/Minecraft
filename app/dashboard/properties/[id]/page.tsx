@@ -88,6 +88,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         address: property.address ?? "",
         monthlyRent: property.monthlyRent,
         vacant: property.vacant,
+        vacantSince: property.vacantSince ? property.vacantSince.toISOString().slice(0, 10) : null,
       }}
       initialUnits={units.map((u) => ({
         id: u.id,
@@ -95,6 +96,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         name: u.name,
         monthlyRent: u.monthlyRent,
         vacant: u.vacant,
+        vacantSince: u.vacantSince ? u.vacantSince.toISOString().slice(0, 10) : null,
       }))}
       initialRecurring={recurring.map((r) => ({
         id: r.id,

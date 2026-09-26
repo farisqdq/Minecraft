@@ -8,6 +8,8 @@ import { isoDay } from "@/lib/lease";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
 import { serializeLedgerEntry } from "@/lib/loans-db";
 import { serializeTenant } from "@/lib/tenants";
+import { clearVacancy, markVacantAfterMoveOut } from "@/lib/vacancy-db";
+import { vacancyStart } from "@/lib/vacancy";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -137,7 +139,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     }
 
     const updated = await tx.tenant.update({ where: { id }, data: { active: false } });
-    return { moveOut, entries, tenant: updated };
+    // The place stands empty from when rent stops — so the vacancy's cost
+    // never counts days the tenant was paying for.
+    const madeVacant = await markVacantAfterMoveOut(
+      tx,
+      { propertyId: tenant.propertyId, unitId: tenant.unitId, tenantId: id },
+      new Date(`${vacancyStart(input.movedOutOn, input.lastRentMonth)}T00:00:00.000Z`)
+    );
+    if (madeVacant) await tx.moveOut.update({ where: { id: moveOut.id }, data: { madeVacant } });
+    return { moveOut: { ...moveOut, madeVacant }, entries, tenant: updated, madeVacant };
   });
 
   return NextResponse.json(
@@ -146,6 +156,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       tenant: serializeTenant(made.tenant),
       transactions: made.entries.map(serializeLedgerEntry),
       settlement: settled.value,
+      // So the page can show the place as vacant without a reload.
+      vacantSince: made.madeVacant ? vacancyStart(input.movedOutOn, input.lastRentMonth) : null,
     },
     { status: 201 }
   );
@@ -218,11 +230,18 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   }
 
   const removed = await prisma.transaction.findMany({ where: { moveOutId: existing.id }, select: { id: true } });
-  const [, , , updated] = await prisma.$transaction([
-    prisma.transaction.deleteMany({ where: { moveOutId: existing.id } }),
-    prisma.tenantCharge.deleteMany({ where: { moveOutId: existing.id } }),
-    prisma.moveOut.delete({ where: { id: existing.id } }),
-    prisma.tenant.update({ where: { id }, data: { active: true } }),
-  ]);
-  return NextResponse.json({ tenant: serializeTenant(updated), transactionIds: removed.map((t) => t.id) });
+  const updated = await prisma.$transaction(async (tx) => {
+    await tx.transaction.deleteMany({ where: { moveOutId: existing.id } });
+    await tx.tenantCharge.deleteMany({ where: { moveOutId: existing.id } });
+    await tx.moveOut.delete({ where: { id: existing.id } });
+    // Only a vacancy this move-out created: one the landlord set by hand
+    // before it isn't this undo's to clear.
+    if (existing.madeVacant) await clearVacancy(tx, { propertyId: tenant.propertyId, unitId: tenant.unitId });
+    return tx.tenant.update({ where: { id }, data: { active: true } });
+  });
+  return NextResponse.json({
+    tenant: serializeTenant(updated),
+    transactionIds: removed.map((t) => t.id),
+    vacancyCleared: existing.madeVacant,
+  });
 }

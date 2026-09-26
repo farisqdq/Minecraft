@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { requireUnit } from "@/lib/access";
 import { monthKeyOf, recordRentChange } from "@/lib/rent";
 import { validRent } from "@/lib/money";
+import { sinceDay, vacantSinceFor } from "@/lib/vacancy-db";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -16,7 +17,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const body = await req.json().catch(() => null);
-  const data: { name?: string; monthlyRent?: number; vacant?: boolean } = {};
+  const data: { name?: string; monthlyRent?: number; vacant?: boolean; vacantSince?: Date | null } = {};
 
   if (body?.name !== undefined) {
     const name = typeof body.name === "string" ? body.name.trim() : "";
@@ -32,6 +33,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if (body?.vacant !== undefined) {
     data.vacant = Boolean(body.vacant);
+    const since = vacantSinceFor(data.vacant, existing.vacant, existing.vacantSince, body?.vacantSince);
+    if (since && "error" in since) return NextResponse.json({ error: since.error }, { status: 400 });
+    data.vacantSince = since;
   }
 
   const unit = await prisma.$transaction(async (tx) => {
@@ -54,6 +58,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
 
   return NextResponse.json({
     ...unit,
+    vacantSince: sinceDay(unit.vacantSince),
     rentChanges: rentChanges.map((c) => ({
       id: c.id,
       propertyId: c.propertyId,

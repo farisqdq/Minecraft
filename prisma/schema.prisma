@@ -108,6 +108,9 @@ model Property {
   address     String?
   monthlyRent Float    @default(0)
   vacant      Boolean  @default(false)
+  /// When it went empty — or rather, when rent stopped coming in. Null when
+  /// occupied, and on places marked vacant before this was recorded.
+  vacantSince DateTime?
   createdAt   DateTime @default(now())
 
   units             Unit[]
@@ -132,6 +135,8 @@ model Unit {
   name        String
   monthlyRent Float    @default(0)
   vacant      Boolean  @default(false)
+  /// As on Property.
+  vacantSince DateTime?
   createdAt   DateTime @default(now())
 
   transactions      Transaction[]
@@ -328,6 +333,9 @@ model MoveOut {
   returnNote        String?
   /// Where to send it — the one thing a landlord always has to chase.
   forwardingAddress String?
+  /// Whether recording this move-out marked their place vacant, so undoing
+  /// it can put that back — and only that.
+  madeVacant        Boolean   @default(false)
   createdById       String?
   createdBy         User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt         DateTime  @default(now())

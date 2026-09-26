@@ -49,6 +49,7 @@ type CleanMoveOut = {
   returnedOn: Date | null;
   returnNote: string | null;
   forwardingAddress: string | null;
+  madeVacant: boolean;
   deductions: { kind: string; label: string; amount: number }[];
 };
 type CleanLoanPayment = { month: string; date: Date; principal: number; interest: number; escrow: number };
@@ -148,6 +149,7 @@ type CleanUnit = {
   name: string;
   monthlyRent: number;
   vacant: boolean;
+  vacantSince: Date | null;
   transactions: CleanTransaction[];
   recurringExpenses: CleanRecurring[];
   tenants: CleanTenant[];
@@ -159,6 +161,7 @@ type CleanProperty = {
   address: string | null;
   monthlyRent: number;
   vacant: boolean;
+  vacantSince: Date | null;
   transactions: CleanTransaction[];
   recurringExpenses: CleanRecurring[];
   loans: CleanLoan[];
@@ -458,6 +461,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           returnedOn: day(mo.returnedOn),
           returnNote: str(mo.returnNote, 200) || null,
           forwardingAddress: str(mo.forwardingAddress, 300) || null,
+          madeVacant: mo.madeVacant === true,
           deductions,
         };
       }
@@ -610,6 +614,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           name: unitName,
           monthlyRent: num(u.monthlyRent),
           vacant: bool(u.vacant),
+          vacantSince: bool(u.vacant) ? day(u.vacantSince) : null,
           transactions: parseTransactions(u.transactions),
           recurringExpenses: parseRecurring(u.recurringExpenses),
           tenants: parseTenants(u.tenants),
@@ -623,6 +628,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         address: str(p.address, 250) || null,
         monthlyRent: num(p.monthlyRent),
         vacant: bool(p.vacant),
+        vacantSince: bool(p.vacant) ? day(p.vacantSince) : null,
         transactions: parseTransactions(p.transactions),
         recurringExpenses: parseRecurring(p.recurringExpenses),
         loans: parseLoans(p.loans),
@@ -1035,6 +1041,7 @@ export async function POST(req: Request) {
             address: property.address,
             monthlyRent: property.monthlyRent,
             vacant: property.vacant,
+            vacantSince: property.vacantSince,
           },
         });
         created.properties += 1;
@@ -1059,6 +1066,7 @@ export async function POST(req: Request) {
               name: unit.name,
               monthlyRent: unit.monthlyRent,
               vacant: unit.vacant,
+              vacantSince: unit.vacantSince,
             },
           });
           created.units += 1;

@@ -12,6 +12,7 @@ import DocumentsPanel from "../../../components/DocumentsPanel";
 import LoansPanel from "../../../components/LoansPanel";
 import { MarkReturnedDialog, MoveOutDialog, MoveOutSummary } from "../../../components/MoveOut";
 import type { MoveOutDTO } from "@/lib/move-outs-db";
+import { vacancyCost, vacantDays, vacantFor } from "@/lib/vacancy";
 import type { LoanDTO } from "@/lib/loans-db";
 import type { DocumentDTO } from "@/lib/documents";
 import { Toasts, useToasts } from "../../../components/Toasts";
@@ -27,7 +28,15 @@ import { STATUS_LABEL, ago, isOpen, type RequestDTO } from "@/lib/maintenance";
 import { monthName } from "@/lib/notices";
 import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 
-type Property = { id: string; name: string; address: string; monthlyRent: number; vacant: boolean };
+type Property = {
+  id: string;
+  name: string;
+  address: string;
+  monthlyRent: number;
+  vacant: boolean;
+  /** YYYY-MM-DD rent stopped coming in, when known. */
+  vacantSince: string | null;
+};
 type LedgerEntry = {
   id: string;
   unitId: string | null;
@@ -41,7 +50,14 @@ type LedgerEntry = {
   /** Set when a mortgage payment wrote this entry; see LoansPanel. */
   loanPaymentId: string | null;
 };
-type Unit = { id: string; propertyId: string; name: string; monthlyRent: number; vacant: boolean };
+type Unit = {
+  id: string;
+  propertyId: string;
+  name: string;
+  monthlyRent: number;
+  vacant: boolean;
+  vacantSince: string | null;
+};
 type RecurringExpense = {
   id: string;
   propertyId: string;
@@ -144,7 +160,13 @@ export default function PropertyManageClient({
   const [rentChanges, setRentChanges] = useState<RentChangeDTO[]>(initialRentChanges);
   const [propertyOpen, setPropertyOpen] = useState(false);
   const [propertySaving, setPropertySaving] = useState(false);
-  const [propertyForm, setPropertyForm] = useState({ name: "", address: "", monthlyRent: "", vacant: false });
+  const [propertyForm, setPropertyForm] = useState({
+    name: "",
+    address: "",
+    monthlyRent: "",
+    vacant: false,
+    vacantSince: "",
+  });
   const [transactions, setTransactions] = useState<LedgerEntry[]>(initialTransactions);
   const [units, setUnits] = useState<Unit[]>(initialUnits);
   const [recurring, setRecurring] = useState<RecurringExpense[]>(initialRecurring);
@@ -176,6 +198,7 @@ export default function PropertyManageClient({
   const [editUnitName, setEditUnitName] = useState("");
   const [editUnitRent, setEditUnitRent] = useState("");
   const [editUnitVacant, setEditUnitVacant] = useState(false);
+  const [editUnitSince, setEditUnitSince] = useState("");
 
   const [addingRecurring, setAddingRecurring] = useState(false);
   const [rCategory, setRCategory] = useState("");
@@ -213,6 +236,7 @@ export default function PropertyManageClient({
     setEditUnitName(u.name);
     setEditUnitRent(u.monthlyRent ? String(u.monthlyRent) : "");
     setEditUnitVacant(u.vacant);
+    setEditUnitSince(u.vacantSince ?? "");
   }
 
   async function saveUnit(e: React.FormEvent) {
@@ -224,7 +248,12 @@ export default function PropertyManageClient({
     const res = await fetch(`/api/units/${editingUnitId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, monthlyRent: parseFloat(editUnitRent) || 0, vacant: editUnitVacant }),
+      body: JSON.stringify({
+        name,
+        monthlyRent: parseFloat(editUnitRent) || 0,
+        vacant: editUnitVacant,
+        ...(editUnitVacant && editUnitSince ? { vacantSince: editUnitSince } : {}),
+      }),
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
@@ -294,6 +323,7 @@ export default function PropertyManageClient({
       address: property.address,
       monthlyRent: property.monthlyRent ? String(property.monthlyRent) : "",
       vacant: property.vacant,
+      vacantSince: property.vacantSince ?? "",
     });
     setError("");
     setPropertyOpen(true);
@@ -313,6 +343,7 @@ export default function PropertyManageClient({
         address: propertyForm.address.trim(),
         monthlyRent: parseFloat(propertyForm.monthlyRent) || 0,
         vacant: propertyForm.vacant,
+        ...(propertyForm.vacant && propertyForm.vacantSince ? { vacantSince: propertyForm.vacantSince } : {}),
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -428,6 +459,8 @@ export default function PropertyManageClient({
     }
 
     setTenants((prev) => (editing ? prev.map((t) => (t.id === data.id ? data : t)) : [...prev, data]));
+    // A new tenant ends a vacancy; the server has already cleared it.
+    if (!editing) setVacancy(data.unitId ?? null, null);
     setTenantOpen(false);
     push(editing ? "Tenant updated." : `${data.name} added.`);
     router.refresh();
@@ -532,6 +565,15 @@ export default function PropertyManageClient({
     router.refresh();
   }
 
+  /** Mirrors a vacancy the server just set or cleared, so the page needn't reload. */
+  function setVacancy(unitId: string | null, since: string | null) {
+    if (unitId) {
+      setUnits((prev) => prev.map((u) => (u.id === unitId ? { ...u, vacant: Boolean(since), vacantSince: since } : u)));
+    } else {
+      setProperty((prev) => ({ ...prev, vacant: Boolean(since), vacantSince: since }));
+    }
+  }
+
   /** Re-reads one tenant's balance after something on the server moved it. */
   async function refreshBalance(tenantId: string) {
     const res = await fetch(`/api/tenants/${tenantId}/statement`);
@@ -569,6 +611,7 @@ export default function PropertyManageClient({
           delete next[t.id];
           return next;
         });
+        if (data.vacancyCleared) setVacancy(t.unitId ?? null, null);
         const gone: string[] = data.transactionIds ?? [];
         setTransactions((prev) => prev.filter((x) => !gone.includes(x.id)));
         await refreshBalance(t.id);
@@ -629,6 +672,12 @@ export default function PropertyManageClient({
   }
 
   /** Who is renting that unit right now, for the "Paid by" line. */
+  /** What a place was asking in a given month — the rent a vacancy is going without. */
+  function expectedRentFor(unitId: string | null, month: string) {
+    const unit = unitId ? units.find((u) => u.id === unitId) : null;
+    return rentForMonth(rentChanges, property.id, unitId, month, unit ? unit.monthlyRent : property.monthlyRent);
+  }
+
   function tenantFor(unitId: string) {
     const match = tenants.find((t) => t.active && (t.unitId ?? "") === unitId);
     return match?.name ?? "";
@@ -864,6 +913,24 @@ export default function PropertyManageClient({
           <span>Monthly rent</span>
           <span className="num">{money(property.monthlyRent)}</span>
           <RentTrail unitId={null} />
+        </div>
+      )}
+
+      {units.length === 0 && property.vacant && property.vacantSince && (
+        <div className={styles.vacancyBar}>
+          <span className={`${styles.pill} ${styles.vacant}`}>
+            Vacant {vacantFor(vacantDays(property.vacantSince, todayKey))}
+          </span>
+          <span>
+            Empty since {formatDay(property.vacantSince)}
+            {vacantDays(property.vacantSince, todayKey) > 0 &&
+              ` · ${money(
+                Math.round(vacancyCost(property.vacantSince, todayKey, (m) => expectedRentFor(null, m)))
+              )} of rent gone so far`}
+          </span>
+          <button type="button" className={styles.portalLink} onClick={() => openTenant()}>
+            Add the next tenant
+          </button>
         </div>
       )}
 
@@ -1326,6 +1393,16 @@ export default function PropertyManageClient({
                           />
                           Vacant
                         </label>
+                        {editUnitVacant && (
+                          <input
+                            type="date"
+                            aria-label="Vacant since"
+                            title="Vacant since"
+                            max={todayKey}
+                            value={editUnitSince || todayKey}
+                            onChange={(e) => setEditUnitSince(e.target.value)}
+                          />
+                        )}
                         <button type="submit" className={`${styles.btn} ${styles.small} ${styles.primary}`}>
                           Save
                         </button>
@@ -1343,7 +1420,18 @@ export default function PropertyManageClient({
                   <tr key={u.id}>
                     <td>
                       {u.name}
-                      {u.vacant && <span className={styles.vacantTag}>Vacant</span>}
+                      {u.vacant && (
+                        <span className={styles.vacantTag}>
+                          {u.vacantSince ? `Vacant ${vacantFor(vacantDays(u.vacantSince, todayKey))}` : "Vacant"}
+                        </span>
+                      )}
+                      {u.vacant && u.vacantSince && vacantDays(u.vacantSince, todayKey) > 0 && (
+                        <div className={styles.note}>
+                          since {formatDay(u.vacantSince)} ·{" "}
+                          {money(Math.round(vacancyCost(u.vacantSince, todayKey, (m) => expectedRentFor(u.id, m))))} of
+                          rent gone
+                        </div>
+                      )}
                     </td>
                     <td className="num" style={{ textAlign: "right" }}>
                       {money(u.monthlyRent)}
@@ -1978,6 +2066,7 @@ export default function PropertyManageClient({
           setMovingOut(null);
           setTenants((prev) => prev.map((x) => (x.id === r.tenant.id ? r.tenant : x)));
           setMoveOuts((prev) => ({ ...prev, [r.tenant.id]: r.moveOut }));
+          if (r.vacantSince) setVacancy(r.tenant.unitId ?? null, r.vacantSince);
           if (r.transactions.length) {
             setTransactions((prev) => [...r.transactions, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
           }
@@ -2085,6 +2174,18 @@ export default function PropertyManageClient({
                 />
                 Vacant — no rent expected until it&apos;s let again
               </label>
+            )}
+            {units.length === 0 && propertyForm.vacant && (
+              <div className={`${styles.field} ${styles.wide}`}>
+                <label htmlFor="p-vacant-since">Empty since</label>
+                <input
+                  id="p-vacant-since"
+                  type="date"
+                  max={todayKey}
+                  value={propertyForm.vacantSince || todayKey}
+                  onChange={(e) => setPropertyForm((f) => ({ ...f, vacantSince: e.target.value }))}
+                />
+              </div>
             )}
           </div>
           {error && <div className={styles.errorBar}>{error}</div>}

@@ -6,7 +6,7 @@ import { backupFileKey } from "@/lib/backup-files";
 import { storageAccessOf } from "@/lib/file-links";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 12;
+export const BACKUP_VERSION = 13;
 
 /** Signs a private file's link for the account exporting it; see lib/backup-files. */
 type FileKey = (url: string) => string | undefined;
@@ -146,6 +146,7 @@ type TenantRow = {
     returnedOn: Date | null;
     returnNote: string | null;
     forwardingAddress: string | null;
+    madeVacant: boolean;
     deductions: { kind: string; label: string; amount: number }[];
   } | null;
   rules?: {
@@ -216,6 +217,7 @@ function serializeTenants(rows: TenantRow[]) {
           returnedOn: t.moveOut.returnedOn ? t.moveOut.returnedOn.toISOString().slice(0, 10) : "",
           returnNote: t.moveOut.returnNote ?? "",
           forwardingAddress: t.moveOut.forwardingAddress ?? "",
+          madeVacant: t.moveOut.madeVacant,
           deductions: t.moveOut.deductions.map((d) => ({ kind: d.kind, label: d.label, amount: d.amount })),
         }
       : null,
@@ -460,6 +462,7 @@ export async function GET() {
         address: p.address ?? "",
         monthlyRent: p.monthlyRent,
         vacant: p.vacant,
+        vacantSince: p.vacantSince ? p.vacantSince.toISOString().slice(0, 10) : "",
         transactions: serializeTxns(p.transactions, key, loanIndex),
         recurringExpenses: serializeRecurring(p.recurringExpenses),
         loans: serializeLoans(p.loans),
@@ -471,6 +474,7 @@ export async function GET() {
           name: u.name,
           monthlyRent: u.monthlyRent,
           vacant: u.vacant,
+          vacantSince: u.vacantSince ? u.vacantSince.toISOString().slice(0, 10) : "",
           transactions: serializeTxns(u.transactions, key, loanIndex),
           recurringExpenses: serializeRecurring(u.recurringExpenses),
           tenants: serializeTenants(u.tenants),

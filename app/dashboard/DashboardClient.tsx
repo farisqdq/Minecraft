@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
-import { money } from "@/lib/money";
+import { money, moneyRound } from "@/lib/money";
 import { STATUS_LABEL, ago, type RequestDTO } from "@/lib/maintenance";
 import { chasedRecently, remindedAgo } from "@/lib/notices";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
@@ -16,6 +16,7 @@ import type { LoanDTO, LoanPaymentDTO } from "@/lib/loans-db";
 import type { MoveOutDTO } from "@/lib/move-outs-db";
 import { returnLabel, returnState } from "@/lib/move-out";
 import { MarkReturnedDialog } from "../components/MoveOut";
+import { vacancyCost, vacantDays, vacantFor } from "@/lib/vacancy";
 import AppShell from "../components/AppShell";
 import CashFlowChart from "../components/CashFlowChart";
 import CategoryBars from "../components/CategoryBars";
@@ -37,6 +38,8 @@ type Property = {
   address: string;
   monthlyRent: number;
   vacant: boolean;
+  /** YYYY-MM-DD rent stopped coming in, when known. */
+  vacantSince: string | null;
 };
 
 type Unit = {
@@ -45,6 +48,7 @@ type Unit = {
   name: string;
   monthlyRent: number;
   vacant: boolean;
+  vacantSince: string | null;
 };
 
 type RecurringExpense = {
@@ -95,6 +99,7 @@ type Target = {
   label: string;
   monthlyRent: number;
   vacant: boolean;
+  vacantSince: string | null;
 };
 
 // toLocaleDateString builds a new Intl formatter on every call, and that is
@@ -426,7 +431,15 @@ export default function DashboardClient({
       const propUnits = unitsForProperty(p.id);
       if (propUnits.length === 0) {
         return [
-          { key: p.id, propertyId: p.id, unitId: null, label: p.name, monthlyRent: p.monthlyRent, vacant: p.vacant },
+          {
+            key: p.id,
+            propertyId: p.id,
+            unitId: null,
+            label: p.name,
+            monthlyRent: p.monthlyRent,
+            vacant: p.vacant,
+            vacantSince: p.vacantSince,
+          },
         ];
       }
       return [
@@ -437,6 +450,7 @@ export default function DashboardClient({
           label: `${p.name} — ${u.name}`,
           monthlyRent: u.monthlyRent,
           vacant: u.vacant,
+          vacantSince: u.vacantSince,
         })),
         {
           key: `${p.id}:whole`,
@@ -445,6 +459,7 @@ export default function DashboardClient({
           label: `${p.name} — (whole building)`,
           monthlyRent: 0,
           vacant: false,
+          vacantSince: null,
         },
       ];
     });
@@ -1379,7 +1394,24 @@ export default function DashboardClient({
     .map((d) => ({ ...d, state: returnState(d, todayKey) }))
     .sort((a, b) => (a.returnBy ?? "9999").localeCompare(b.returnBy ?? "9999"));
 
+  // Empty places, longest first, with the rent they've gone without. Only
+  // ones with a known start: a place marked vacant years ago with no date
+  // would sit here forever with a number nobody can check.
+  const vacancies = visibleTargets
+    .filter((t) => t.vacant && t.vacantSince)
+    .map((t) => {
+      const since = t.vacantSince!;
+      return {
+        target: t,
+        since,
+        days: vacantDays(since, todayKey),
+        lost: vacancyCost(since, todayKey, (month) => expectedRent(t, month)),
+      };
+    })
+    .sort((a, b) => b.days - a.days);
+
   const attentionCount =
+    vacancies.length +
     depositAlerts.length +
     repairAlerts.length +
     unpaidThisMonth.length +
@@ -1907,6 +1939,32 @@ export default function DashboardClient({
                     </div>
                   ))}
 
+                  {vacancies.map((v) => (
+                    <div key={`v-${v.target.key}`} className={styles.attnRow}>
+                      <div className={styles.attnMain}>
+                        <div className={styles.attnLabel}>
+                          {v.target.label}{" "}
+                          <span className={`${styles.pill} ${styles.vacant}`}>Vacant {vacantFor(v.days)}</span>
+                        </div>
+                        <div className={styles.attnSub}>
+                          Empty since {formatDay(v.since)}
+                          {v.days > 0 ? ` · ${moneyRound(v.lost)} of rent gone so far` : " · rent stops today"}
+                        </div>
+                      </div>
+                      <span className={`${styles.attnAmt} ${styles.neg} num`}>
+                        {v.lost > 0 ? `\u2212${moneyRound(v.lost)}` : ""}
+                      </span>
+                      <div className={styles.attnActions}>
+                        <Link
+                          href={`/dashboard/properties/${v.target.propertyId}`}
+                          className={`${styles.btn} ${styles.small}`}
+                        >
+                          Add a tenant
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+
                   {depositAlerts.map((d) => (
                     <div key={`d-${d.id}`} className={styles.attnRow}>
                       <div className={styles.attnMain}>
@@ -2054,7 +2112,11 @@ export default function DashboardClient({
                 ).length;
                 let status: { text: string; tone: string } | null = null;
                 if (propUnits.length === 0) {
-                  if (p.vacant) status = { text: "Vacant", tone: styles.vacant };
+                  if (p.vacant)
+                    status = {
+                      text: p.vacantSince ? `Vacant ${vacantFor(vacantDays(p.vacantSince, todayKey))}` : "Vacant",
+                      tone: styles.vacant,
+                    };
                   else if (paidInFull) status = { text: "Paid", tone: styles.paid };
                   else if (target > 0) status = { text: `${money(target - paidThisMonth)} short`, tone: styles.owed };
                 } else if (rentedUnits.length > 0) {
@@ -2161,7 +2223,9 @@ export default function DashboardClient({
                                 {uTenant && <span className={styles.unitTenant}>{uTenant.name}</span>}
                               </span>
                               {u.vacant ? (
-                                <span className={styles.vacantTag}>Vacant</span>
+                                <span className={styles.vacantTag}>
+                                  {u.vacantSince ? `Vacant ${vacantFor(vacantDays(u.vacantSince, todayKey))}` : "Vacant"}
+                                </span>
                               ) : uTarget > 0 ? (
                                 <span className={`num ${uFull ? styles.pos : styles.unitDue}`}>
                                   {uFull ? "Paid in full" : `${money(uPaid)} of ${money(uTarget)}`}

@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
 import { monthKeyOf, recordRentChange } from "@/lib/rent";
 import { validRent } from "@/lib/money";
+import { sinceDay, vacantSinceFor } from "@/lib/vacancy-db";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -27,12 +28,23 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     return NextResponse.json({ error: "Enter a valid monthly rent." }, { status: 400 });
   }
 
-  const data: { name: string; address: string | null; monthlyRent: number; vacant?: boolean } = {
+  const data: {
+    name: string;
+    address: string | null;
+    monthlyRent: number;
+    vacant?: boolean;
+    vacantSince?: Date | null;
+  } = {
     name,
     address: address || null,
     monthlyRent,
   };
-  if (body?.vacant !== undefined) data.vacant = Boolean(body.vacant);
+  if (body?.vacant !== undefined) {
+    data.vacant = Boolean(body.vacant);
+    const since = vacantSinceFor(data.vacant, existing.vacant, existing.vacantSince, body?.vacantSince);
+    if (since && "error" in since) return NextResponse.json({ error: since.error }, { status: 400 });
+    data.vacantSince = since;
+  }
 
   // The rent change and the property update land together, so the books can
   // never show a new rent with no record of when it started.
@@ -57,6 +69,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   return NextResponse.json({
     ...property,
     address: property.address ?? "",
+    vacantSince: sinceDay(property.vacantSince),
     rentChanges: rentChanges.map((c) => ({
       id: c.id,
       propertyId: c.propertyId,

@@ -113,6 +113,7 @@ export default async function DashboardPage() {
         address: p.address ?? "",
         monthlyRent: p.monthlyRent,
         vacant: p.vacant,
+        vacantSince: p.vacantSince ? p.vacantSince.toISOString().slice(0, 10) : null,
       }))}
       initialUnits={units.map((u) => ({
         id: u.id,
@@ -120,6 +121,7 @@ export default async function DashboardPage() {
         name: u.name,
         monthlyRent: u.monthlyRent,
         vacant: u.vacant,
+        vacantSince: u.vacantSince ? u.vacantSince.toISOString().slice(0, 10) : null,
       }))}
       initialRecurring={recurring.map((r) => ({
         id: r.id,

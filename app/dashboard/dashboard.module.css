@@ -3149,3 +3149,21 @@ tr:hover .rowDel {
   gap: 4px 14px;
   margin-top: 4px;
 }
+
+/* An empty place: what it has cost is the point, so it sits up top. */
+.vacancyBar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.vacancyBar .portalLink {
+  margin-left: auto;
+}

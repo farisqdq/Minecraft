@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { clearVacancy } from "@/lib/vacancy-db";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireCompany, requireTenant } from "@/lib/access";
@@ -60,7 +61,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
-  const tenant = await prisma.tenant.update({ where: { id }, data });
+  const tenant = await prisma.$transaction(async (tx) => {
+    // Back in means the place isn't empty any more.
+    if (data.active === true && !existing.active) {
+      await clearVacancy(tx, { propertyId: existing.propertyId, unitId: existing.unitId });
+    }
+    return tx.tenant.update({ where: { id }, data });
+  });
   return NextResponse.json(serializeTenant(tenant));
 }
 

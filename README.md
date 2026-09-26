@@ -131,6 +131,19 @@ flipping them to past:
   deduction and what's coming back, laid out to print or save as a PDF and
   send to their forwarding address.
 
+**The empty place.** A move-out that leaves nobody living there marks the
+place vacant, from the day rent stops — the later of the day they left and
+the end of the last month they were charged for, so a vacancy never counts
+days someone paid for. The dashboard then lists it under Needs attention
+with how long it's stood empty and the rent it has gone without, prorated by
+the day at what the place was asking each month. A vacancy is the costliest
+thing on a rent roll and the only one that never shows up in the ledger,
+because nothing happens; this is what puts it next to the late rent.
+Adding the next tenant ends it. Marking a place vacant by hand on its edit
+form asks when it went empty; places marked vacant before this existed have
+no date and are shown as vacant without a figure rather than given an
+invented one.
+
 **Undo move-out** takes all of it back: the income and charges come out and
 they're current again. It's refused if someone else now lives there. The
 income and charges can't be deleted on their own from the ledger or the
