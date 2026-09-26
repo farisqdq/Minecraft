@@ -12,6 +12,7 @@ import { documentsWhere } from "@/lib/documents-db";
 import { blobConfigured } from "@/lib/blob";
 import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
+import { serializeAsset } from "@/lib/assets-db";
 import PropertyManageClient from "./PropertyManageClient";
 
 // Enough to see the shape of a place's troubles without turning the page
@@ -70,6 +71,10 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   // The property's own documents and its tenants' — both carry its id.
   const documents = await documentsWhere({ propertyId: property.id });
   const loans = await loansWhere({ propertyId: property.id });
+  const assets = await prisma.depreciableAsset.findMany({
+    where: { propertyId: property.id },
+    orderBy: { createdAt: "asc" },
+  });
   const moveOuts = await prisma.moveOut.findMany({
     where: { tenant: { propertyId: property.id } },
     include: moveOutInclude,
@@ -115,6 +120,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       initialBalances={balances}
       initialDocuments={documents}
       initialLoans={loans}
+      initialAssets={assets.map(serializeAsset)}
       initialMoveOuts={Object.fromEntries(moveOuts.map((m) => [m.tenantId, serializeMoveOut(m)]))}
       storageReady={blobConfigured()}
       initialRequests={requests

@@ -331,13 +331,30 @@ twice.
 Amounts are worked in whole cents, and a 30-year schedule's rounding residual
 is folded into the final payment the way lenders do it.
 
+**Depreciation.** The tax code lets a landlord deduct a rental building's
+cost over 27.5 years (39 for a commercial building like a storefront), and
+the same for improvements to it — a roof, a furnace, a remodel. It's usually
+the largest deduction on Schedule E and, because no money moves, no ledger of
+payments ever shows it. Each property page has a **Depreciation** section:
+add the building (its cost without the land, which never depreciates) and any
+improvements, with the month each was first ready to rent. The app works out
+each year's deduction by the IRS method for both classes — straight-line with
+the mid-month convention — and checks against Publication 946's table in the
+tests. Each year is the difference of two rounded running totals, so a
+schedule adds up to exactly its basis. It is deliberately not in the
+overview's profit, which is money in and out; it is on the tax export.
+
 **Tax-year export.** The **Export** page downloads a CSV for one LLC and
 one year — every transaction, a summary totalling rental income and each
 expense category, and, when the LLC owns more than one house, the same
 breakdown per property. Schedule E is filled in per property, so that last
 block is the one an accountant actually wants. A final block lists each mortgage's
 interest, escrow and principal for the year and its balance at year end —
-the interest line is the one to check against the lender's Form 1098.
+the interest line is the one to check against the lender's Form 1098. When anything is being depreciated, the summary
+gains a depreciation line (Schedule E line 18) and a net after depreciation,
+per property too, and a schedule of each asset's basis, class, year's
+deduction and total taken — the running figure an accountant carries forward
+and needs again at a sale.
 
 Text going into the CSV is escaped so a note can't become a live formula in
 whoever's spreadsheet opens it. Amounts are left alone, so the columns still

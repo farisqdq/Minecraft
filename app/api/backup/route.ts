@@ -6,7 +6,7 @@ import { backupFileKey } from "@/lib/backup-files";
 import { storageAccessOf } from "@/lib/file-links";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 13;
+export const BACKUP_VERSION = 14;
 
 /** Signs a private file's link for the account exporting it; see lib/backup-files. */
 type FileKey = (url: string) => string | undefined;
@@ -393,6 +393,7 @@ export async function GET() {
           },
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
           loans: { orderBy: { createdAt: "asc" }, include: { payments: { orderBy: { month: "asc" } } } },
+          assets: { orderBy: { createdAt: "asc" } },
           tenants: {
             where: { unitId: null },
             orderBy: { createdAt: "asc" },
@@ -466,6 +467,16 @@ export async function GET() {
         transactions: serializeTxns(p.transactions, key, loanIndex),
         recurringExpenses: serializeRecurring(p.recurringExpenses),
         loans: serializeLoans(p.loans),
+        // What's being depreciated. Without it a restore would quietly drop
+        // the largest deduction from every future tax export.
+        assets: p.assets.map((a) => ({
+          kind: a.kind,
+          label: a.label,
+          cls: a.cls,
+          basis: a.basis,
+          inService: a.inService,
+          note: a.note ?? "",
+        })),
         tenants: serializeTenants(p.tenants),
         rentChanges: serializeRentChanges(p.rentChanges),
         requests: serializeRequests(p.requests, key),

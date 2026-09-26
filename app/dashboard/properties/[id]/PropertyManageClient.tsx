@@ -10,6 +10,8 @@ import Modal from "../../../components/Modal";
 import StatementPanel from "../../../components/StatementPanel";
 import DocumentsPanel from "../../../components/DocumentsPanel";
 import LoansPanel from "../../../components/LoansPanel";
+import DepreciationPanel from "../../../components/DepreciationPanel";
+import type { AssetDTO } from "@/lib/assets-db";
 import { MarkReturnedDialog, MoveOutDialog, MoveOutSummary } from "../../../components/MoveOut";
 import type { MoveOutDTO } from "@/lib/move-outs-db";
 import { vacancyCost, vacantDays, vacantFor } from "@/lib/vacancy";
@@ -109,6 +111,7 @@ export default function PropertyManageClient({
   initialDocuments,
   initialLoans,
   initialMoveOuts,
+  initialAssets,
   storageReady,
   rentChanges: initialRentChanges,
   transactions: initialTransactions,
@@ -135,6 +138,8 @@ export default function PropertyManageClient({
   initialLoans: LoanDTO[];
   /** Recorded move-outs, by tenant id. */
   initialMoveOuts: Record<string, MoveOutDTO>;
+  /** The building and improvements being depreciated. */
+  initialAssets: AssetDTO[];
   storageReady: boolean;
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
@@ -1536,6 +1541,25 @@ export default function PropertyManageClient({
             setTransactions((prev) => prev.filter((t) => !ids.includes(t.id)));
             router.refresh();
           }}
+          onToast={push}
+        />
+      </section>
+
+      <section className={styles.block}>
+        <div className={styles.blockHead}>
+          <h2>Depreciation</h2>
+        </div>
+        <p className={styles.helpText} style={{ marginTop: 0 }}>
+          The tax code lets you deduct a rental building&apos;s cost over 27.5 years — 39 for commercial — and the
+          same for improvements to it. It&apos;s usually the largest deduction a landlord has, and it never shows up as
+          money leaving the bank, so it isn&apos;t in the figures above. It is on the tax export, on the line
+          Schedule E calls depreciation.
+        </p>
+        <DepreciationPanel
+          propertyId={property.id}
+          initial={initialAssets}
+          year={Number(todayKey.slice(0, 4))}
+          canDelete={canManage}
           onToast={push}
         />
       </section>

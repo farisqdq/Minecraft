@@ -5,6 +5,7 @@ import { requireCompany } from "@/lib/access";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { csvRow } from "@/lib/csv";
 import { balanceAt, yearTotals } from "@/lib/loans";
+import { accumulatedThrough, depreciationFor, normalizeClass, RECOVERY_YEARS } from "@/lib/depreciation";
 
 const fmt = (n: number) => n.toFixed(2);
 
@@ -40,12 +41,12 @@ export async function GET(req: Request) {
 
   // Schedule E is filled in per property — a column each — so the summary
   // below carries the same breakdown rather than only an LLC-wide total.
-  type PropertyTotals = { rent: number; expenses: Map<string, number>; expenseTotal: number };
+  type PropertyTotals = { rent: number; expenses: Map<string, number>; expenseTotal: number; depreciation: number };
   const byProperty = new Map<string, PropertyTotals>();
   const propertyFor = (name: string) => {
     let totals = byProperty.get(name);
     if (!totals) {
-      totals = { rent: 0, expenses: new Map(), expenseTotal: 0 };
+      totals = { rent: 0, expenses: new Map(), expenseTotal: 0, depreciation: 0 };
       byProperty.set(name, totals);
     }
     return totals;
@@ -78,6 +79,30 @@ export async function GET(req: Request) {
     );
   }
 
+  // Depreciation for the year: no money moved, so it isn't in the ledger
+  // above, but it's a Schedule E expense (line 18) — usually the largest.
+  // Worked out per asset in cents, so each property's figure is exactly the
+  // sum of its assets' and the LLC's exactly the sum of its properties'.
+  const assets = await prisma.depreciableAsset.findMany({
+    where: { property: { companyId } },
+    include: { property: { select: { name: true } } },
+    orderBy: [{ createdAt: "asc" }],
+  });
+  const assetRows = assets
+    .map((a) => {
+      const asset = { basis: a.basis, inService: a.inService, cls: normalizeClass(a.cls) };
+      return { a, asset, thisYear: depreciationFor(asset, year), taken: accumulatedThrough(asset, year) };
+    })
+    .filter((r) => r.thisYear > 0 || r.taken > 0);
+  let depreciationCents = 0;
+  for (const r of assetRows) {
+    const cents = Math.round(r.thisYear * 100);
+    depreciationCents += cents;
+    const totals = propertyFor(r.a.property.name);
+    totals.depreciation = (Math.round(totals.depreciation * 100) + cents) / 100;
+  }
+  const depreciationTotal = depreciationCents / 100;
+
   rows.push("\r\n");
   rows.push(csvRow(["Summary", String(year)]));
   rows.push(csvRow(["Rental Income", fmt(rentTotal)]));
@@ -87,6 +112,10 @@ export async function GET(req: Request) {
   }
   rows.push(csvRow(["Total Expenses", fmt(-expenseTotal)]));
   rows.push(csvRow(["Net Profit", fmt(rentTotal - expenseTotal)]));
+  if (depreciationTotal > 0) {
+    rows.push(csvRow(["Depreciation (Schedule E line 18)", fmt(-depreciationTotal)]));
+    rows.push(csvRow(["Net after depreciation", fmt(rentTotal - expenseTotal - depreciationTotal)]));
+  }
 
   // Per-property columns, in the order they appear in the ledger. A category
   // row is included when any property used it, so the columns line up.
@@ -111,6 +140,11 @@ export async function GET(req: Request) {
     rows.push(
       csvRow(["Total Expenses", "", ...propertyNames.map((n) => fmt(-byProperty.get(n)!.expenseTotal))])
     );
+    if (depreciationTotal > 0) {
+      rows.push(
+        csvRow(["Depreciation", "", ...propertyNames.map((n) => fmt(-byProperty.get(n)!.depreciation))])
+      );
+    }
     rows.push(
       csvRow([
         "Net Profit",
@@ -121,6 +155,53 @@ export async function GET(req: Request) {
         }),
       ])
     );
+    if (depreciationTotal > 0) {
+      rows.push(
+        csvRow([
+          "Net after depreciation",
+          "",
+          ...propertyNames.map((n) => {
+            const totals = byProperty.get(n)!;
+            return fmt(totals.rent - totals.expenseTotal - totals.depreciation);
+          }),
+        ])
+      );
+    }
+  }
+
+  // The schedule behind the depreciation line, which an accountant carries
+  // forward year to year — and needs at a sale, when what was taken is
+  // recaptured.
+  if (assetRows.length > 0) {
+    rows.push("\r\n");
+    rows.push(
+      csvRow([
+        "Depreciation",
+        String(year),
+        "Property",
+        "Class",
+        "In service",
+        "Basis",
+        `Depreciation ${year}`,
+        `Accumulated through ${year}`,
+      ])
+    );
+    for (const { a, asset, thisYear, taken } of assetRows) {
+      rows.push(
+        csvRow([
+          a.label,
+          "",
+          a.property.name,
+          `${asset.cls === "commercial" ? "Nonresidential real property" : "Residential rental property"}, ${
+            RECOVERY_YEARS[asset.cls]
+          } yrs SL/MM`,
+          a.inService,
+          fmt(a.basis),
+          fmt(thisYear),
+          fmt(taken),
+        ])
+      );
+    }
   }
 
   // Mortgages: the interest above should match box 1 of each lender's Form

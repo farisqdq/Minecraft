@@ -49,6 +49,7 @@ model User {
   loansAdded          Loan[]
   loanPayments        LoanPayment[]
   moveOuts            MoveOut[]
+  assetsAdded         DepreciableAsset[]
 }
 
 model Company {
@@ -121,6 +122,7 @@ model Property {
   requests          MaintenanceRequest[]
   documents         Document[]
   loans             Loan[]
+  assets            DepreciableAsset[]
 
   @@index([companyId])
 }
@@ -762,4 +764,29 @@ model TenantRuleRun {
   /// remembering to check — two requests landing together is the ordinary
   /// case on a dashboard and must not bill a tenant twice.
   @@unique([ruleId, month])
+}
+
+// Something on a property that's depreciated rather than deducted at once:
+// the building itself, or an improvement to it (a roof, a furnace, a
+// remodel). See lib/depreciation.ts — this is the Schedule E line 18
+// deduction, which never appears in a ledger because no money moves.
+model DepreciableAsset {
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  /// "building" or "improvement".
+  kind        String   @default("building")
+  label       String
+  /// "residential" (27.5 years) or "commercial" (39).
+  cls         String   @default("residential")
+  /// The depreciable cost, in dollars — never including land.
+  basis       Float
+  /// YYYY-MM it was first ready and available to rent.
+  inService   String
+  note        String?
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId])
 }

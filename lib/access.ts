@@ -104,3 +104,11 @@ export async function requireLoan(userId: string, loanId: string, role: Role = "
   const membership = await requireCompany(userId, loan.property.companyId, role);
   return membership ? loan : null;
 }
+
+/** A depreciable asset on a property the user can reach; removing one takes an owner. */
+export async function requireAsset(userId: string, assetId: string, role: Role = "member") {
+  const asset = await prisma.depreciableAsset.findUnique({ where: { id: assetId }, include: { property: true } });
+  if (!asset) return null;
+  const membership = await requireCompany(userId, asset.property.companyId, role);
+  return membership ? asset : null;
+}

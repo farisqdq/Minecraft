@@ -3167,3 +3167,55 @@ tr:hover .rowDel {
 .vacancyBar .portalLink {
   margin-left: auto;
 }
+
+/* ---------- Depreciation ---------- */
+.depSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  margin: 16px 0 12px;
+}
+.depSummary > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.depFigure {
+  font-size: 20px;
+  font-weight: 650;
+  color: var(--accent);
+  letter-spacing: -0.01em;
+}
+
+.assetList {
+  list-style: none;
+  margin: 0;
+  padding: 0 16px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.assetList li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+}
+.assetList li + li {
+  border-top: 1px solid var(--line);
+}
+.assetMain {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.assetLabel {
+  font-weight: 600;
+  font-size: 14px;
+}
+.assetAmt {
+  font-weight: 600;
+  white-space: nowrap;
+}

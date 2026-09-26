@@ -9,6 +9,7 @@ import { normalizeKind } from "@/lib/documents";
 import { acceptBackupFile } from "@/lib/backup-files";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
 import { MAX_AMOUNT } from "@/lib/money";
+import { parseAssetInput, type AssetInput } from "@/lib/depreciation";
 
 type Tx = Prisma.TransactionClient;
 
@@ -165,6 +166,7 @@ type CleanProperty = {
   transactions: CleanTransaction[];
   recurringExpenses: CleanRecurring[];
   loans: CleanLoan[];
+  assets: AssetInput[];
   tenants: CleanTenant[];
   rentChanges: CleanRentChange[];
   requests: CleanRequest[];
@@ -632,6 +634,11 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         transactions: parseTransactions(p.transactions),
         recurringExpenses: parseRecurring(p.recurringExpenses),
         loans: parseLoans(p.loans),
+        // The same checks as the form; anything that fails them isn't an asset.
+        assets: (Array.isArray(p.assets) ? p.assets : []).slice(0, 200).flatMap((raw) => {
+          const parsed = parseAssetInput(raw);
+          return parsed.ok ? [parsed.value] : [];
+        }),
         tenants: parseTenants(p.tenants),
         rentChanges: parseRentChanges(p.rentChanges),
         requests: parseRequests(p.requests),
@@ -733,6 +740,7 @@ export async function POST(req: Request) {
     loans: 0,
     loanPayments: 0,
     moveOuts: 0,
+    assets: 0,
   };
 
   /**
@@ -1049,6 +1057,12 @@ export async function POST(req: Request) {
         // Loans before the ledger, so interest entries can point at the
         // payment that wrote them.
         const loanPayments = await createLoans(tx, prop.id, property.loans);
+        if (property.assets.length > 0) {
+          await tx.depreciableAsset.createMany({
+            data: property.assets.map((a) => ({ ...a, propertyId: prop.id, createdById: userId })),
+          });
+          created.assets += property.assets.length;
+        }
         // Tenants before the ledger too, so deposit money kept at a move-out
         // can point at the move-out that kept it.
         moveOutsByTenant = new Map();
