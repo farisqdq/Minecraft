@@ -9,6 +9,8 @@ import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmD
 import Modal from "../../../components/Modal";
 import StatementPanel from "../../../components/StatementPanel";
 import DocumentsPanel from "../../../components/DocumentsPanel";
+import LoansPanel from "../../../components/LoansPanel";
+import type { LoanDTO } from "@/lib/loans-db";
 import type { DocumentDTO } from "@/lib/documents";
 import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
@@ -34,6 +36,8 @@ type LedgerEntry = {
   note: string;
   category: string;
   proofCount: number;
+  /** Set when a mortgage payment wrote this entry; see LoansPanel. */
+  loanPaymentId: string | null;
 };
 type Unit = { id: string; propertyId: string; name: string; monthlyRent: number; vacant: boolean };
 type RecurringExpense = {
@@ -85,6 +89,7 @@ export default function PropertyManageClient({
   initialTenants,
   initialBalances,
   initialDocuments,
+  initialLoans,
   storageReady,
   rentChanges: initialRentChanges,
   transactions: initialTransactions,
@@ -107,6 +112,8 @@ export default function PropertyManageClient({
   initialBalances: Record<string, { balance: number; behindSince: string; problem: string }>;
   /** Leases, certificates and the like for this property and its tenants. */
   initialDocuments: DocumentDTO[];
+  /** Mortgages on this property, with their payments. */
+  initialLoans: LoanDTO[];
   storageReady: boolean;
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
@@ -331,8 +338,12 @@ export default function PropertyManageClient({
       body: JSON.stringify({ active: !r.active }),
     });
     const data = await res.json().catch(() => ({}));
-    if (!res.ok) return;
+    if (!res.ok) {
+      push(data?.error || "Couldn't change that bill.", "bad");
+      return;
+    }
     setRecurring((prev) => prev.map((x) => (x.id === r.id ? data : x)));
+    push(r.active ? `${r.category} bill paused.` : `${r.category} bill resumed.`);
   }
 
   function removeRecurring(r: RecurringExpense) {
@@ -680,7 +691,8 @@ export default function PropertyManageClient({
       onConfirm: async () => {
         const res = await fetch(`/api/transactions/${t.id}`, { method: "DELETE" });
         if (!res.ok) {
-          push("Couldn't delete that entry.", "bad");
+          const data = await res.json().catch(() => ({}));
+          push(data?.error || "Couldn't delete that entry.", "bad");
           return;
         }
         setTransactions((prev) => prev.filter((x) => x.id !== t.id));
@@ -1332,10 +1344,43 @@ export default function PropertyManageClient({
 
       <section className={styles.block}>
         <div className={styles.blockHead}>
+          <h2>Mortgages</h2>
+        </div>
+        <p className={styles.helpText} style={{ marginTop: 0 }}>
+          A mortgage payment is three kinds of money. Interest and escrow go into the ledger as expenses, each under its
+          own tax category; principal pays down the loan and isn&apos;t an expense, so it stays out of the profit above.
+        </p>
+        <LoansPanel
+          propertyId={property.id}
+          initial={initialLoans}
+          today={todayKey}
+          canDelete={canManage}
+          mortgageBills={recurring
+            .filter((r) => r.category === "Mortgage Interest")
+            .map((r) => ({ id: r.id, amount: r.amount, detail: r.detail, active: r.active }))}
+          onPauseBill={async (id) => {
+            const r = recurring.find((x) => x.id === id);
+            if (r && r.active) await toggleRecurringActive(r);
+          }}
+          onEntriesAdded={(entries) => {
+            setTransactions((prev) => [...entries, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+            router.refresh();
+          }}
+          onEntriesRemoved={(ids) => {
+            setTransactions((prev) => prev.filter((t) => !ids.includes(t.id)));
+            router.refresh();
+          }}
+          onToast={push}
+        />
+      </section>
+
+      <section className={styles.block}>
+        <div className={styles.blockHead}>
           <h2>Recurring expenses</h2>
         </div>
         <p className={styles.helpText} style={{ marginTop: 0 }}>
-          Mortgage, insurance, HOA dues — set the amount and schedule once. Nothing posts on its own: when it&apos;s
+          Insurance, HOA dues, a management fee — set the amount and schedule once. Mortgages go under Mortgages
+          above, so each payment is split. Nothing posts on its own: when it&apos;s
           due, it shows up on the dashboard for that month with a one-click &ldquo;Log it&rdquo; button.
         </p>
 
@@ -1435,7 +1480,7 @@ export default function PropertyManageClient({
                 <input
                   id="r-detail"
                   type="text"
-                  placeholder="e.g. First National Mortgage"
+                  placeholder="e.g. State Farm landlord policy"
                   value={rDetail}
                   onChange={(e) => setRDetail(e.target.value)}
                 />

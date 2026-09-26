@@ -11,6 +11,8 @@ import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref } from "@/lib/lease";
 import { byUrgency, expiryLabel, expiryState, type DocumentDTO } from "@/lib/documents";
+import { isDue as loanIsDue, missedMonths, suggestPayment } from "@/lib/loans";
+import type { LoanDTO, LoanPaymentDTO } from "@/lib/loans-db";
 import AppShell from "../components/AppShell";
 import CashFlowChart from "../components/CashFlowChart";
 import CategoryBars from "../components/CategoryBars";
@@ -75,6 +77,8 @@ type Transaction = {
   note: string;
   category: string;
   recurringExpenseId: string | null;
+  /** Set on the interest and escrow entries a mortgage payment wrote. */
+  loanPaymentId: string | null;
   attachments: Attachment[];
 };
 
@@ -185,6 +189,7 @@ export default function DashboardClient({
   initialRentChanges,
   initialTenants,
   initialTransactions,
+  initialLoans,
 }: {
   /** Repairs waiting on you, for the nav badge. */
   openRepairs?: number;
@@ -206,6 +211,8 @@ export default function DashboardClient({
   initialRentChanges: RentChangeDTO[];
   initialTenants: TenantDTO[];
   initialTransactions: Transaction[];
+  /** Open mortgages, with their payments, so a due one can be logged split. */
+  initialLoans: LoanDTO[];
 }) {
   // The server renders with its own clock; the browser may be on a different
   // calendar day. Starting from the server's value keeps the first client
@@ -277,6 +284,7 @@ export default function DashboardClient({
   const [properties, setProperties] = useState<Property[]>(initialProperties);
   const [units, setUnits] = useState<Unit[]>(initialUnits);
   const [recurring, setRecurring] = useState<RecurringExpense[]>(initialRecurring);
+  const [loans, setLoans] = useState<LoanDTO[]>(initialLoans);
   const tenants = initialTenants;
   const [rentChanges, setRentChanges] = useState<RentChangeDTO[]>(initialRentChanges);
   const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
@@ -588,6 +596,29 @@ export default function DashboardClient({
           !transactions.some((t) => t.recurringExpenseId === r.id && t.date.startsWith(barMonth))
       );
   }, [recurring, transactions, barMonth, visibleIds]);
+
+  // Mortgage payments due this month and not recorded, each with the split
+  // "Log it" would write — shown before it's written, not discovered after.
+  const dueLoans = useMemo(
+    () =>
+      loans
+        .filter((l) => visibleIds.has(l.propertyId) && loanIsDue(l, l.payments, barMonth, l.active))
+        .map((l) => {
+          const s = suggestPayment(l, l.payments, barMonth);
+          const escrow = Math.round((s.escrowTax + s.escrowInsurance) * 100) / 100;
+          return {
+            loan: l,
+            // Earlier months never recorded. Logging this one first would work
+            // its interest out from a balance that is too high, so say so.
+            missed: missedMonths(l, l.payments, barMonth, l.active).filter((m) => m < barMonth),
+            interest: s.interest,
+            principal: s.principal,
+            escrow,
+            total: Math.round((s.interest + s.principal + escrow) * 100) / 100,
+          };
+        }),
+    [loans, barMonth, visibleIds]
+  );
 
   /** The current tenant of a target, if one is on file. */
   function tenantFor(propertyId: string, unitId: string | null) {
@@ -994,7 +1025,8 @@ export default function DashboardClient({
       onConfirm: async () => {
         const res = await fetch(`/api/transactions/${t.id}`, { method: "DELETE" });
         if (!res.ok) {
-          push("Couldn't delete that entry.", "bad");
+          const data = await res.json().catch(() => ({}));
+          push(data?.error || "Couldn't delete that entry.", "bad");
           return;
         }
         setTransactions((prev) => prev.filter((x) => x.id !== t.id));
@@ -1072,20 +1104,67 @@ export default function DashboardClient({
     push("Logged to the ledger.");
   }
 
-  /** Every recurring bill due this period, logged in one go. */
+  /**
+   * Records a mortgage payment for the month on screen at the split shown,
+   * which writes interest and escrow into the ledger and takes the principal
+   * off the balance. Returns false when the server refused it.
+   */
+  async function postLoanPayment(loanId: string) {
+    const res = await fetch(`/api/loans/${loanId}/payments`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ month: barMonth }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) return { ok: false as const, error: (data?.error as string) || "Couldn't log that payment." };
+    const payment = data.payment as LoanPaymentDTO;
+    setLoans((prev) =>
+      prev.map((l) =>
+        l.id === loanId
+          ? { ...l, payments: [...l.payments, payment].sort((a, b) => a.month.localeCompare(b.month)) }
+          : l
+      )
+    );
+    setTransactions((prev) => [
+      ...prev,
+      ...(data.transactions as Transaction[]).map((t) => ({ ...t, attachments: [] })),
+    ]);
+    return { ok: true as const, payment };
+  }
+
+  async function logLoan(loanId: string) {
+    setRecurringBusyId(loanId);
+    setError("");
+    const result = await postLoanPayment(loanId);
+    setRecurringBusyId("");
+    if (!result.ok) {
+      setError(result.error);
+      return;
+    }
+    const p = result.payment;
+    push(`Logged: ${money(p.interest)} interest${p.escrow > 0 ? `, ${money(p.escrow)} escrow` : ""}, ${money(p.principal)} off the loan.`);
+  }
+
+  /** Every recurring bill and mortgage payment due this period, logged in one go. */
   function logAllRecurring() {
     const rows = dueRecurring;
-    if (rows.length === 0) return;
-    const total = rows.reduce((sum, r) => sum + r.amount, 0);
+    const loanRows = dueLoans;
+    const count = rows.length + loanRows.length;
+    if (count === 0) return;
+    const total = rows.reduce((sum, r) => sum + r.amount, 0) + loanRows.reduce((sum, l) => sum + l.total, 0);
     setConfirming({
       title: `Log ${money(total)} of bills?`,
-      body: `Adds ${rows.length} ${rows.length === 1 ? "entry" : "entries"} for ${monthName(
-        barMonth
-      )}: ${rows.map((r) => `${r.category} ${money(r.amount)}`).join(", ")}.`,
-      confirmLabel: `Log ${rows.length} bills`,
+      body: `Adds ${count} ${count === 1 ? "bill" : "bills"} for ${monthName(barMonth)}: ${[
+        ...rows.map((r) => `${r.category} ${money(r.amount)}`),
+        ...loanRows.map((l) => `${l.loan.lender} ${money(l.total)}`),
+      ].join(", ")}.${loanRows.length ? " Mortgage principal comes off the loan rather than going in as an expense." : ""}`,
+      confirmLabel: `Log ${count} bills`,
       onConfirm: async () => {
         setBulkBusy("bills");
         let failed = 0;
+        for (const l of loanRows) {
+          if (!(await postLoanPayment(l.loan.id)).ok) failed += 1;
+        }
         for (const r of rows) {
           const res = await fetch(`/api/recurring/${r.id}/log`, {
             method: "POST",
@@ -1097,7 +1176,7 @@ export default function DashboardClient({
           else failed += 1;
         }
         setBulkBusy("");
-        if (failed > 0) push(`${failed} of ${rows.length} bills didn't log.`, "bad");
+        if (failed > 0) push(`${failed} of ${count} bills didn't log.`, "bad");
         else push(`${money(total)} of bills logged for ${monthName(barMonth, false)}.`);
       },
     });
@@ -1242,6 +1321,7 @@ export default function DashboardClient({
     unpaidThisMonth.length +
     leaseAlerts.length +
     dueRecurring.length +
+    dueLoans.length +
     docAlerts.length;
 
   return (
@@ -1512,14 +1592,16 @@ export default function DashboardClient({
                       {bulkBusy === "rent" ? "Recording…" : `Mark all ${unpaidThisMonth.length} paid`}
                     </button>
                   )}
-                  {dueRecurring.length > 1 && (
+                  {dueRecurring.length + dueLoans.length > 1 && (
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.small}`}
                       disabled={bulkBusy !== ""}
                       onClick={logAllRecurring}
                     >
-                      {bulkBusy === "bills" ? "Logging…" : `Log all ${dueRecurring.length} bills`}
+                      {bulkBusy === "bills"
+                        ? "Logging…"
+                        : `Log all ${dueRecurring.length + dueLoans.length} bills`}
                     </button>
                   )}
                 </div>
@@ -1756,6 +1838,42 @@ export default function DashboardClient({
                           onClick={() => logRecurring(r.id)}
                         >
                           {recurringBusyId === r.id ? "Logging…" : "Log it"}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+
+                  {dueLoans.map(({ loan, missed, interest, principal, escrow, total }) => (
+                    <div key={`l-${loan.id}`} className={styles.attnRow}>
+                      <div className={styles.attnMain}>
+                        <div className={styles.attnLabel}>
+                          {targetLabel({ propertyId: loan.propertyId, unitId: null })}{" "}
+                          <span className={`${styles.pill} ${styles.bill}`}>Mortgage</span>
+                        </div>
+                        <div className={styles.attnSub}>
+                          {loan.lender}: {money(interest)} interest
+                          {escrow > 0 ? ` · ${money(escrow)} escrow` : ""} · {money(principal)} principal
+                          {missed.length > 0 && (
+                            <span className={styles.loanMissed}>
+                              {" "}
+                              · {missed.length === 1 ? monthName(missed[0], false) : `${missed.length} earlier months`} not
+                              recorded yet
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <span className={`${styles.attnAmt} ${styles.neg} num`}>{money(total)}</span>
+                      <div className={styles.attnActions}>
+                        <Link href={`/dashboard/properties/${loan.propertyId}`} className={`${styles.btn} ${styles.small}`}>
+                          Split differently
+                        </Link>
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small}`}
+                          disabled={recurringBusyId === loan.id}
+                          onClick={() => logLoan(loan.id)}
+                        >
+                          {recurringBusyId === loan.id ? "Logging…" : "Log it"}
                         </button>
                       </div>
                     </div>

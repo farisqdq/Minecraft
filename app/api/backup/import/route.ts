@@ -8,6 +8,7 @@ import { normalizeTrade } from "@/lib/vendors";
 import { normalizeKind } from "@/lib/documents";
 import { acceptBackupFile } from "@/lib/backup-files";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
+import { MAX_AMOUNT } from "@/lib/money";
 
 type Tx = Prisma.TransactionClient;
 
@@ -20,6 +21,8 @@ const MAX_TENANTS = 5000;
 const MAX_RENT_CHANGES = 20000;
 const MAX_REQUESTS = 20000;
 const MAX_REQUEST_UPDATES = 100000;
+const MAX_LOANS = 2000;
+const MAX_LOAN_PAYMENTS = 50000;
 
 type CleanAttachment = { url: string; filename: string; contentType: string; size: number };
 type CleanTransaction = {
@@ -32,6 +35,22 @@ type CleanTransaction = {
   attachments: CleanAttachment[];
   /** Who was paid, by name — re-linked to this LLC's restored vendor book. */
   vendorName: string;
+  /** The mortgage payment that wrote it: the loan's position in `loans`, and the month. */
+  loanRef: string | null;
+};
+type CleanLoanPayment = { month: string; date: Date; principal: number; interest: number; escrow: number };
+type CleanLoan = {
+  lender: string;
+  balance: number;
+  balanceAsOf: string;
+  rate: number;
+  payment: number;
+  escrowTax: number;
+  escrowInsurance: number;
+  dueDay: number;
+  active: boolean;
+  note: string | null;
+  payments: CleanLoanPayment[];
 };
 type CleanRecurring = {
   category: string;
@@ -126,6 +145,7 @@ type CleanProperty = {
   vacant: boolean;
   transactions: CleanTransaction[];
   recurringExpenses: CleanRecurring[];
+  loans: CleanLoan[];
   tenants: CleanTenant[];
   rentChanges: CleanRentChange[];
   requests: CleanRequest[];
@@ -198,6 +218,8 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
   let rentChangeTotal = 0;
   let requestTotal = 0;
   let requestUpdateTotal = 0;
+  let loanTotal = 0;
+  let loanPaymentTotal = 0;
 
   function parseTransactions(raw: unknown): CleanTransaction[] {
     const out: CleanTransaction[] = [];
@@ -224,7 +246,17 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
       }
 
       const type = t.type === "expense" ? "expense" : "rent";
+      const ref = (t.loanPayment ?? null) as Record<string, unknown> | null;
+      const loanRef =
+        type === "expense" &&
+        ref &&
+        Number.isInteger(ref.loan) &&
+        typeof ref.month === "string" &&
+        /^\d{4}-\d{2}$/.test(ref.month)
+          ? `${ref.loan}:${ref.month}`
+          : null;
       out.push({
+        loanRef,
         type,
         date,
         amount,
@@ -257,6 +289,51 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         day: Math.min(31, Math.max(1, Math.round(num(r.day)) || 1)),
         month: frequency === "yearly" ? Math.min(12, Math.max(1, Math.round(num(r.month)) || 1)) : null,
         active: r.active !== false,
+      });
+    }
+    return out;
+  }
+
+  function parseLoans(raw: unknown): CleanLoan[] {
+    const out: CleanLoan[] = [];
+    const amount = (v: unknown) => Math.min(MAX_AMOUNT, num(v));
+    for (const rawLoan of Array.isArray(raw) ? raw : []) {
+      const l = (rawLoan ?? {}) as Record<string, unknown>;
+      const lender = str(l.lender, 120);
+      const balanceAsOf = typeof l.balanceAsOf === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(l.balanceAsOf) ? l.balanceAsOf : "";
+      // Never skipped, even when the figures look odd: a loan dropped here
+      // would take its payment history with it, and would shift every later
+      // loan's position — which is how the ledger's entries find theirs.
+      if (++loanTotal > MAX_LOANS) throw new Error("That backup is too large to import.");
+      const payments: CleanLoanPayment[] = [];
+      const seen = new Set<string>();
+      for (const rawP of Array.isArray(l.payments) ? l.payments : []) {
+        const p = (rawP ?? {}) as Record<string, unknown>;
+        const month = typeof p.month === "string" && /^\d{4}-(0[1-9]|1[0-2])$/.test(p.month) ? p.month : "";
+        const date = day(p.date);
+        if (!month || !date || seen.has(month)) continue;
+        seen.add(month);
+        if (++loanPaymentTotal > MAX_LOAN_PAYMENTS) throw new Error("That backup is too large to import.");
+        payments.push({
+          month,
+          date,
+          principal: amount(p.principal),
+          interest: amount(p.interest),
+          escrow: amount(p.escrow),
+        });
+      }
+      out.push({
+        lender: lender || "Mortgage",
+        balance: amount(l.balance),
+        balanceAsOf: balanceAsOf || payments[0]?.month || "",
+        rate: Math.min(30, num(l.rate)),
+        payment: amount(l.payment),
+        escrowTax: amount(l.escrowTax),
+        escrowInsurance: amount(l.escrowInsurance),
+        dueDay: Math.min(31, Math.max(1, Math.round(num(l.dueDay)) || 1)),
+        active: l.active !== false,
+        note: str(l.note, 500) || null,
+        payments,
       });
     }
     return out;
@@ -500,6 +577,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         vacant: bool(p.vacant),
         transactions: parseTransactions(p.transactions),
         recurringExpenses: parseRecurring(p.recurringExpenses),
+        loans: parseLoans(p.loans),
         tenants: parseTenants(p.tenants),
         rentChanges: parseRentChanges(p.rentChanges),
         requests: parseRequests(p.requests),
@@ -598,16 +676,49 @@ export async function POST(req: Request) {
     documents: 0,
     rentChanges: 0,
     requests: 0,
+    loans: 0,
+    loanPayments: 0,
   };
 
   /** This company's vendors by name, reset as each company is written. */
   let vendorsByName = new Map<string, string>();
 
+  /**
+   * Writes a property's loans and their payments, and returns each payment's
+   * new id under "<loan position>:<month>" — how the ledger entries those
+   * payments wrote find them again.
+   */
+  async function createLoans(tx: Tx, propertyId: string, loans: CleanLoan[]) {
+    const byRef = new Map<string, string>();
+    for (const [index, { payments, ...fields }] of loans.entries()) {
+      // A loan with no usable start still comes back, closed, so its
+      // history isn't lost and it can't ask for payments it can't work out.
+      const usable = Boolean(fields.balanceAsOf);
+      const loan = await tx.loan.create({
+        data: {
+          ...fields,
+          balanceAsOf: fields.balanceAsOf || "1970-01",
+          active: fields.active && usable,
+          propertyId,
+          createdById: userId,
+        },
+      });
+      created.loans += 1;
+      for (const p of payments) {
+        const made = await tx.loanPayment.create({ data: { ...p, loanId: loan.id, createdById: userId } });
+        byRef.set(`${index}:${p.month}`, made.id);
+        created.loanPayments += 1;
+      }
+    }
+    return byRef;
+  }
+
   async function createTransactions(
     tx: Tx,
     propertyId: string,
     unitId: string | null,
-    txns: CleanTransaction[]
+    txns: CleanTransaction[],
+    loanPayments: Map<string, string>
   ) {
     for (const t of txns) {
       const txn = await tx.transaction.create({
@@ -622,6 +733,7 @@ export async function POST(req: Request) {
           note: t.note,
           category: t.category,
           vendorId: (t.vendorName && vendorsByName.get(t.vendorName)) || null,
+          loanPaymentId: (t.loanRef && loanPayments.get(t.loanRef)) || null,
         },
       });
       created.transactions += 1;
@@ -858,7 +970,10 @@ export async function POST(req: Request) {
         });
         created.properties += 1;
 
-        await createTransactions(tx, prop.id, null, property.transactions);
+        // Loans before the ledger, so interest entries can point at the
+        // payment that wrote them.
+        const loanPayments = await createLoans(tx, prop.id, property.loans);
+        await createTransactions(tx, prop.id, null, property.transactions, loanPayments);
         await createRecurring(tx, prop.id, null, property.recurringExpenses);
         const propertyTenants = await createTenants(tx, prop.id, null, property.tenants);
         await createRentChanges(tx, prop.id, null, property.rentChanges);
@@ -876,7 +991,7 @@ export async function POST(req: Request) {
           });
           created.units += 1;
 
-          await createTransactions(tx, prop.id, u.id, unit.transactions);
+          await createTransactions(tx, prop.id, u.id, unit.transactions, loanPayments);
           await createRecurring(tx, prop.id, u.id, unit.recurringExpenses);
           const unitTenants = await createTenants(tx, prop.id, u.id, unit.tenants);
           await createRentChanges(tx, prop.id, u.id, unit.rentChanges);

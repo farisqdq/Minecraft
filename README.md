@@ -252,17 +252,49 @@ on rent for the month you're viewing, with how much is owed. Mark a
 property or unit **vacant** (on its edit form) to leave it out of that list
 and hide its rent bar.
 
-**Recurring expenses.** Set up a mortgage, insurance, or HOA payment once on
+**Recurring expenses.** Set up an insurance, HOA or management payment once on
 a property's page — amount, category, and a monthly or yearly
 schedule. Nothing posts itself: when one is due, it shows up on the
 dashboard for that month with a one-click **Log it** button that creates
 the transaction and marks it done for that period.
 
+**Mortgages.** A mortgage payment is three kinds of money under one number:
+interest (an expense), escrow for property tax and insurance (also expenses,
+on their own Schedule E lines), and principal (not an expense — it's equity).
+Logging the whole payment as one "Mortgage Interest" bill, which is what this
+app used to suggest, overstates the interest deduction by the principal and
+escrow every month, understates profit, and gives an interest figure that
+won't match the lender's Form 1098.
+
+So a property can carry its loans under **Mortgages**, set up from the figures
+on the latest statement: the principal balance going into the next payment,
+the rate, the principal-and-interest payment, the monthly escrow, and the due
+day. Each payment is then split from the balance at the time — interest into
+the ledger as Mortgage Interest, escrow as Property Tax and Insurance, and
+principal only off the balance. The dashboard asks for each payment when it's
+due, with the split shown before you log it; the property page records one
+with the lender's own figures when they differ, and shows the balance, the
+payoff date, the interest still to come, and any month never recorded.
+
+The interest and escrow entries a payment wrote belong to it: the ledger won't
+change their amount or delete one on its own, because the loan's balance and
+the books would then disagree. **Undo** on the payment removes them together.
+A new rate or escrow figure applies from the next payment; recorded ones keep
+their split. Removing a loan (owners only) keeps the ledger entries — that
+interest was really paid. If a property still has a recurring bill filed under
+Mortgage Interest, the loan panel offers to pause it so nothing is counted
+twice.
+
+Amounts are worked in whole cents, and a 30-year schedule's rounding residual
+is folded into the final payment the way lenders do it.
+
 **Tax-year export.** The **Export** page downloads a CSV for one LLC and
 one year — every transaction, a summary totalling rental income and each
 expense category, and, when the LLC owns more than one house, the same
 breakdown per property. Schedule E is filled in per property, so that last
-block is the one an accountant actually wants.
+block is the one an accountant actually wants. A final block lists each mortgage's
+interest, escrow and principal for the year and its balance at year end —
+the interest line is the one to check against the lender's Form 1098.
 
 Text going into the CSV is escaped so a note can't become a live formula in
 whoever's spreadsheet opens it. Amounts are left alone, so the columns still
@@ -320,8 +352,10 @@ Dark mode follows the system setting.
 ## Backups
 
 The **Backup** page downloads a single JSON file with every LLC, property,
-unit, tenant, recurring expense, rent change, repair report and ledger entry
-you can see, and restores one back into the app. Proof files and repair
+unit, tenant, recurring expense, mortgage and its payments, rent change,
+repair report and ledger entry you can see, and restores one back into the
+app. Ledger entries a mortgage payment wrote are re-linked to that payment on
+restore, so they stay protected from being edited on their own. Proof files and repair
 photos are referenced by link rather than copied into the file.
 
 Repairs carry their reporter as a **name** rather than an id, because ids from

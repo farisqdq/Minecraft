@@ -42,8 +42,8 @@ export default function ExportClient({
             <p className={styles.helpText} style={{ marginTop: 0 }}>
               Produces a CSV with every rent payment and expense for the year, categorized the way a Schedule E is —
               plus a summary totalling rental income and each expense category — and, when the LLC owns more
-              than one house, the same breakdown per property, which is how Schedule E is filled in.
-              Hand it straight to an accountant or open it in a spreadsheet.
+              than one house, the same breakdown per property, which is how Schedule E is filled in. Each mortgage
+              gets a line with the year&apos;s interest, to check against the lender&apos;s Form 1098. Hand it straight to an accountant or open it in a spreadsheet.
             </p>
             <div className={styles.twoCol}>
               <div className={styles.field}>

@@ -6,7 +6,7 @@ import { backupFileKey } from "@/lib/backup-files";
 import { storageAccessOf } from "@/lib/file-links";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 10;
+export const BACKUP_VERSION = 11;
 
 /** Signs a private file's link for the account exporting it; see lib/backup-files. */
 type FileKey = (url: string) => string | undefined;
@@ -20,9 +20,13 @@ type TxnRow = {
   category: string | null;
   attachments: { url: string; filename: string; contentType: string; size: number }[];
   vendor: { name: string } | null;
+  loanPayment: { loanId: string; month: string } | null;
 };
 
-function serializeTxns(txns: TxnRow[], key: FileKey) {
+/** Position of each of a property's loans in its `loans` list, by id. */
+type LoanIndex = Map<string, number>;
+
+function serializeTxns(txns: TxnRow[], key: FileKey, loanIndex: LoanIndex) {
   return txns.map((t) => ({
     type: t.type,
     date: t.date.toISOString().slice(0, 10),
@@ -32,6 +36,14 @@ function serializeTxns(txns: TxnRow[], key: FileKey) {
     category: t.category ?? "",
     // By name: ids don't survive a restore into a fresh database.
     vendorName: t.vendor?.name ?? "",
+    // Which mortgage payment wrote this entry, as the loan's position in the
+    // property's `loans` and the month — ids don't survive a restore. Without
+    // it a restored interest entry could be deleted on its own, leaving the
+    // loan's balance and the books disagreeing.
+    loanPayment:
+      t.loanPayment && loanIndex.has(t.loanPayment.loanId)
+        ? { loan: loanIndex.get(t.loanPayment.loanId), month: t.loanPayment.month }
+        : null,
     // Links to the stored files, not the files themselves — they stay in
     // blob storage and keep working as long as the app does.
     attachments: t.attachments.map((a) => ({
@@ -65,6 +77,48 @@ function serializeRecurring(rows: RecurringRow[]) {
     day: r.day,
     month: r.month,
     active: r.active,
+  }));
+}
+
+type LoanRow = {
+  id: string;
+  lender: string;
+  balance: number;
+  balanceAsOf: string;
+  rate: number;
+  payment: number;
+  escrowTax: number;
+  escrowInsurance: number;
+  dueDay: number;
+  active: boolean;
+  note: string | null;
+  payments: { month: string; date: Date; principal: number; interest: number; escrow: number }[];
+};
+
+/**
+ * Mortgages with every payment's split. The principal lives only here — it
+ * never went into the ledger — so without these a restore would lose how
+ * much of every loan has been paid down.
+ */
+function serializeLoans(rows: LoanRow[]) {
+  return rows.map((l) => ({
+    lender: l.lender,
+    balance: l.balance,
+    balanceAsOf: l.balanceAsOf,
+    rate: l.rate,
+    payment: l.payment,
+    escrowTax: l.escrowTax,
+    escrowInsurance: l.escrowInsurance,
+    dueDay: l.dueDay,
+    active: l.active,
+    note: l.note ?? "",
+    payments: l.payments.map((p) => ({
+      month: p.month,
+      date: p.date.toISOString().slice(0, 10),
+      principal: p.principal,
+      interest: p.interest,
+      escrow: p.escrow,
+    })),
   }));
 }
 
@@ -287,9 +341,14 @@ export async function GET() {
           transactions: {
             where: { unitId: null },
             orderBy: { date: "asc" },
-            include: { attachments: { orderBy: { createdAt: "asc" } }, vendor: { select: { name: true } } },
+            include: {
+              attachments: { orderBy: { createdAt: "asc" } },
+              vendor: { select: { name: true } },
+              loanPayment: { select: { loanId: true, month: true } },
+            },
           },
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
+          loans: { orderBy: { createdAt: "asc" }, include: { payments: { orderBy: { month: "asc" } } } },
           tenants: {
             where: { unitId: null },
             orderBy: { createdAt: "asc" },
@@ -307,7 +366,11 @@ export async function GET() {
             include: {
               transactions: {
                 orderBy: { date: "asc" },
-                include: { attachments: { orderBy: { createdAt: "asc" } }, vendor: { select: { name: true } } },
+                include: {
+              attachments: { orderBy: { createdAt: "asc" } },
+              vendor: { select: { name: true } },
+              loanPayment: { select: { loanId: true, month: true } },
+            },
               },
               recurringExpenses: { orderBy: { createdAt: "asc" } },
               tenants: {
@@ -345,13 +408,16 @@ export async function GET() {
         note: v.note ?? "",
       })),
       documents: serializeDocuments(c.documents, key),
-      properties: c.properties.map((p) => ({
+      properties: c.properties.map((p) => {
+        const loanIndex: LoanIndex = new Map(p.loans.map((l, i) => [l.id, i]));
+        return {
         name: p.name,
         address: p.address ?? "",
         monthlyRent: p.monthlyRent,
         vacant: p.vacant,
-        transactions: serializeTxns(p.transactions, key),
+        transactions: serializeTxns(p.transactions, key, loanIndex),
         recurringExpenses: serializeRecurring(p.recurringExpenses),
+        loans: serializeLoans(p.loans),
         tenants: serializeTenants(p.tenants),
         rentChanges: serializeRentChanges(p.rentChanges),
         requests: serializeRequests(p.requests, key),
@@ -360,13 +426,14 @@ export async function GET() {
           name: u.name,
           monthlyRent: u.monthlyRent,
           vacant: u.vacant,
-          transactions: serializeTxns(u.transactions, key),
+          transactions: serializeTxns(u.transactions, key, loanIndex),
           recurringExpenses: serializeRecurring(u.recurringExpenses),
           tenants: serializeTenants(u.tenants),
           rentChanges: serializeRentChanges(u.rentChanges),
           requests: serializeRequests(u.requests, key),
         })),
-      })),
+        };
+      }),
     })),
   };
 

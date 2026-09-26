@@ -5,6 +5,22 @@ import { requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
 import { validAmount } from "@/lib/money";
 import { fileLink } from "@/lib/file-links";
+import { shortMonth } from "@/lib/loans-db";
+
+/**
+ * The interest and escrow a mortgage payment wrote are one payment, split —
+ * the principal only exists on the payment itself. Changing or deleting one
+ * of them alone would leave the loan's balance and the books telling two
+ * different stories, so those go through the payment instead.
+ */
+async function loanPaymentMessage(loanPaymentId: string, action: string) {
+  const payment = await prisma.loanPayment.findUnique({
+    where: { id: loanPaymentId },
+    include: { loan: { select: { lender: true } } },
+  });
+  if (!payment) return null;
+  return `This is part of the ${shortMonth(payment.month)} payment on ${payment.loan.lender}. To ${action} it, undo that payment under Mortgages on the property page and record it again — its interest, escrow and principal go together.`;
+}
 
 function serialize<T extends { date: Date; detail: string | null; note: string | null; category: string | null }>(
   t: T
@@ -51,6 +67,17 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if (type === "expense" && !category) {
     return NextResponse.json({ error: "Pick a category for this expense." }, { status: 400 });
+  }
+
+  if (existing.loanPaymentId) {
+    const changed =
+      type !== existing.type ||
+      propertyId !== existing.propertyId ||
+      unitId !== existing.unitId ||
+      category !== existing.category ||
+      Math.round(amount * 100) !== Math.round(existing.amount * 100);
+    const message = changed ? await loanPaymentMessage(existing.loanPaymentId, "change the amount of") : null;
+    if (message) return NextResponse.json({ error: message }, { status: 409 });
   }
 
   // Moving an entry to another property is only allowed between properties
@@ -101,6 +128,11 @@ export async function DELETE(_req: Request, { params }: { params: Promise<{ id: 
   const transaction = await prisma.transaction.findUnique({ where: { id } });
   if (!transaction || !(await requireProperty(userId, transaction.propertyId))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+
+  if (transaction.loanPaymentId) {
+    const message = await loanPaymentMessage(transaction.loanPaymentId, "remove");
+    if (message) return NextResponse.json({ error: message }, { status: 409 });
   }
 
   await prisma.transaction.delete({ where: { id } });

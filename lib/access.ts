@@ -92,3 +92,15 @@ export async function requireDocument(userId: string, documentId: string, role: 
   const membership = await requireCompany(userId, doc.companyId, role);
   return membership ? doc : null;
 }
+
+/**
+ * A loan on a property the user can reach. Recording and undoing payments
+ * is everyday bookkeeping, open to the team; removing the loan record takes
+ * an owner, like removing anything else people rely on.
+ */
+export async function requireLoan(userId: string, loanId: string, role: Role = "member") {
+  const loan = await prisma.loan.findUnique({ where: { id: loanId }, include: { property: true } });
+  if (!loan) return null;
+  const membership = await requireCompany(userId, loan.property.companyId, role);
+  return membership ? loan : null;
+}

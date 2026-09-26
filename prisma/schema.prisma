@@ -46,6 +46,8 @@ model User {
   chargeRules         TenantChargeRule[]
   vendorsAdded        Vendor[]
   documentsUploaded   Document[]
+  loansAdded          Loan[]
+  loanPayments        LoanPayment[]
 }
 
 model Company {
@@ -114,6 +116,7 @@ model Property {
   rentChanges       RentChange[]
   requests          MaintenanceRequest[]
   documents         Document[]
+  loans             Loan[]
 
   @@index([companyId])
 }
@@ -273,11 +276,84 @@ model Transaction {
   // what makes "what have I spent with this plumber this year?" a lookup.
   vendorId           String?
   vendor             Vendor?           @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  // Set on the interest and escrow entries a mortgage payment wrote, so the
+  // ledger can say where they came from and refuse to let one half of a
+  // payment be changed without the other. SetNull, not Cascade: deleting a
+  // loan record must never delete interest that was really paid — undoing
+  // a payment removes its entries explicitly.
+  loanPaymentId      String?
+  loanPayment        LoanPayment?      @relation(fields: [loanPaymentId], references: [id], onDelete: SetNull)
 
   @@index([propertyId])
   @@index([unitId])
   @@index([recurringExpenseId])
   @@index([vendorId])
+  @@index([loanPaymentId])
+}
+
+// A mortgage, stored as the figures printed on its monthly statement.
+//
+// It exists because a mortgage payment is three kinds of money under one
+// number: interest (an expense), escrow (property tax and insurance — also
+// expenses, on other lines), and principal (not an expense: it's equity).
+// Logged as one recurring bill, the whole payment landed under "Mortgage
+// Interest", understating profit and overstating the one deduction an
+// accountant checks against the lender's Form 1098. See lib/loans.ts.
+//
+// The balance is "as of" a month rather than an original amount and term,
+// because most loans began long before the books did, and the statement on
+// the kitchen table has today's balance on it, not the 2019 one.
+model Loan {
+  id              String   @id @default(cuid())
+  propertyId      String
+  property        Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  lender          String
+  /// Principal owed going into `balanceAsOf`, before that month's payment.
+  balance         Float
+  /// YYYY-MM: the first payment tracked here.
+  balanceAsOf     String
+  /// Annual rate as a percentage: 6.25 means 6.25%.
+  rate            Float
+  /// Monthly principal and interest, without escrow.
+  payment         Float
+  escrowTax       Float    @default(0)
+  escrowInsurance Float    @default(0)
+  dueDay          Int      @default(1)
+  /// Off once it's paid off or refinanced; kept for its history.
+  active          Boolean  @default(true)
+  note            String?
+  createdById     String?
+  createdBy       User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt       DateTime @default(now())
+
+  payments LoanPayment[]
+
+  @@index([propertyId])
+}
+
+// One month's payment on a loan, split. The interest and escrow are also
+// ordinary ledger entries (Transaction.loanPaymentId); the principal lives
+// only here, because it isn't an expense and must not reach the profit line.
+model LoanPayment {
+  id          String   @id @default(cuid())
+  loanId      String
+  loan        Loan     @relation(fields: [loanId], references: [id], onDelete: Cascade)
+  /// The YYYY-MM this payment was for, which may not be the month it was made.
+  month       String
+  date        DateTime
+  principal   Float
+  interest    Float
+  /// Tax plus insurance escrow, for the record; the ledger has them apart.
+  escrow      Float    @default(0)
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  transactions Transaction[]
+
+  /// One payment per loan per month, enforced by the database: "Log it"
+  /// pressed twice, or on two phones at once, must not pay a mortgage twice.
+  @@unique([loanId, month])
 }
 
 // Someone you call to fix things: a plumber, an HVAC company, the person who

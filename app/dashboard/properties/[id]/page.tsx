@@ -10,6 +10,7 @@ import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
 import { documentsWhere } from "@/lib/documents-db";
 import { blobConfigured } from "@/lib/blob";
+import { loansWhere } from "@/lib/loans-db";
 import PropertyManageClient from "./PropertyManageClient";
 
 // Enough to see the shape of a place's troubles without turning the page
@@ -67,6 +68,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   const balances = await balancesForTenants(tenants.map((t) => t.id));
   // The property's own documents and its tenants' — both carry its id.
   const documents = await documentsWhere({ propertyId: property.id });
+  const loans = await loansWhere({ propertyId: property.id });
 
   return (
     <PropertyManageClient
@@ -105,6 +107,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       initialTenants={tenants.map(serializeTenant)}
       initialBalances={balances}
       initialDocuments={documents}
+      initialLoans={loans}
       storageReady={blobConfigured()}
       initialRequests={requests
         .map(serializeRequestForLandlord)
@@ -148,6 +151,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         note: t.note ?? "",
         category: t.category ?? "",
         proofCount: t.attachments.length,
+        loanPaymentId: t.loanPaymentId,
       }))}
     />
   );

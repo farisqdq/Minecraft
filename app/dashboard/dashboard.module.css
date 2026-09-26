@@ -535,14 +535,16 @@
   background: var(--surface-2);
 }
 
-.propCard .name {
+.propCard .name,
+.tenantCard .name {
   font-family: "Fraunces", Georgia, serif;
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 
-.propCard .addr {
+.propCard .addr,
+.tenantCard .addr {
   color: var(--muted);
   font-size: 13px;
   margin-top: 2px;
@@ -2890,4 +2892,166 @@ tr:hover .rowDel {
   .backupCodes {
     grid-template-columns: 1fr;
   }
+}
+
+/* ---------- Mortgages ---------- */
+.loanGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+}
+
+.loanBalance {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
+
+/* One payment as three kinds of money. Interest is spent, escrow is spent on
+   the house's bills, principal is kept — so the colours follow the ledger's:
+   expense, gold, and the accent that means money that's still yours. */
+.loanSplit {
+  display: flex;
+  height: 10px;
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--surface-3);
+  gap: 2px;
+}
+.loanSplit > span {
+  display: block;
+  height: 100%;
+  min-width: 0;
+}
+.splitInterest {
+  background: var(--expense);
+}
+.splitEscrow {
+  background: var(--gold);
+}
+.splitPrincipal {
+  background: var(--accent);
+}
+
+.splitLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+.splitLegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.splitLegend i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  display: inline-block;
+}
+.splitLegend b {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.loanFacts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+  padding-top: 11px;
+  border-top: 1px solid var(--line);
+}
+.loanFacts .figureValue {
+  font-size: 13px;
+}
+
+.loanMissed {
+  font-size: 12.5px;
+  color: var(--gold);
+  font-weight: 550;
+}
+
+.loanActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: auto;
+}
+.loanActions .portalLink {
+  margin-left: auto;
+}
+
+/* A nudge, not an error: something already on the books is probably
+   counting a mortgage the wrong way. */
+.loanNotice {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  border-radius: var(--radius);
+  background: var(--gold-soft);
+  border: 1px solid color-mix(in srgb, var(--gold) 34%, transparent);
+  font-size: 13px;
+  color: var(--ink);
+}
+.loanNotice p {
+  margin: 0;
+  flex: 1 1 260px;
+}
+/* Payment history: a stacked list rather than a table, so Undo stays in
+   reach on a phone instead of scrolling off the right edge. */
+.loanHistory {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.loanHistory li {
+  padding: 12px 0;
+}
+.loanHistory li + li {
+  border-top: 1px solid var(--line);
+}
+.loanHistoryHead {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
+.loanHistoryHead .portalLink {
+  margin-left: auto;
+}
+.loanHistoryMonth {
+  font-weight: 600;
+  font-size: 14px;
+}
+.loanHistoryFigures {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-top: 6px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.loanHistoryFigures span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.loanHistoryFigures i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+.loanHistoryFigures b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.loanHistoryLeft {
+  margin-left: auto;
 }

@@ -9,6 +9,7 @@ import { fileLink } from "@/lib/file-links";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
+import { loansWhere } from "@/lib/loans-db";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
@@ -69,6 +70,8 @@ export default async function DashboardPage() {
       orderBy: [{ urgency: "desc" }, { createdAt: "asc" }],
     }),
   ]);
+
+  const loans = await loansWhere({ property: { companyId: { in: companyIds } }, active: true });
 
   return (
     <DashboardClient
@@ -133,6 +136,7 @@ export default async function DashboardPage() {
         amount: c.amount,
       }))}
       initialTenants={tenants.map(serializeTenant)}
+      initialLoans={loans}
       initialTransactions={transactions.map((t) => ({
         id: t.id,
         propertyId: t.propertyId,
@@ -144,6 +148,7 @@ export default async function DashboardPage() {
         note: t.note ?? "",
         category: t.category ?? "",
         recurringExpenseId: t.recurringExpenseId,
+        loanPaymentId: t.loanPaymentId,
         attachments: t.attachments.map((a) => ({
           id: a.id,
           transactionId: a.transactionId,

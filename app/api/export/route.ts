@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { requireCompany } from "@/lib/access";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { csvRow } from "@/lib/csv";
+import { balanceAt, yearTotals } from "@/lib/loans";
 
 const fmt = (n: number) => n.toFixed(2);
 
@@ -120,6 +121,47 @@ export async function GET(req: Request) {
         }),
       ])
     );
+  }
+
+  // Mortgages: the interest above should match box 1 of each lender's Form
+  // 1098, and the principal is listed so it's plain it was never counted as
+  // an expense. Loans with no payment this year are left out.
+  const loans = await prisma.loan.findMany({
+    where: { property: { companyId } },
+    include: { property: { select: { name: true } }, payments: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const loanRows = loans
+    .map((l) => ({ l, totals: yearTotals(l.payments, year) }))
+    .filter(({ totals }) => totals.count > 0);
+  if (loanRows.length > 0) {
+    rows.push("\r\n");
+    rows.push(
+      csvRow([
+        "Mortgages",
+        String(year),
+        "Property",
+        "Payments",
+        "Interest (check against Form 1098)",
+        "Escrow",
+        "Principal (not an expense)",
+        "Balance at year end",
+      ])
+    );
+    for (const { l, totals } of loanRows) {
+      rows.push(
+        csvRow([
+          l.lender,
+          "",
+          l.property.name,
+          String(totals.count),
+          fmt(totals.interest),
+          fmt(totals.escrow),
+          fmt(totals.principal),
+          fmt(balanceAt(l.balance, l.payments, `${year}-12`)),
+        ])
+      );
+    }
   }
 
   const safeName = company.name.replace(/[^a-zA-Z0-9._-]/g, "_");
