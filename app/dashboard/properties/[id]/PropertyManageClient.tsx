@@ -21,7 +21,7 @@ import { Toasts, useToasts } from "../../../components/Toasts";
 import styles from "../../dashboard.module.css";
 import { useNow } from "../../../components/useNow";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
-import { money } from "@/lib/money";
+import { money, signedMoney } from "@/lib/money";
 import { historyFor, rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { formatJoinCode } from "@/lib/codes";
@@ -869,6 +869,19 @@ export default function PropertyManageClient({
     return keys.map((k) => buckets.get(k)!);
   }, [transactions, now]);
 
+  // Loans as the Mortgages panel last reported them, for the one figure the
+  // net above can't show: principal is rightly not an expense, so "net"
+  // overstates the cash left once the mortgage is paid.
+  const [loanState, setLoanState] = useState<LoanDTO[]>(initialLoans);
+  const principalLastTwelve = useMemo(() => {
+    const from = series[0]?.month ?? "";
+    let cents = 0;
+    for (const l of loanState) {
+      for (const p of l.payments) if (p.date.slice(0, 7) >= from) cents += Math.round(p.principal * 100);
+    }
+    return cents / 100;
+  }, [loanState, series]);
+
   const lastTwelve = useMemo(() => {
     const rent = series.reduce((sum, m) => sum + m.rent, 0);
     const expense = series.reduce((sum, m) => sum + m.expense, 0);
@@ -969,8 +982,9 @@ export default function PropertyManageClient({
           <div className={styles.kpiFoot}>
             <span className={styles.delta}>
               <span className={styles.deltaNote}>
-                {lifetime.net < 0 ? "\u2212" : ""}
-                {money(Math.abs(lifetime.net))} all time
+                {principalLastTwelve > 0
+                  ? `${signedMoney(lastTwelve.net - principalLastTwelve)} after ${money(principalLastTwelve)} of principal`
+                  : `${lifetime.net < 0 ? "\u2212" : ""}${money(Math.abs(lifetime.net))} all time`}
               </span>
             </span>
           </div>
@@ -1544,6 +1558,7 @@ export default function PropertyManageClient({
             router.refresh();
           }}
           onToast={push}
+          onLoansChange={setLoanState}
         />
       </section>
 

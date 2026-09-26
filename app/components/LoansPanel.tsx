@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Modal from "./Modal";
 import ConfirmDialog, { type ConfirmRequest } from "./ConfirmDialog";
 import styles from "../dashboard/dashboard.module.css";
@@ -94,7 +94,10 @@ export default function LoansPanel({
   onEntriesAdded,
   onEntriesRemoved,
   onToast,
+  onLoansChange,
 }: {
+  /** Tells the page whenever payments change, for figures outside the panel. */
+  onLoansChange?: (loans: LoanDTO[]) => void;
   propertyId: string;
   initial: LoanDTO[];
   /** YYYY-MM-DD, from the parent, so "this month" agrees with the rest of the page. */
@@ -107,6 +110,7 @@ export default function LoansPanel({
   onToast: (message: string, tone?: "bad") => void;
 }) {
   const [loans, setLoans] = useState(initial);
+  useEffect(() => onLoansChange?.(loans), [loans, onLoansChange]);
   const [loanForm, setLoanForm] = useState(EMPTY_LOAN);
   const [loanOpen, setLoanOpen] = useState(false);
   const [payForm, setPayForm] = useState(EMPTY_PAYMENT);
