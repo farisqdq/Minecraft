@@ -1743,7 +1743,17 @@ export default function DashboardClient({
                     <div key={`u-${target.key}`} className={styles.attnRow}>
                       <div className={styles.attnMain}>
                         <div className={styles.attnLabel}>
-                          {tenant ? tenant.name : target.label}{" "}
+                          <Link
+                            href={
+                              tenant
+                                ? `/dashboard/properties/${target.propertyId}#tenant-${tenant.id}`
+                                : `/dashboard/properties/${target.propertyId}`
+                            }
+                            className={styles.attnLink}
+                            title={tenant ? `Open ${tenant.name}\u2019s card` : `Open ${target.label}`}
+                          >
+                            {tenant ? tenant.name : target.label}
+                          </Link>{" "}
                           {late > 0 ? (
                             <span className={`${styles.pill} ${styles.bill}`}>
                               {late === 1 ? "1 day late" : `${late} days late`}
@@ -1843,7 +1853,13 @@ export default function DashboardClient({
                     <div key={`l-${tenant.id}`} className={styles.attnRow}>
                       <div className={styles.attnMain}>
                         <div className={styles.attnLabel}>
-                          {tenant.name}{" "}
+                          <Link
+                            href={`/dashboard/properties/${tenant.propertyId}#tenant-${tenant.id}`}
+                            className={styles.attnLink}
+                            title={`Open ${tenant.name}\u2019s card`}
+                          >
+                            {tenant.name}
+                          </Link>{" "}
                           <span
                             className={`${styles.pill} ${status.kind === "expired" ? styles.bill : styles.owed}`}
                           >

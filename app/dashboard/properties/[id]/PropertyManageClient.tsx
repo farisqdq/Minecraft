@@ -478,6 +478,21 @@ export default function PropertyManageClient({
    */
   const [balances, setBalances] = useState(initialBalances);
   const [moveOuts, setMoveOuts] = useState(initialMoveOuts);
+
+  // Arriving by a link to one tenant (a name on the overview): bring their
+  // card into view and light it up for a moment, so on a phone with six
+  // cards it's obvious which one was meant.
+  const [spotlightId, setSpotlightId] = useState("");
+  useEffect(() => {
+    const id = window.location.hash.startsWith("#tenant-") ? window.location.hash.slice("#tenant-".length) : "";
+    if (!id) return;
+    const card = document.getElementById(`tenant-${id}`);
+    if (!card) return;
+    card.scrollIntoView({ block: "center" });
+    setSpotlightId(id);
+    const timer = window.setTimeout(() => setSpotlightId(""), 2400);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [movingOut, setMovingOut] = useState<TenantDTO | null>(null);
   const [returningFor, setReturningFor] = useState("");
   const [statementFor, setStatementFor] = useState<TenantDTO | null>(null);
@@ -1028,7 +1043,13 @@ export default function PropertyManageClient({
                       ? styles.owed
                       : styles.bill;
               return (
-                <div key={t.id} className={`${styles.tenantCard} ${t.active ? "" : styles.pastTenant}`}>
+                <div
+                  key={t.id}
+                  id={`tenant-${t.id}`}
+                  className={`${styles.tenantCard} ${t.active ? "" : styles.pastTenant} ${
+                    spotlightId === t.id ? styles.spotlight : ""
+                  }`}
+                >
                   <div className={styles.tenantHead}>
                     <div className={styles.tenantName}>
                       <span className={styles.name}>{t.name}</span>

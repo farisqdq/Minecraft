@@ -3219,3 +3219,38 @@ tr:hover .rowDel {
   font-weight: 600;
   white-space: nowrap;
 }
+
+/* A name on the overview that opens that tenant's card. Styled as the text it
+   already was, with the underline on hover saying it goes somewhere. */
+.attnLink {
+  color: inherit;
+  text-decoration: none;
+  border-radius: 3px;
+}
+.attnLink:hover,
+.attnLink:focus-visible {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  color: var(--accent);
+}
+
+/* The card a link pointed at, for a moment after arriving. */
+.spotlight {
+  animation: spotlight 2.4s var(--ease) both;
+}
+@keyframes spotlight {
+  0%,
+  60% {
+    box-shadow: 0 0 0 3px var(--gold);
+    border-color: var(--gold);
+  }
+  100% {
+    box-shadow: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .spotlight {
+    animation: none;
+    border-color: var(--gold);
+  }
+}
