@@ -206,6 +206,27 @@ deposit or ledger history; **Forgot password** kills the old login and hands
 you a fresh code, and everything they ever reported is still there when they
 sign back in.
 
+### Forgot password
+
+**Forgot your password?** on the sign-in page asks for the email and, when
+the site can send email, sends a one-time link to set a new one. The
+answer on screen is the same whether or not the address has an account,
+so the form can't be used to find out which emails are signed up.
+
+A link lives an hour, works once, and asking for another retires the old.
+Only its hash is stored, so a copy of the database can't be turned into a
+way in. Using it signs the account out everywhere — the usual reason for a
+reset is not being sure who has the old password — and it never gets past
+two-factor: someone with the link and without the phone still can't sign
+in. An admin can turn two-factor off from the Admin page if the phone is
+really gone.
+
+Email needs `RESEND_API_KEY` and `EMAIL_FROM` set (Resend has a free tier;
+the sender must be on a domain verified there). Without them the page says
+so and points at the admin, who can make a reset link for anyone from the
+Admin page and send it however they already talk to that person. Both
+routes are the same link; only who hands it over differs.
+
 ### Sign-in throttling
 
 Ten wrong passwords for one account inside fifteen minutes pauses that

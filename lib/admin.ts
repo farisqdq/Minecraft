@@ -73,6 +73,7 @@ export const ADMIN_ACTIONS = [
   "account.admin.revoke",
   "account.signOutEverywhere",
   "account.twoFactor.off",
+  "account.resetLink",
   "company.create",
   "company.delete",
   "company.rename",
@@ -96,6 +97,8 @@ export function describeAction(a: { action: string; target: string; detail: stri
       return `Signed ${a.target} out everywhere`;
     case "account.twoFactor.off":
       return `Turned off two-factor for ${a.target}`;
+    case "account.resetLink":
+      return `Made a password reset link for ${a.target}`;
     case "company.create":
       return `Created the LLC ${a.target}${d}`;
     case "company.delete":

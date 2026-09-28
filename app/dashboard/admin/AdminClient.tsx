@@ -56,6 +56,8 @@ export default function AdminClient({
   const [typedName, setTypedName] = useState("");
   const [createName, setCreateName] = useState("");
   const [createOwner, setCreateOwner] = useState("");
+  const [resetLink, setResetLink] = useState("");
+  const [copied, setCopied] = useState(false);
 
   const account = data.accounts.find((a) => a.id === accountId) ?? null;
   const company = data.companies.find((c) => c.id === companyId) ?? null;
@@ -110,6 +112,8 @@ export default function AdminClient({
     setAddRole("member");
     setNewLlcName("");
     setTypedEmail("");
+    setResetLink("");
+    setCopied(false);
   }
 
   function openCompany(c: AdminCompany) {
@@ -446,6 +450,28 @@ export default function AdminClient({
                 type="button"
                 className={`${styles.btn} ${styles.small}`}
                 disabled={busy}
+                onClick={async () => {
+                  setBusy(true);
+                  setError("");
+                  const res = await fetch(`/api/admin/accounts/${account.id}/reset-link`, { method: "POST" });
+                  const json = await res.json().catch(() => ({}));
+                  setBusy(false);
+                  if (!res.ok) {
+                    setError(json?.error || "Couldn't make a link.");
+                    return;
+                  }
+                  setResetLink(json.link);
+                  setCopied(false);
+                  // The link isn't in the snapshot; refresh the log line it wrote.
+                  fetch("/api/admin/accounts").then((r) => (r.ok ? r.json() : null)).then((d) => d && setData(d));
+                }}
+              >
+                Password reset link
+              </button>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.small}`}
+                disabled={busy}
                 onClick={() => send(`/api/admin/accounts/${account.id}`, "PATCH", { signOutEverywhere: true }, "Signed out everywhere.")}
               >
                 Sign out everywhere
@@ -473,9 +499,30 @@ export default function AdminClient({
                 </button>
               )}
             </div>
+            {resetLink && (
+              <div className={styles.adminInline}>
+                <input type="text" readOnly aria-label="Reset link" value={resetLink} onFocus={(e) => e.currentTarget.select()} />
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.small}`}
+                  onClick={async () => {
+                    try {
+                      await navigator.clipboard.writeText(resetLink);
+                      setCopied(true);
+                    } catch {
+                      setCopied(false);
+                    }
+                  }}
+                >
+                  {copied ? "Copied" : "Copy"}
+                </button>
+              </div>
+            )}
             <p className={styles.helpText}>
-              Signing them out ends every session they have; two-factor off lets someone who lost their phone back in with
-              just their password. Both are written to the log on this page.
+              A reset link lets them choose a new password; send it however you talk to them. It works once, for an
+              hour, and doesn&apos;t get past two-factor. Signing them out ends every session they have; two-factor off
+              lets someone who lost their phone back in with just their password. All of it is written to the log on
+              this page.
             </p>
 
             {account.id !== me.id && !account.isAdmin && plan && (

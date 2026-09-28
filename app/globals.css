@@ -295,6 +295,17 @@ button {
   text-decoration: none;
 }
 
+.authNote {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--ink);
+}
+.authNote a {
+  color: var(--gold);
+  font-weight: 600;
+}
+
 .authError {
   background: var(--expense-soft);
   border: 1px solid var(--expense);

@@ -116,6 +116,8 @@ function LoginForm() {
         </button>
       </form>
       <div className="authFoot">
+        <Link href="/forgot">Forgot your password?</Link>
+        <br />
         Don&apos;t have an account?{" "}
         <Link href={`/signup?callbackUrl=${encodeURIComponent(callbackUrl)}`}>Create one</Link>
         <br />
