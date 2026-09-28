@@ -149,6 +149,51 @@ Someone who moves out is kept as a **past tenant** rather than deleted, so
 their history and their old ledger entries still make sense and the next
 tenant is a new record rather than an overwrite.
 
+### Late fees
+
+An LLC can charge late fees automatically, the same way for every tenant,
+from the **Team** page:
+
+> If rent is still owed 5 days after the due day, a late fee of 7% of that
+> month's rent is charged, then $5 a day until it's paid, up to 12% of that
+> month's rent ($120 on $1,000).
+
+The four numbers — grace days, the one-time percentage, the daily amount and
+the cap — are the LLC's, and the page reads the policy back in a sentence as
+you type. It is off until an owner switches it on, and switching it on starts
+from the current month: it never reaches back over months already on the
+books.
+
+Each tenant's account then says which late fees apply to them, under **What
+bills itself**: the LLC's policy (the default), **their own late rules** with
+different numbers, or **no late fees** at all. Rules for every month — a lot
+fee, pet rent — apply whichever is chosen. A tenant's own late rule can carry
+the same daily amount and cap as the policy.
+
+How it accrues, on $1,000 rent due on the 1st with the policy above: nothing
+through the 5th; **$70** on the 6th; **$5** on each of the 7th, 8th, 9th…
+until the month's rent is paid or the fees reach **$120**, whichever comes
+first (ten daily fees). The daily amount stops the day the rent is paid, even
+if the fees themselves are still open. A partial payment doesn't reset
+anything — the daily fee carries on against what's left — and no fee is ever
+bigger than what's still owed, so a $3 shortfall accrues $3 a day, not $5. A
+month with no rent (a vacancy, a tenant who has moved out) accrues nothing,
+and the percentage is of *that* month's rent, from the rent history, so a
+raise in September changes September's fee and not August's. No single
+automatic charge can exceed $2,000, whatever the numbers say.
+
+Every fee is an ordinary charge on the tenant's account — "Late fee", "Late
+fee (Sep 8)" — that you can see and **delete**, and the tenant sees it on
+their portal. Deleting one is final: the app remembers that the day was
+charged and never charges it again, and a deleted fee still counts toward the
+month's cap. The fees are applied whenever a statement is worked out, which
+the daily reminder run does for every current tenant, so they land on the day
+without anyone opening the app. Rent-late reminders can say what was added
+("a $70 late fee was added; $5/day more until paid, up to $120").
+
+Backups carry the policy, each tenant's choice, and every day already
+charged, so a restore neither forgets a fee nor bills it twice.
+
 ### Moving out, and the deposit
 
 **Move out** on a tenant's card ends the tenancy properly rather than just

@@ -6,6 +6,8 @@ import AppShell from "../../components/AppShell";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
 import { formatPhone } from "@/lib/lease";
+import type { LateFeePolicyDTO } from "@/lib/late-fee-policy";
+import LateFeePanel from "../../components/LateFeePanel";
 import styles from "../dashboard.module.css";
 
 type Member = { userId: string; email: string; name: string; role: "owner" | "member" };
@@ -16,6 +18,8 @@ type Company = {
   /** What tenants of this LLC see under "Who to contact". */
   contactPhone: string;
   contactEmail: string;
+  /** The LLC's late-fee policy, or null when none was ever saved. */
+  lateFees: LateFeePolicyDTO | null;
   role: "owner" | "member";
   propertyCount: number;
   transactionCount: number;
@@ -386,6 +390,8 @@ export default function TeamClient({
                 )}
               </form>
             )}
+
+            <LateFeePanel companyId={company.id} initial={company.lateFees} canEdit={isOwner} />
 
             {isOwner && (
               <form className={styles.inviteForm} onSubmit={(e) => createCode(e, company.id)}>

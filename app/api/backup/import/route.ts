@@ -11,6 +11,7 @@ import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "
 import { MAX_AMOUNT } from "@/lib/money";
 import { parseAssetInput, type AssetInput } from "@/lib/depreciation";
 import { parseSettings, settingsToRow, type ReminderSettingsDTO } from "@/lib/reminders";
+import { parseLateFeeMode, parsePolicy, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
 
 type Tx = Prisma.TransactionClient;
 
@@ -111,7 +112,10 @@ type CleanRule = {
   startMonth: string | null;
   endMonth: string | null;
   active: boolean;
-  runs: { month: string; amount: number; ranAt: Date }[];
+  dailyAmount: number;
+  capPercent: number;
+  fromPolicy: boolean;
+  runs: { month: string; day: string; amount: number; ranAt: Date }[];
 };
 type CleanTenant = {
   /** Where it sat in the file's list, which is what the ledger points at. */
@@ -133,6 +137,7 @@ type CleanTenant = {
   note: string | null;
   emailReminders: boolean;
   pushReminders: boolean;
+  lateFeeMode: string;
 };
 type CleanRentChange = { effectiveFrom: Date; amount: number };
 type CleanRequestUpdate = {
@@ -210,6 +215,8 @@ type CleanCompany = {
   contactEmail: string | null;
   /** Reminder settings, when the backup carries them (v16 on). */
   reminders: ReminderSettingsDTO | null;
+  /** The LLC-wide late-fee policy, when the backup carries one. */
+  lateFees: LateFeePolicyDTO | null;
   vendors: CleanVendor[];
   documents: CleanDocument[];
   properties: CleanProperty[];
@@ -422,14 +429,23 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
       }
 
       const rules: CleanRule[] = [];
-      for (const rawR of (Array.isArray(t.rules) ? t.rules : []).slice(0, 8)) {
+      // Eight of the landlord's own, plus the one the late-fee policy keeps.
+      let policyRules = 0;
+      for (const rawR of (Array.isArray(t.rules) ? t.rules : []).slice(0, 9)) {
         const r = (rawR ?? {}) as Record<string, unknown>;
+        const kind = r.kind === "late" ? "late" : "monthly";
         const label = str(r.label, 80);
         const amount = num(r.amount);
         const percent = r.percent === true;
+        const dailyAmount = kind === "late" ? Math.min(2000, Math.max(0, num(r.dailyAmount))) : 0;
+        const capPercent = kind === "late" ? Math.min(100, Math.max(0, num(r.capPercent))) : 0;
         // The same limits the rules API enforces. A backup is a file anyone
         // could edit, so it gets no more trust than a form.
-        if (!label || !(amount > 0) || (percent ? amount > 100 : amount > 2000)) continue;
+        if (!label || (!(amount > 0) && !(dailyAmount > 0)) || amount < 0) continue;
+        if (percent ? amount > 100 : amount > 2000) continue;
+        // One policy rule at most: a second would have the policy bill twice.
+        const fromPolicy = r.fromPolicy === true && kind === "late" && policyRules === 0;
+        if (fromPolicy) policyRules += 1;
         const startMonth = /^\d{4}-\d{2}$/.test(str(r.startMonth, 7)) ? str(r.startMonth, 7) : null;
         const endMonth = /^\d{4}-\d{2}$/.test(str(r.endMonth, 7)) ? str(r.endMonth, 7) : null;
         const seen = new Set<string>();
@@ -437,12 +453,15 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         for (const rawRun of Array.isArray(r.runs) ? r.runs : []) {
           const run = (rawRun ?? {}) as Record<string, unknown>;
           const month = str(run.month, 7);
-          if (!/^\d{4}-\d{2}$/.test(month) || seen.has(month)) continue;
-          seen.add(month);
-          runs.push({ month, amount: num(run.amount), ranAt: stamp(run.ranAt) ?? new Date() });
+          // "" is the month's one-time fee; a daily fee names its day. Older
+          // backups have no day at all, which is the same as "".
+          const day = /^\d{4}-\d{2}-\d{2}$/.test(str(run.day, 10)) ? str(run.day, 10) : "";
+          if (!/^\d{4}-\d{2}$/.test(month) || seen.has(`${month}|${day}`)) continue;
+          seen.add(`${month}|${day}`);
+          runs.push({ month, day, amount: num(run.amount), ranAt: stamp(run.ranAt) ?? new Date() });
         }
         rules.push({
-          kind: r.kind === "late" ? "late" : "monthly",
+          kind,
           label,
           amount,
           percent,
@@ -450,6 +469,9 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           startMonth,
           endMonth,
           active: r.active !== false,
+          dailyAmount,
+          capPercent,
+          fromPolicy,
           runs,
         });
       }
@@ -501,6 +523,10 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         dueDay: Math.min(31, Math.max(1, Math.round(num(t.dueDay)) || 1)),
         active: t.active !== false,
         note: str(t.note, 500) || null,
+        emailReminders: t.emailReminders !== false,
+        pushReminders: t.pushReminders !== false,
+        // Older backups have no mode; "default" is what every tenant had then.
+        lateFeeMode: parseLateFeeMode(t.lateFeeMode),
       });
     }
     return out;
@@ -687,6 +713,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
       contactPhone: str(c.contactPhone, 40) || null,
       contactEmail: str(c.contactEmail, 200) || null,
       reminders: c.reminders && typeof c.reminders === "object" ? parseSettings(c.reminders) : null,
+      lateFees: c.lateFees && typeof c.lateFees === "object" ? parsePolicy(c.lateFees) : null,
       vendors,
       documents: parseDocuments(c.documents),
       properties,
@@ -1056,6 +1083,9 @@ export async function POST(req: Request) {
       created.companies += 1;
       if (company.reminders) {
         await tx.reminderSettings.create({ data: { companyId: record.id, ...settingsToRow(company.reminders) } });
+      }
+      if (company.lateFees) {
+        await tx.lateFeePolicy.create({ data: { companyId: record.id, ...company.lateFees } });
       }
 
       // The book goes in before any property, so the repairs and expenses
