@@ -13,18 +13,23 @@ export default function ForgotPage() {
     e.preventDefault();
     setError("");
     setLoading(true);
-    const res = await fetch("/api/auth/forgot", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setLoading(false);
-    if (!res.ok) {
-      setError(data?.error || "Something went wrong. Please try again.");
-      return;
+    try {
+      const res = await fetch("/api/auth/forgot", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error || "Something went wrong. Please try again.");
+        return;
+      }
+      setState(data.emailConfigured ? "sent" : "unconfigured");
+    } catch {
+      setError("Couldn't reach the site. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    setState(data.emailConfigured ? "sent" : "unconfigured");
   }
 
   return (

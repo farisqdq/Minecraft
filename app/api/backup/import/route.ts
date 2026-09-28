@@ -13,6 +13,9 @@ import { parseAssetInput, type AssetInput } from "@/lib/depreciation";
 
 type Tx = Prisma.TransactionClient;
 
+/** A restore is the one request allowed to run long. */
+export const maxDuration = 60;
+
 const MAX_COMPANIES = 100;
 const MAX_PROPERTIES = 2000;
 const MAX_UNITS = 5000;
@@ -1032,6 +1035,8 @@ export async function POST(req: Request) {
     created.rentChanges += changes.length;
   }
 
+  // One row per round trip, and a large backup has thousands of rows: the
+  // engine's five-second default would cut a real restore off halfway.
   await prisma.$transaction(async (tx) => {
     for (const company of parsed.companies) {
       const record = await tx.company.create({
@@ -1115,7 +1120,7 @@ export async function POST(req: Request) {
       }
       await createDocuments(tx, record.id, null, company.documents, new Map());
     }
-  });
+  }, { timeout: 55_000, maxWait: 20_000 });
 
   return NextResponse.json({ ok: true, ...created });
 }

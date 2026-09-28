@@ -14,7 +14,9 @@ export async function POST(req: Request) {
   const owner = await prisma.user.findUnique({ where: { id: ownerUserId }, select: { id: true, email: true } });
   if (!owner) return NextResponse.json({ error: "Pick the account that owns it." }, { status: 400 });
 
-  await prisma.company.create({ data: { name, members: { create: { userId: owner.id, role: "owner" } } } });
-  await logAdmin(admin, "company.create", name, `owned by ${owner.email}`);
+  await prisma.$transaction(async (tx) => {
+    await tx.company.create({ data: { name, members: { create: { userId: owner.id, role: "owner" } } } });
+    await logAdmin(admin, "company.create", name, `owned by ${owner.email}`, tx);
+  });
   return NextResponse.json(await adminSnapshot(), { status: 201 });
 }

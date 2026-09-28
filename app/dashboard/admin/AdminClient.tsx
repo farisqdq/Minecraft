@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
@@ -14,9 +14,17 @@ type Role = "owner" | "member";
 
 const day = (iso: string) => formatDay(iso.slice(0, 10));
 
-function when(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+/**
+ * A local time, rendered only in the browser: the server renders in its own
+ * zone, and a different string on each side of hydration is an error React
+ * reports on every visit.
+ */
+function When({ iso }: { iso: string }) {
+  const [text, setText] = useState("");
+  useEffect(() => {
+    setText(new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }));
+  }, [iso]);
+  return <span className={styles.logWhen}>{text || "\u00a0"}</span>;
 }
 
 /**
@@ -58,6 +66,9 @@ export default function AdminClient({
   const [createOwner, setCreateOwner] = useState("");
   const [resetLink, setResetLink] = useState("");
   const [copied, setCopied] = useState(false);
+  const linkRef = useRef<HTMLInputElement>(null);
+  const [editEmail, setEditEmail] = useState("");
+  const [editName, setEditName] = useState("");
 
   const account = data.accounts.find((a) => a.id === accountId) ?? null;
   const company = data.companies.find((c) => c.id === companyId) ?? null;
@@ -86,23 +97,29 @@ export default function AdminClient({
   );
 
   /** One call shape for everything: send, and on success swap in the snapshot that came back. */
-  async function send(url: string, method: string, body?: unknown, done?: string) {
+  async function send(url: string, method: string, body?: unknown, done?: string): Promise<Record<string, unknown> | null> {
     setBusy(true);
     setError("");
-    const res = await fetch(url, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
-    const json = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) {
-      setError(json?.error || "That didn't work.");
-      return false;
+    try {
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(json?.error || "That didn't work.");
+        return null;
+      }
+      if (json?.accounts && json?.companies) setData(json as AdminSnapshot);
+      if (done) push(done);
+      return json;
+    } catch {
+      setError("Couldn't reach the site. Check your connection and try again.");
+      return null;
+    } finally {
+      setBusy(false);
     }
-    if (json?.accounts && json?.companies) setData(json as AdminSnapshot);
-    if (done) push(done);
-    return true;
   }
 
   function openAccount(a: AdminAccount) {
@@ -114,6 +131,8 @@ export default function AdminClient({
     setTypedEmail("");
     setResetLink("");
     setCopied(false);
+    setEditEmail(a.email);
+    setEditName(a.name);
   }
 
   function openCompany(c: AdminCompany) {
@@ -332,7 +351,7 @@ export default function AdminClient({
             <ul className={styles.logList}>
               {data.log.map((l) => (
                 <li key={l.id}>
-                  <span className={styles.logWhen}>{when(l.createdAt)}</span>
+                  <When iso={l.createdAt} />
                   <span>
                     {l.text} <span className={styles.logWho}>· {l.adminEmail}</span>
                   </span>
@@ -354,9 +373,45 @@ export default function AdminClient({
           <>
             {error && <div className={styles.errorBar} style={{ marginTop: 0, marginBottom: 14 }}>{error}</div>}
 
-            <h3 className={styles.moHeading} style={{ marginTop: 0 }}>
-              On these LLCs
-            </h3>
+            <form
+              className={styles.adminInline}
+              style={{ marginTop: 0 }}
+              onSubmit={async (e) => {
+                e.preventDefault();
+                await send(`/api/admin/accounts/${account.id}`, "PATCH", { email: editEmail, name: editName }, "Account updated.");
+              }}
+            >
+              <input
+                type="email"
+                required
+                aria-label="Email"
+                autoComplete="off"
+                value={editEmail}
+                onChange={(e) => setEditEmail(e.target.value)}
+              />
+              <input
+                type="text"
+                aria-label="Name"
+                placeholder="Name"
+                autoComplete="off"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+              />
+              <button
+                type="submit"
+                className={`${styles.btn} ${styles.small}`}
+                disabled={
+                  busy || (editEmail.trim().toLowerCase() === account.email && editName.trim() === account.name)
+                }
+              >
+                Save
+              </button>
+            </form>
+            <p className={styles.helpText} style={{ marginTop: 6 }}>
+              The email is what they sign in with and where reset links go. They aren&apos;t signed out by a change.
+            </p>
+
+            <h3 className={styles.moHeading}>On these LLCs</h3>
             {account.memberships.length === 0 ? (
               <p className={styles.helpText} style={{ marginTop: 0 }}>
                 None yet.
@@ -451,19 +506,11 @@ export default function AdminClient({
                 className={`${styles.btn} ${styles.small}`}
                 disabled={busy}
                 onClick={async () => {
-                  setBusy(true);
-                  setError("");
-                  const res = await fetch(`/api/admin/accounts/${account.id}/reset-link`, { method: "POST" });
-                  const json = await res.json().catch(() => ({}));
-                  setBusy(false);
-                  if (!res.ok) {
-                    setError(json?.error || "Couldn't make a link.");
-                    return;
+                  const json = await send(`/api/admin/accounts/${account.id}/reset-link`, "POST");
+                  if (json && typeof json.link === "string") {
+                    setResetLink(json.link);
+                    setCopied(false);
                   }
-                  setResetLink(json.link);
-                  setCopied(false);
-                  // The link isn't in the snapshot; refresh the log line it wrote.
-                  fetch("/api/admin/accounts").then((r) => (r.ok ? r.json() : null)).then((d) => d && setData(d));
                 }}
               >
                 Password reset link
@@ -501,16 +548,29 @@ export default function AdminClient({
             </div>
             {resetLink && (
               <div className={styles.adminInline}>
-                <input type="text" readOnly aria-label="Reset link" value={resetLink} onFocus={(e) => e.currentTarget.select()} />
+                <input
+                  ref={linkRef}
+                  type="text"
+                  readOnly
+                  aria-label="Reset link"
+                  value={resetLink}
+                  onFocus={(e) => e.currentTarget.select()}
+                />
                 <button
                   type="button"
                   className={`${styles.btn} ${styles.small}`}
                   onClick={async () => {
+                    // No clipboard on plain http or in some in-app browsers:
+                    // select the link so a long-press or Ctrl+C gets it.
                     try {
+                      if (!navigator.clipboard?.writeText) throw new Error("no clipboard");
                       await navigator.clipboard.writeText(resetLink);
                       setCopied(true);
                     } catch {
+                      linkRef.current?.focus();
+                      linkRef.current?.select();
                       setCopied(false);
+                      push("Copy isn't available here — the link is selected, copy it by hand.", "bad");
                     }
                   }}
                 >

@@ -34,7 +34,9 @@ export function chooseDatasource(env: Record<string, string | undefined> = proce
 export function datasourceUrl(raw = chooseDatasource().url): string {
   if (!raw) return raw;
   const extras: string[] = [];
-  if (!/[?&]connection_limit=/.test(raw)) extras.push("connection_limit=1");
+  // A pooler multiplexes for us; serialising onto one connection behind it
+  // would only slow things down. The cap is for a direct connection.
+  if (!/[?&]connection_limit=/.test(raw) && !isPooled(raw)) extras.push("connection_limit=1");
   if (!/[?&]pool_timeout=/.test(raw)) extras.push("pool_timeout=20");
   if (extras.length === 0) return raw;
   return `${raw}${raw.includes("?") ? "&" : "?"}${extras.join("&")}`;

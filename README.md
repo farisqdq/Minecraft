@@ -69,9 +69,13 @@ Node's own test runner in about a second.
 
 ## Site admin
 
-One account runs the site: `fariseqal3@gmail.com` is an admin from the moment
-it exists, and can make others admins. Admins get an **Admin** tab; for
-everyone else that page, and every `/api/admin` route, is a 404.
+One account runs the site. `fariseqal3@gmail.com` is the first admin: on a
+fresh site the account that signs up with that address starts as admin —
+only while the site has no admin at all — and the migration flagged the
+existing one. After that, admin comes from another admin and from nowhere
+else: signups are open and addresses aren't verified, so an address on its
+own must never be enough. Admins get an **Admin** tab; for everyone else
+that page, and every `/api/admin` route, is a 404.
 
 The panel lists every account and every LLC, with a search box across both,
 and lets an admin:
@@ -97,9 +101,10 @@ Every one of these is written to a log, shown at the bottom of the panel:
 who did what, to which account or LLC, when. Emails in the log are frozen
 text, because the account they name may be the one that was deleted.
 
-`ADMIN_EMAILS` (comma-separated) replaces the built-in owner address; an
-address on it is an admin whatever the database says, which is how a
-restored database still has one.
+`ADMIN_EMAILS` (comma-separated) replaces the built-in owner address for
+that first-admin moment. Links the panel makes (a password reset link) are
+built on `SITE_URL`, or the site's own domain when that's unset — never on
+the request, whose Host header is whatever the sender says.
 
 ## LLCs and teams
 
@@ -220,6 +225,12 @@ reset is not being sure who has the old password — and it never gets past
 two-factor: someone with the link and without the phone still can't sign
 in. An admin can turn two-factor off from the Admin page if the phone is
 really gone.
+
+Asking is limited per address as well as per requester, and a link
+younger than five minutes is left standing, so a stranger who knows the
+address can't flood it with mail or keep killing the link its owner is
+about to click. A password change or a sign-out-everywhere kills any
+outstanding link too.
 
 Email needs `RESEND_API_KEY` and `EMAIL_FROM` set (Resend has a free tier;
 the sender must be on a domain verified there). Without them the page says

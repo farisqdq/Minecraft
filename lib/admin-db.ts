@@ -1,6 +1,9 @@
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { describeAction, type AdminAction } from "@/lib/admin";
+
+type Db = Prisma.TransactionClient | typeof prisma;
 
 /** The signed-in admin, or null for anyone else — including every ordinary landlord. */
 export async function requireAdmin() {
@@ -8,15 +11,34 @@ export async function requireAdmin() {
   return me && me.isAdmin ? me : null;
 }
 
+/**
+ * Writes the audit line. Pass the transaction the change is made in, so a
+ * change that commits is always logged and a log line never describes a
+ * change that rolled back.
+ */
 export async function logAdmin(
   admin: { id: string; email: string },
   action: AdminAction,
   target: string,
-  detail?: string | null
+  detail?: string | null,
+  db: Db = prisma
 ) {
-  await prisma.adminLog.create({
+  await db.adminLog.create({
     data: { adminId: admin.id, adminEmail: admin.email, action, target, detail: detail || null },
   });
+}
+
+/**
+ * Deletes an LLC and, once that has committed, the stored files nothing
+ * else references: rows cascade on their own, blobs don't.
+ */
+export async function companyFileUrls(db: Db, companyId: string): Promise<string[]> {
+  const [attachments, documents, photos] = await Promise.all([
+    db.attachment.findMany({ where: { transaction: { property: { companyId } } }, select: { url: true } }),
+    db.document.findMany({ where: { companyId }, select: { url: true } }),
+    db.maintenancePhoto.findMany({ where: { request: { property: { companyId } } }, select: { url: true } }),
+  ]);
+  return [...attachments, ...documents, ...photos].map((f) => f.url);
 }
 
 export type AdminAccount = {

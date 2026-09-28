@@ -27,6 +27,9 @@ export async function sendEmail(
       method: "POST",
       headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({ from: env.EMAIL_FROM, to: [message.to], subject: message.subject, text: message.text }),
+      // A slow mail provider must not hold the request; eight seconds is
+      // generous for one small POST.
+      signal: AbortSignal.timeout(8000),
     });
     return res.ok ? { sent: true } : { sent: false, reason: "failed" };
   } catch {

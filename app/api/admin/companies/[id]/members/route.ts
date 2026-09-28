@@ -27,12 +27,17 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     );
   }
 
-  const existing = await prisma.companyMember.findUnique({
-    where: { companyId_userId: { companyId: id, userId: user.id } },
-  });
-  if (existing) return NextResponse.json({ error: `${user.email} is already on ${company.name}.` }, { status: 409 });
-
-  await prisma.companyMember.create({ data: { companyId: id, userId: user.id, role } });
-  await logAdmin(admin, "company.member.add", company.name, `${user.email} as ${role}`);
+  try {
+    await prisma.$transaction(async (tx) => {
+      await tx.companyMember.create({ data: { companyId: id, userId: user.id, role } });
+      await logAdmin(admin, "company.member.add", company.name, `${user.email} as ${role}`, tx);
+    });
+  } catch (e) {
+    // The unique index on (LLC, account) is what stops a double add.
+    if ((e as { code?: string })?.code === "P2002") {
+      return NextResponse.json({ error: `${user.email} is already on ${company.name}.` }, { status: 409 });
+    }
+    throw e;
+  }
   return NextResponse.json(await adminSnapshot(), { status: 201 });
 }

@@ -9,14 +9,18 @@
  * Pure: no database. lib/admin-db.ts does the reading and writing.
  */
 
-/** The site owner, who is admin whether or not the flag was ever set. */
+/** The site owner: the address that becomes the first admin of a fresh site. */
 const BUILT_IN_ADMINS = ["fariseqal3@gmail.com"];
 
 /**
- * Addresses that are admins no matter what the database says: ADMIN_EMAILS,
- * comma-separated, or the built-in owner when it's unset. Belt and braces
- * for the flag — a restored database, or an account created after the
- * migration that set it, still gets in.
+ * Addresses that may become the first admin: ADMIN_EMAILS, comma-separated,
+ * or the built-in owner when it's unset. Only the first — once the site has
+ * an admin, this list does nothing, and admin is only ever granted by
+ * another admin (or by the migration that flagged the owner's existing
+ * account). Signups are open and nothing verifies an address, so treating
+ * the list as admin at sign-in time would let whoever registered the
+ * owner's address first run the site. Bootstrap is the one moment that is
+ * unavoidable, and it is a single moment.
  */
 export function adminEmails(env: Record<string, string | undefined> = process.env): Set<string> {
   const raw = env.ADMIN_EMAILS;
@@ -24,11 +28,18 @@ export function adminEmails(env: Record<string, string | undefined> = process.en
   return new Set(list.map((e) => e.trim().toLowerCase()).filter(Boolean));
 }
 
-export function isAdminAccount(
-  account: { email: string; isAdmin: boolean },
+/** Whether a new account should start as admin: a listed address, on a site that has none yet. */
+export function bootstrapsAdmin(
+  email: string,
+  existingAdmins: number,
   env: Record<string, string | undefined> = process.env
 ): boolean {
-  return account.isAdmin || adminEmails(env).has(account.email.trim().toLowerCase());
+  return existingAdmins === 0 && adminEmails(env).has(email.trim().toLowerCase());
+}
+
+/** The flag is the only source of truth, so revoking it means revoked. */
+export function isAdminAccount(account: { isAdmin: boolean }): boolean {
+  return account.isAdmin;
 }
 
 export type MemberRow = { userId: string; role: string; createdAt: string };
@@ -74,6 +85,7 @@ export const ADMIN_ACTIONS = [
   "account.signOutEverywhere",
   "account.twoFactor.off",
   "account.resetLink",
+  "account.edit",
   "company.create",
   "company.delete",
   "company.rename",
@@ -99,6 +111,8 @@ export function describeAction(a: { action: string; target: string; detail: stri
       return `Turned off two-factor for ${a.target}`;
     case "account.resetLink":
       return `Made a password reset link for ${a.target}`;
+    case "account.edit":
+      return `Changed the account ${a.target}${d}`;
     case "company.create":
       return `Created the LLC ${a.target}${d}`;
     case "company.delete":

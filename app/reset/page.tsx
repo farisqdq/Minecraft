@@ -20,18 +20,23 @@ function ResetForm() {
       return;
     }
     setLoading(true);
-    const res = await fetch("/api/auth/reset", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ token, password }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setLoading(false);
-    if (!res.ok) {
-      setError(data?.error || "Something went wrong. Please try again.");
-      return;
+    try {
+      const res = await fetch("/api/auth/reset", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, password }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(data?.error || "Something went wrong. Please try again.");
+        return;
+      }
+      setDone(true);
+    } catch {
+      setError("Couldn't reach the site. Check your connection and try again.");
+    } finally {
+      setLoading(false);
     }
-    setDone(true);
   }
 
   if (!token) {

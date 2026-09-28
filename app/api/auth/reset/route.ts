@@ -30,9 +30,11 @@ export async function POST(req: Request) {
   }
   const reset = await prisma.passwordReset.findUnique({
     where: { tokenHash: hashToken(token) },
-    include: { user: { select: { id: true, email: true } } },
+    include: { user: { select: { id: true, email: true, sessionVersion: true } } },
   });
-  if (!reset || !resetIsLive(reset)) {
+  // A password change or a sign-out-everywhere since the link was made has
+  // moved the account on; the link is from before that, and is dead.
+  if (!reset || !resetIsLive(reset) || reset.sessionVersion !== reset.user.sessionVersion) {
     await recordFailure([{ key: addressKey, max: MAX_PER_IP }]);
     return expired;
   }

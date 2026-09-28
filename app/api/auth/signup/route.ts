@@ -4,7 +4,7 @@ import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { normalizeJoinCode } from "@/lib/codes";
 import { MAX_PER_IP, clientIp, ipKey, isThrottled, pauseMessage, recordFailure } from "@/lib/throttle";
-import { adminEmails } from "@/lib/admin";
+import { bootstrapsAdmin } from "@/lib/admin";
 
 /** Accounts one address can create inside the throttle window. */
 const MAX_SIGNUPS_PER_IP = 10;
@@ -82,10 +82,11 @@ export async function POST(req: Request) {
   // together. The code is claimed only while still unused and unexpired, so
   // two people redeeming it at once can't both get in.
   const result = await prisma.$transaction(async (tx) => {
-    // The site's owner is an admin from the first sign-in, so the panel is
-    // reachable even on a database where the migration found no account yet.
+    // A fresh site's owner is its first admin. Only while there is none:
+    // after that, admin comes from another admin, never from an address.
+    const admins = await tx.user.count({ where: { isAdmin: true } });
     const user = await tx.user.create({
-      data: { email, passwordHash, name: name || null, isAdmin: adminEmails().has(email) },
+      data: { email, passwordHash, name: name || null, isAdmin: bootstrapsAdmin(email, admins) },
     });
     if (!validJoinCode || !invite) return { joined: null as string | null };
     const claim = await tx.invite.updateMany({

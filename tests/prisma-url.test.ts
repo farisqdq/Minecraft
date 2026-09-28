@@ -16,6 +16,13 @@ test("existing query parameters are kept and appended to", () => {
   );
 });
 
+test("a pooled URL keeps its own concurrency; only the timeout is added", () => {
+  assert.equal(
+    datasourceUrl("postgresql://u:p@ep-x-pooler.neon.tech/db?sslmode=require"),
+    "postgresql://u:p@ep-x-pooler.neon.tech/db?sslmode=require&pool_timeout=20"
+  );
+});
+
 test("a URL that sets its own limits is left exactly alone", () => {
   const pooled = "postgresql://u:p@host-pooler/db?pgbouncer=true&connection_limit=1&pool_timeout=15";
   assert.equal(datasourceUrl(pooled), pooled);

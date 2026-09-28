@@ -45,14 +45,3 @@ export function passwordProblem(password: unknown): string | null {
   if (password.length > 200) return "That's too long.";
   return null;
 }
-
-/**
- * The origin links are built on: the deployment's own URL when configured,
- * otherwise the one the request came in on. The former is what the README
- * asks for and can't be spoofed by a request header.
- */
-export function siteOrigin(requestUrl: string, env: Record<string, string | undefined> = process.env): string {
-  const configured = env.NEXTAUTH_URL?.trim();
-  if (configured && /^https?:\/\//.test(configured)) return configured.replace(/\/+$/, "");
-  return new URL(requestUrl).origin;
-}

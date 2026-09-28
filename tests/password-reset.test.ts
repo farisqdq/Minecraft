@@ -7,8 +7,8 @@ import {
   plausibleToken,
   resetIsLive,
   resetLink,
-  siteOrigin,
 } from "../lib/password-reset.ts";
+import { siteOrigin } from "../lib/site.ts";
 import { emailConfigured, resetEmail, sendEmail } from "../lib/email.ts";
 
 test("a token is long, random, and stored only as its hash", () => {
@@ -35,9 +35,12 @@ test("a link is used once and dies after an hour", () => {
   assert.equal(resetIsLive(row, new Date("2026-09-28T13:00:01Z")), false);
 });
 
-test("links are built on the configured site URL, never a request header", () => {
-  assert.equal(siteOrigin("http://evil.example/x", { NEXTAUTH_URL: "https://www.eqal.rentals/" }), "https://www.eqal.rentals");
-  assert.equal(siteOrigin("http://localhost:3000/api/auth/forgot", {}), "http://localhost:3000");
+test("links are built on the site's own address in production, never the request's", () => {
+  const prod = { NODE_ENV: "production" };
+  assert.equal(siteOrigin("https://minecraft-git-x.vercel.app/api/x", prod), "https://eqal.rentals");
+  assert.equal(siteOrigin("http://evil.example/x", { ...prod, SITE_URL: "https://www.eqal.rentals/" }), "https://www.eqal.rentals");
+  assert.equal(siteOrigin("http://evil.example/x", { ...prod, SITE_URL: "not a url" }), "https://eqal.rentals");
+  assert.equal(siteOrigin("http://localhost:3000/api/auth/forgot", {}), "http://localhost:3000", "development");
   assert.equal(resetLink("https://www.eqal.rentals/", "abc"), "https://www.eqal.rentals/reset?token=abc");
 });
 

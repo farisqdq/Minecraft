@@ -14,7 +14,18 @@ export const dynamic = "force-dynamic";
  * so what's left is the shape of the failure — "too many connections",
  * "can't reach" — not the coordinates.
  */
+/** One probe per instance per few seconds: a burst of checks costs one query, not the instance's connection. */
+let cached: { at: number; body: unknown; status: number } | null = null;
+const CACHE_MS = 5000;
+
 export async function GET() {
+  if (cached && Date.now() - cached.at < CACHE_MS) return NextResponse.json(cached.body, { status: cached.status });
+  const res = await probe();
+  cached = { at: Date.now(), body: await res.clone().json(), status: res.status };
+  return res;
+}
+
+async function probe() {
   const started = Date.now();
   try {
     await prisma.$queryRaw`SELECT 1`;

@@ -1,18 +1,26 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { adminEmails, describeAction, isAdminAccount, planAccountDeletion } from "../lib/admin.ts";
+import { adminEmails, bootstrapsAdmin, describeAction, isAdminAccount, planAccountDeletion } from "../lib/admin.ts";
 
-test("the site owner is an admin with nothing configured", () => {
+test("the owner's address becomes the first admin of a fresh site, and only the first", () => {
   assert.deepEqual([...adminEmails({})], ["fariseqal3@gmail.com"]);
-  assert.equal(isAdminAccount({ email: "FarisEqal3@gmail.com ", isAdmin: false }, {}), true);
-  assert.equal(isAdminAccount({ email: "someone@example.com", isAdmin: false }, {}), false);
-  assert.equal(isAdminAccount({ email: "someone@example.com", isAdmin: true }, {}), true, "the flag counts too");
+  assert.equal(bootstrapsAdmin("FarisEqal3@gmail.com ", 0, {}), true);
+  // Signups are open and addresses aren't verified: once the site has an
+  // admin, registering the owner's address must grant nothing.
+  assert.equal(bootstrapsAdmin("fariseqal3@gmail.com", 1, {}), false);
+  assert.equal(bootstrapsAdmin("someone@example.com", 0, {}), false);
 });
 
-test("ADMIN_EMAILS replaces the built-in list", () => {
+test("only the flag makes an admin; the address list never does on its own", () => {
+  assert.equal(isAdminAccount({ isAdmin: false }), false);
+  assert.equal(isAdminAccount({ isAdmin: true }), true);
+});
+
+test("ADMIN_EMAILS replaces the built-in list for that first admin", () => {
   const env = { ADMIN_EMAILS: " A@x.com, b@y.com ,, " };
   assert.deepEqual([...adminEmails(env)], ["a@x.com", "b@y.com"]);
-  assert.equal(isAdminAccount({ email: "fariseqal3@gmail.com", isAdmin: false }, env), false);
+  assert.equal(bootstrapsAdmin("fariseqal3@gmail.com", 0, env), false);
+  assert.equal(bootstrapsAdmin("b@y.com", 0, env), true);
   assert.deepEqual([...adminEmails({ ADMIN_EMAILS: "   " })], ["fariseqal3@gmail.com"], "blank means unset");
 });
 

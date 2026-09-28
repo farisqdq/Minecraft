@@ -827,6 +827,9 @@ model PasswordReset {
   usedAt    DateTime?
   /// "self" when asked for on the sign-in page, otherwise the admin's email.
   issuedBy  String    @default("self")
+  /// The account's sessionVersion when issued. A password change or a
+  /// sign-out-everywhere bumps that, and a link from before it is dead.
+  sessionVersion Int  @default(0)
   createdAt DateTime  @default(now())
 
   @@index([userId])
