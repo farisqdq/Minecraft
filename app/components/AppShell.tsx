@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOutTo } from "./sign-out";
 import PropertySearch from "./PropertySearch";
+import { useShellInfo } from "./ShellContext";
 import styles from "./shell.module.css";
 
 /** The pill beside a page title that opens its edit form. */
@@ -97,6 +98,18 @@ function IconExport(props: { className?: string }) {
   );
 }
 
+function IconAdmin(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M4 7h10M18 7h2M4 12h3M11 12h9M4 17h12M20 17h0" />
+      <circle cx="16" cy="7" r="2" />
+      <circle cx="9" cy="12" r="2" />
+      <circle cx="18" cy="17" r="2" />
+    </svg>
+  );
+}
+
 const NAV = [
   { href: "/dashboard", label: "Overview", short: "Home", Icon: IconHome },
   { href: "/dashboard/calendar", label: "Calendar", short: "Calendar", Icon: IconCalendar },
@@ -104,6 +117,8 @@ const NAV = [
   { href: "/dashboard/team", label: "Team", short: "Team", Icon: IconTeam },
   { href: "/dashboard/backup", label: "Backup", short: "Backup", Icon: IconBackup },
   { href: "/dashboard/export", label: "Export", short: "Export", Icon: IconExport },
+  // Site admins only; the layout says who those are.
+  { href: "/dashboard/admin", label: "Admin", short: "Admin", Icon: IconAdmin, adminOnly: true },
 ];
 
 /**
@@ -133,6 +148,8 @@ export default function AppShell({
   children: ReactNode;
 }) {
   const pathname = usePathname() ?? "";
+  const { admin } = useShellInfo();
+  const nav = NAV.filter((item) => !item.adminOnly || admin);
 
   // "/dashboard" must not light up for every page nested under it.
   const isOn = (href: string) =>
@@ -151,7 +168,7 @@ export default function AppShell({
           </Link>
 
           <nav className={styles.nav} aria-label="Sections">
-            {NAV.map(({ href, label, Icon, badge }) => (
+            {nav.map(({ href, label, Icon, badge }) => (
               <Link key={href} href={href} className={`${styles.navLink} ${isOn(href) ? styles.on : ""}`}>
                 <Icon className={styles.navIcon} />
                 {label}
@@ -205,7 +222,7 @@ export default function AppShell({
       </main>
 
       <nav className={styles.tabBar} aria-label="Sections">
-        {NAV.map(({ href, short, Icon, badge }) => (
+        {nav.map(({ href, short, Icon, badge }) => (
           <Link
             key={href}
             href={href}

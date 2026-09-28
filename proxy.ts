@@ -21,6 +21,7 @@ const under = (path: string, bases: string[]) =>
 const LANDLORD_AREA = [
   "/dashboard",
   "/api/account",
+  "/api/admin",
   "/api/attachments",
   "/api/backup",
   "/api/companies",

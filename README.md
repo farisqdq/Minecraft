@@ -67,6 +67,40 @@ Node's own test runner in about a second.
 5. Deploy. The build runs migrations (`prisma migrate deploy`) before building,
    so the tables are created or updated automatically without destroying data.
 
+## Site admin
+
+One account runs the site: `fariseqal3@gmail.com` is an admin from the moment
+it exists, and can make others admins. Admins get an **Admin** tab; for
+everyone else that page, and every `/api/admin` route, is a 404.
+
+The panel lists every account and every LLC, with a search box across both,
+and lets an admin:
+
+- put someone on any LLC as owner or member, change their role, or take
+  them off — with the same two rules the Team page keeps: never the only
+  owner while others remain, and never the last person on an LLC (delete the
+  LLC instead, which is the honest version of that);
+- create an LLC for an account, rename one, or delete one (typed name to
+  confirm, everything under it goes for everyone on it);
+- delete an account (typed email to confirm). LLCs the account was the only
+  member of go with it, because nobody could ever reach them otherwise; on
+  LLCs with teammates the account is just taken off, and if it was the only
+  owner the longest-standing member becomes one. The panel says exactly
+  which before asking;
+- sign an account out everywhere, and turn off its two-factor — how a
+  landlord who lost their phone gets back in;
+- make or unmake admins. Nobody can change their own admin standing or
+  delete themselves, and an admin can't be deleted until admin is removed
+  from it — so there is always someone who can get in.
+
+Every one of these is written to a log, shown at the bottom of the panel:
+who did what, to which account or LLC, when. Emails in the log are frozen
+text, because the account they name may be the one that was deleted.
+
+`ADMIN_EMAILS` (comma-separated) replaces the built-in owner address; an
+address on it is an admin whatever the database says, which is how a
+restored database still has one.
+
 ## LLCs and teams
 
 Properties belong to the **LLC** that owns them, not directly to a person.
@@ -435,6 +469,37 @@ Restoring only ever **adds**. Each LLC in the file comes back as a new LLC you
 own; if the name is already taken, the restored copy is renamed (e.g.
 `Birchwood Holdings LLC (imported)`) so you can compare the two before
 removing either. Nothing is ever overwritten or deleted by an import.
+
+## The database connection
+
+The app runs as many serverless instances, and each opens its own database
+connections. A small Postgres allows about a hundred in all; when that runs
+out, new connections are refused outright, and the effect is maddening —
+pages holding a connection keep working while the overview, which fans out
+a dozen queries, fails nearly every time. That was an outage on
+2026-09-28, and `FATAL: too many connections for role` was the cause.
+
+Two things keep it from happening again:
+
+- **Use the pooled connection string.** Neon and Vercel Postgres provide one
+  (the host contains `-pooler`; Vercel names it `POSTGRES_PRISMA_URL`, and
+  the app uses that variable ahead of `DATABASE_URL` when it's set).
+  Supabase calls it the transaction pooler, on port 6543, and wants
+  `?pgbouncer=true` on the end. A pooler multiplexes thousands of client
+  connections onto a few real ones, which removes the limit altogether.
+- **One connection per instance.** Unless the URL sets its own
+  `connection_limit`, the app uses one, and waits up to twenty seconds for
+  it rather than failing the page. Queries on one instance then run one at
+  a time — the overview's dozen take about a tenth of a second together.
+
+`/api/health` runs `SELECT 1` and says whether the database is up, which URL
+is in use and whether it's pooled, and on failure the Prisma error code and
+a message with hosts, users and quoted values stripped out. It's the first
+thing to check when every signed-in page is a 500.
+
+Each deploy briefly doubles the open connections while the old instances
+drain, so on a direct (unpooled) URL expect a few minutes of errors after
+each one, and don't deploy twice in five minutes.
 
 ## Your data and app updates
 

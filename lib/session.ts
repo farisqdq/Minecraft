@@ -2,6 +2,7 @@ import { cache } from "react";
 import { getServerSession } from "next-auth/next";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { isAdminAccount } from "@/lib/admin";
 
 /**
  * The signed-in landlord's id, or null.
@@ -23,18 +24,18 @@ const currentUser = cache(async () => {
   if (session?.kind !== "user" || !session.user?.id) return null;
   const user = await prisma.user.findUnique({
     where: { id: session.user.id },
-    select: { id: true, name: true, email: true, sessionVersion: true },
+    select: { id: true, name: true, email: true, sessionVersion: true, isAdmin: true },
   });
   // Deleted, or signed out everywhere since this token was issued.
   if (!user || user.sessionVersion !== (session.sv ?? 0)) return null;
-  return { id: user.id, name: user.name ?? "", email: user.email };
+  return { id: user.id, name: user.name ?? "", email: user.email, isAdmin: isAdminAccount(user) };
 });
 
 export async function getCurrentUserId(): Promise<string | null> {
   return (await currentUser())?.id ?? null;
 }
 
-export async function getCurrentUser(): Promise<{ id: string; name: string; email: string } | null> {
+export async function getCurrentUser(): Promise<{ id: string; name: string; email: string; isAdmin: boolean } | null> {
   return currentUser();
 }
 

@@ -29,6 +29,9 @@ model User {
   totpLastStep      Int?
   /// SHA-256 of each unused one-time backup code.
   recoveryCodes     String[]  @default([])
+  /// Runs the site: sees every account and LLC, and can change them. Granted
+  /// by another admin, or by being on ADMIN_EMAILS (see lib/admin.ts).
+  isAdmin           Boolean   @default(false)
 
   memberships         CompanyMember[]
   invitesSent         Invite[]            @relation("InviteSender")
@@ -50,6 +53,7 @@ model User {
   loanPayments        LoanPayment[]
   moveOuts            MoveOut[]
   assetsAdded         DepreciableAsset[]
+  adminActions        AdminLog[]
 }
 
 model Company {
@@ -789,4 +793,22 @@ model DepreciableAsset {
   createdAt   DateTime @default(now())
 
   @@index([propertyId])
+}
+
+// What an admin did to whom. An admin can delete any account and rewrite any
+// team, so every such action is written down: who, what, to which account
+// or LLC, when. The emails are frozen text, because the account they name
+// may be the one that was deleted.
+model AdminLog {
+  id         String   @id @default(cuid())
+  adminId    String?
+  admin      User?    @relation(fields: [adminId], references: [id], onDelete: SetNull)
+  adminEmail String
+  /// e.g. "account.delete", "company.member.add".
+  action     String
+  target     String
+  detail     String?
+  createdAt  DateTime @default(now())
+
+  @@index([createdAt])
 }
