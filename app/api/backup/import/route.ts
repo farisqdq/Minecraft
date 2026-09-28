@@ -28,6 +28,8 @@ const MAX_REQUESTS = 20000;
 const MAX_REQUEST_UPDATES = 100000;
 const MAX_LOANS = 2000;
 const MAX_LOAN_PAYMENTS = 50000;
+/** A thread longer than this is a novel, not a landlord's record. */
+const MAX_MESSAGES_PER_TENANT = 5000;
 
 type CleanAttachment = { url: string; filename: string; contentType: string; size: number };
 type CleanTransaction = {
@@ -91,6 +93,13 @@ type CleanNotice = {
   createdAt: Date;
   readAt: Date | null;
 };
+type CleanMessage = {
+  fromTenant: boolean;
+  authorName: string;
+  body: string;
+  createdAt: Date;
+  attachments: CleanAttachment[];
+};
 type CleanCharge = {
   month: string;
   kind: string;
@@ -118,6 +127,9 @@ type CleanTenant = {
   at: number;
   moveOut: CleanMoveOut | null;
   notices: CleanNotice[];
+  /** The conversation with them, and how far each side had read it. */
+  messages: CleanMessage[];
+  messagesReadAt: { tenant: Date | null; landlord: Date | null } | null;
   charges: CleanCharge[];
   rules: CleanRule[];
   openingBalance: number;
@@ -400,6 +412,39 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         });
       }
 
+      const messages: CleanMessage[] = [];
+      for (const rawM of Array.isArray(t.messages) ? t.messages : []) {
+        const m = (rawM ?? {}) as Record<string, unknown>;
+        const attachments: CleanAttachment[] = [];
+        for (const rawA of Array.isArray(m.attachments) ? m.attachments : []) {
+          const a = (rawA ?? {}) as Record<string, unknown>;
+          const url = str(a.url, 1000);
+          // Same rule as receipts: only links into Blob storage, and a
+          // private one only for the account that exported it.
+          if (!acceptFile(url, str(a.key, 100))) continue;
+          attachments.push({
+            url,
+            filename: str(a.filename, 200) || "file",
+            contentType: str(a.contentType, 100) || "application/octet-stream",
+            size: Math.round(num(a.size)),
+          });
+        }
+        const body = str(m.body, 4000);
+        // A message with neither words nor a file that came back is nothing.
+        if (!body && attachments.length === 0) continue;
+        if (messages.length >= MAX_MESSAGES_PER_TENANT) break;
+        messages.push({
+          fromTenant: m.fromTenant === true,
+          authorName: str(m.authorName, 120) || (m.fromTenant === true ? name : "Your landlord"),
+          body,
+          createdAt: stamp(m.createdAt) ?? new Date(),
+          attachments,
+        });
+      }
+      const rawRead = (t.messagesReadAt ?? null) as Record<string, unknown> | null;
+      const messagesReadAt =
+        messages.length > 0 ? { tenant: stamp(rawRead?.tenant), landlord: stamp(rawRead?.landlord) } : null;
+
       const charges: CleanCharge[] = [];
       for (const rawC of Array.isArray(t.charges) ? t.charges : []) {
         const c = (rawC ?? {}) as Record<string, unknown>;
@@ -488,8 +533,14 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         at,
         moveOut,
         notices,
+        messages,
+        messagesReadAt,
         charges,
         rules,
+        // Their say over automatic reminders; a backup from before they
+        // existed means "on", the default.
+        emailReminders: t.emailReminders !== false,
+        pushReminders: t.pushReminders !== false,
         openingBalance: num(t.openingBalance),
         balanceFrom: /^\d{4}-\d{2}$/.test(str(t.balanceFrom, 7)) ? str(t.balanceFrom, 7) : null,
         name,
@@ -750,6 +801,7 @@ export async function POST(req: Request) {
     recurring: 0,
     tenants: 0,
     charges: 0,
+    messages: 0,
     rules: 0,
     vendors: 0,
     documents: 0,
@@ -884,13 +936,14 @@ export async function POST(req: Request) {
    */
   async function createTenants(
     tx: Tx,
+    companyId: string,
     propertyId: string,
     unitId: string | null,
     tenants: CleanTenant[]
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
-      const { notices, charges, rules, moveOut, at, ...fields } = t;
+      const { notices, messages, messagesReadAt, charges, rules, moveOut, at, ...fields } = t;
       const row = await tx.tenant.create({
         data: { ...fields, propertyId, unitId, createdById: userId },
       });
@@ -927,6 +980,38 @@ export async function POST(req: Request) {
         await tx.tenantNotice.createMany({
           data: notices.map((n) => ({ ...n, tenantId: row.id, sentById: userId })),
         });
+      }
+      // The conversation, with the read stamps as they were. Landlord
+      // messages keep the author's name but not their account: ids from
+      // the old database mean nothing here.
+      if (messages.length > 0) {
+        const last = messages.reduce((a, b) => (b.createdAt > a ? b.createdAt : a), messages[0].createdAt);
+        const thread = await tx.messageThread.create({
+          data: {
+            tenantId: row.id,
+            companyId,
+            lastMessageAt: last,
+            tenantReadAt: messagesReadAt?.tenant ?? null,
+            landlordReadAt: messagesReadAt?.landlord ?? null,
+          },
+        });
+        for (const m of messages) {
+          const { attachments, ...m2 } = m;
+          const made = await tx.message.create({ data: { ...m2, threadId: thread.id } });
+          if (attachments.length > 0) {
+            await tx.messageAttachment.createMany({
+              data: attachments.map((a) => ({
+                messageId: made.id,
+                url: a.url,
+                pathname: new URL(a.url).pathname.replace(/^\//, ""),
+                filename: a.filename,
+                contentType: a.contentType,
+                size: a.size,
+              })),
+            });
+          }
+        }
+        created.messages += messages.length;
       }
       if (charges.length > 0) {
         await tx.tenantCharge.createMany({
@@ -1096,7 +1181,7 @@ export async function POST(req: Request) {
         // can point at the move-out that kept it.
         moveOutsByTenant = new Map();
         moveOutsByPosition = new Map();
-        const propertyTenants = await createTenants(tx, prop.id, null, property.tenants);
+        const propertyTenants = await createTenants(tx, record.id, prop.id, null, property.tenants);
         await createTransactions(tx, prop.id, null, property.transactions, loanPayments);
         await createRecurring(tx, prop.id, null, property.recurringExpenses);
         await createRentChanges(tx, prop.id, null, property.rentChanges);
@@ -1117,7 +1202,7 @@ export async function POST(req: Request) {
 
           moveOutsByTenant = new Map();
           moveOutsByPosition = new Map();
-          const unitTenants = await createTenants(tx, prop.id, u.id, unit.tenants);
+          const unitTenants = await createTenants(tx, record.id, prop.id, u.id, unit.tenants);
           await createTransactions(tx, prop.id, u.id, unit.transactions, loanPayments);
           await createRecurring(tx, prop.id, u.id, unit.recurringExpenses);
           await createRentChanges(tx, prop.id, u.id, unit.rentChanges);
