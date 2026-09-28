@@ -4,6 +4,7 @@ import { Suspense, useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import InstallBanner from "../../components/InstallBanner";
 import { pauseMessage } from "@/lib/throttle-rules";
 
 function PortalLoginForm() {
@@ -42,6 +43,7 @@ function PortalLoginForm() {
 
   return (
     <div className="authPage">
+      <InstallBanner audience="guest" />
       <div className="authBrand">
         <span className="authMark" aria-hidden="true">
           R

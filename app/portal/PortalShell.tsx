@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { signOutTo } from "../components/sign-out";
+import InstallBanner from "../components/InstallBanner";
 import styles from "./portal.module.css";
 
 /** The tenant frame: a brand, who you are, and the way out. */
@@ -25,7 +26,10 @@ export default function PortalShell({ who, children }: { who: string; children: 
           Sign out
         </button>
       </header>
-      <main className={styles.main}>{children}</main>
+      <main className={styles.main}>
+        <InstallBanner audience="tenant" />
+        {children}
+      </main>
     </div>
   );
 }

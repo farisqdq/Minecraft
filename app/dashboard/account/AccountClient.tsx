@@ -1,8 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { signOutTo } from "../../components/sign-out";
 import AppShell from "../../components/AppShell";
+import PushSetup from "../../components/PushSetup";
 import Modal from "../../components/Modal";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
@@ -174,6 +176,17 @@ export default function AccountClient({
       tagline={email}
     >
       <Toasts toasts={toasts} onDismiss={dismiss} />
+
+      <section className={styles.block}>
+        <div className={styles.blockHead}>
+          <h2>Notifications on this device</h2>
+        </div>
+        <p className={styles.helpText} style={{ marginTop: -6 }}>
+          Rent, lease, document and repair reminders as phone notifications. What gets sent, and when, is set per LLC
+          under <Link href="/dashboard/reminders">Reminders</Link>.
+        </p>
+        <PushSetup audience="user" />
+      </section>
 
       <section className={styles.block}>
         <div className={styles.blockHead}>

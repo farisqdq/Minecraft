@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "../../components/AppShell";
@@ -236,6 +237,9 @@ export default function TeamClient({
                 {company.members.length} {company.members.length === 1 ? "person" : "people"}
                 {isOwner ? "" : " · you're a member"}
               </span>
+              <Link href="/dashboard/reminders" className={styles.portalLink}>
+                Automatic reminders →
+              </Link>
             </div>
 
             {errors[company.id] && <div className={styles.errorBar}>{errors[company.id]}</div>}

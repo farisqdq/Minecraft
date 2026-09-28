@@ -504,6 +504,74 @@ in as two. The picture arithmetic is in `lib/scan.ts` and the PDF writer in
 `tests/pdf.test.ts`. What the server receives is an ordinary PDF upload, with
 the same type sniffing and size limit as any other document.
 
+## Automatic reminders and phone notifications
+
+Rent Roll can do the chasing for you. Under **Team → Automatic reminders**
+(or `/dashboard/reminders`) each LLC has a master switch and five reminder
+types, each with its own on/off, timing and channels (email, phone
+notification, or both):
+
+- **Rent due soon** — to the tenant, N days before their due day (default 3).
+- **Rent late** — to the tenant, once a month, after the grace period. A
+  tenant's own late-fee rule sets their grace period; the company figure
+  (default 5 days) is for tenants without one. It's also written to their
+  portal and the tenant card as a chase, like one sent by hand.
+- **Lease ending** — to your team at 60 and 30 days out (editable list), and
+  optionally to the tenant.
+- **Document expiring** — to your team at 30 and 7 days before anything in
+  the filing cabinet with an expiry date runs out.
+- **Repair updates** — to the tenant the moment you reply on their request
+  or change its status.
+
+**Send test email** and **Send test notification** send you a sample.
+"What's gone out" lists every attempt with its result.
+
+Everything runs from one daily job, `/api/cron/reminders`, scheduled in
+`vercel.json` at 13:00 UTC (early morning across the US, when the UTC date
+and the local date agree). Vercel calls it with `Authorization: Bearer
+$CRON_SECRET`; set `CRON_SECRET` in the project's environment variables and
+Vercel sends it automatically. Every send is claimed first in the
+`ReminderSent` table under a key that names the thing being reminded about
+(`rent-due:<tenant>:<month>`, `lease-end:<tenant>:<date>:<60>`, …), unique
+per channel and recipient, so a rerun — or two runs landing together — never
+messages anyone twice. Reminders are off for a company until an owner turns
+them on.
+
+Tenants have their own say: the portal's **Reminders** card lets them switch
+email or phone notifications off, and add their phone number. You can also
+switch email reminders off for a tenant from their card.
+
+### Phone notifications (web push)
+
+The site is an installable app, and an installed app can receive
+notifications. Set three variables in Vercel (generate the keys once with
+`npx web-push generate-vapid-keys`):
+
+    VAPID_PUBLIC_KEY=...
+    VAPID_PRIVATE_KEY=...
+    VAPID_SUBJECT=mailto:you@example.com
+
+Without them push is quietly off and email still goes out. Each person
+enables notifications per device — **Reminders** or **Account** in the
+dashboard, the **Reminders** card in the portal — and can send themselves a
+test. Subscriptions are stored per landlord login and per tenant login
+(several devices each) in `PushSubscription`; one the push service reports
+gone (404/410) is deleted. The service worker is `public/sw.js`; it only
+shows notifications and opens the right page when one is tapped — no caching.
+
+On an **iPhone or iPad** notifications need iOS 16.4 or later and only work
+once the site is on the home screen: Safari → Share → Add to Home Screen →
+open it from there → Enable notifications. On **Android** Chrome offers a
+one-tap Install. A banner explains the right steps on any phone browser that
+hasn't installed the app yet (dismissable for 30 days; never shown on a
+desktop), and once installed it offers to turn notifications on. The
+manifest carries regular and maskable icons at 192 and 512; the portal has
+its own manifest (`/portal-manifest.webmanifest`) so a tenant's installed
+app opens on the portal, not the landlord sign-in.
+
+A text-message channel isn't wired up; `lib/notify.ts` and the per-type
+channel columns are shaped so one could be added without touching the rest.
+
 ## Installing it on a phone
 
 Most of the logging happens standing in a doorway, so the app ships a web

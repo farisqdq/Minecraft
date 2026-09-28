@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOutTo } from "./sign-out";
 import PropertySearch from "./PropertySearch";
+import InstallBanner from "./InstallBanner";
 import { useShellInfo } from "./ShellContext";
 import styles from "./shell.module.css";
 
@@ -210,6 +211,7 @@ export default function AppShell({
       </header>
 
       <main className={styles.main}>
+        <InstallBanner audience="user" />
         <div className={styles.pageHead}>
           <div>
             {back && (

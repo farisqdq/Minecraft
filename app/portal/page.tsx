@@ -11,6 +11,7 @@ import { monthName } from "@/lib/notices";
 import PortalShell from "./PortalShell";
 import PortalRequests from "./PortalRequests";
 import PortalNotices from "./PortalNotices";
+import PortalPreferences from "./PortalPreferences";
 import styles from "./portal.module.css";
 
 export const dynamic = "force-dynamic";
@@ -131,6 +132,11 @@ export default async function PortalHome() {
           </div>
         </section>
       )}
+
+      <PortalPreferences
+        initial={{ emailReminders: tenant.emailReminders, pushReminders: tenant.pushReminders, phone: tenant.phone ?? "" }}
+        email={tenant.email || me.email}
+      />
 
       {showAccount && account && (() => {
         const owed = account.statement.balance;

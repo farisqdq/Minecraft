@@ -3558,3 +3558,98 @@ tr:hover .rowDel {
   color: var(--muted);
   font-weight: 500;
 }
+
+/* ---------- Reminders ---------- */
+
+.remMaster {
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  margin-bottom: 14px;
+}
+
+.remMaster input {
+  margin-top: 4px;
+}
+
+.remRows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.remRow {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+}
+
+.remRowHead {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.remDetail {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.remDetail .checkboxField {
+  font-size: 13.5px;
+}
+
+.remChannels {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.remDays,
+.remDayList {
+  font: inherit;
+  font-size: 14px;
+  padding: 5px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+}
+
+.remDays {
+  width: 62px;
+}
+
+.remDayList {
+  width: 110px;
+}
+
+.remStatus {
+  list-style: none;
+  margin: 12px 0 8px;
+  padding: 0;
+  font-size: 13px;
+  color: var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+@media (min-width: 721px) {
+  .remRow {
+    grid-template-columns: 220px 1fr auto;
+    align-items: center;
+  }
+}

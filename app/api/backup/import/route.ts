@@ -495,6 +495,9 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         name,
         email: str(t.email, 200) || null,
         phone: str(t.phone, 40) || null,
+        // Older backups have no say either way; on is the default they had.
+        emailReminders: t.emailReminders !== false,
+        pushReminders: t.pushReminders !== false,
         leaseStart: day(t.leaseStart),
         leaseEnd: day(t.leaseEnd),
         deposit: num(t.deposit),

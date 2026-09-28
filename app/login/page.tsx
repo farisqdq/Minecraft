@@ -4,6 +4,7 @@ import { Suspense, useState, type FormEvent } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import InstallBanner from "../components/InstallBanner";
 import { pauseMessage } from "@/lib/throttle-rules";
 import { safeCallbackUrl } from "@/lib/safe-redirect";
 import { TWO_FACTOR_INVALID, TWO_FACTOR_REQUIRED } from "@/lib/auth-messages";
@@ -64,6 +65,7 @@ function LoginForm() {
 
   return (
     <div className="authPage">
+      <InstallBanner audience="guest" />
       <div className="authBrand">
         <span className="authMark" aria-hidden="true">
           R

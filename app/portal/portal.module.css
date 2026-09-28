@@ -711,3 +711,38 @@
 .docList a:hover {
   color: var(--gold);
 }
+
+/* ---------- Reminder preferences ---------- */
+
+.prefRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.prefRow input {
+  width: 20px;
+  height: 20px;
+  accent-color: var(--accent);
+}
+
+.prefPhone {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.prefPhone .field {
+  flex: 1 1 200px;
+}
+
+.prefPush {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
