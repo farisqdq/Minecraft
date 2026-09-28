@@ -57,7 +57,11 @@ function SignupForm() {
           R
         </span>
         <h1>Rent Roll</h1>
-        <p>Create an account to start tracking your properties.</p>
+        <p>
+          {inviteToken
+            ? "Create an account to join the LLC that invited you."
+            : "Create an account, set up your LLC, and start tracking your properties."}
+        </p>
       </div>
       <form className="authCard" onSubmit={onSubmit}>
         {error && <div className="authError">{error}</div>}
@@ -95,16 +99,18 @@ function SignupForm() {
           />
         </div>
         <div className="field">
-          <label htmlFor="code">Signup or join code</label>
+          <label htmlFor="code">Join code (optional)</label>
           <input
             id="code"
             type="text"
             autoComplete="off"
-            required
-            placeholder="From the LLC owner who invited you"
+            placeholder="e.g. K7P2-M9X4"
             value={code}
             onChange={(e) => setCode(e.target.value)}
           />
+          <span className="fieldHint">
+            Only if an LLC&apos;s owner invited you onto their team. Setting up your own LLC? Leave it blank.
+          </span>
         </div>
         <button type="submit" className="btn primary" disabled={loading}>
           {loading ? "Creating account…" : "Create account"}

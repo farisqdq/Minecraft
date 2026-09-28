@@ -28,7 +28,7 @@ data — safe to deploy publicly on Vercel.
    - `NEXTAUTH_SECRET` — generate with `openssl rand -base64 32`
    - `NEXTAUTH_URL` — leave as `http://localhost:3000` for local dev
    - `NEXTAUTH_SECRET` must be at least 32 characters; a production build refuses to start with a short or placeholder one.
-   - `SIGNUP_CODE` — the code that lets someone create a landlord account. Signup is closed without it: only join codes from an existing team work.
+   - Signups are open: anyone can create an account and set up their own LLC, and each account only ever sees its own companies. To make it invite-only, set `SIGNUPS=invite-only`; then a `SIGNUP_CODE` you choose, or a join code from an existing team, is needed.
 4. Create the database tables:
    ```
    npx prisma migrate deploy
@@ -60,7 +60,7 @@ Node's own test runner in about a second.
 4. Add the other environment variables:
    - `NEXTAUTH_SECRET` — same as above
    - `NEXTAUTH_URL` — your deployment URL, e.g. `https://your-app.vercel.app`
-   - `SIGNUP_CODE` — without it, only join codes can create accounts
+   - `SIGNUPS=invite-only` and `SIGNUP_CODE` — only if you want to close public signups
 
    Leave a variable out entirely rather than saving it blank — an empty value
    is not the same as unset and can break the build.
@@ -84,8 +84,12 @@ houses, ledger, and profit — nothing from your other LLCs.
   `K7P2-M9X4`) and sends it however they like. The other person signs in,
   enters it under "Join with a code" on the dashboard, and lands on that LLC.
   Each code works once and expires after 7 days.
-- A valid join code also satisfies `SIGNUP_CODE`, so gating public signups
-  doesn't lock out someone you just handed a code to.
+- Anyone can sign up and create their own LLC. Someone given a join code can
+  type it into the optional box on the signup page and lands straight on that
+  LLC's team, or sign up first and enter it under "Join with a code" later.
+  Account creation is limited to ten per address per fifteen minutes, so the
+  open form can't be used to mint accounts in bulk. `SIGNUPS=invite-only`
+  closes it again, and a valid join code still gets through then.
 - The last owner can't leave an LLC (that would strand it with nobody able to
   manage it) — either make someone else an owner first, or delete the LLC.
 

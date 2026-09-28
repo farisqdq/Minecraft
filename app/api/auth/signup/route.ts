@@ -5,6 +5,10 @@ import { prisma } from "@/lib/prisma";
 import { normalizeJoinCode } from "@/lib/codes";
 import { MAX_PER_IP, clientIp, ipKey, isThrottled, pauseMessage, recordFailure } from "@/lib/throttle";
 
+/** Accounts one address can create inside the throttle window. */
+const MAX_SIGNUPS_PER_IP = 10;
+const signupIpKey = (ip: string | null) => (ip ? `signup:${ip}` : null);
+
 /** Compare without leaking, through timing, how much of the code was right. */
 function sameSecret(given: string, expected: string) {
   const a = Buffer.from(given);
@@ -19,30 +23,42 @@ export async function POST(req: Request) {
   const name = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
   const code = typeof body?.code === "string" ? body.code : "";
 
-  // A live LLC join code also gets you through the signup gate, otherwise
-  // gating signups would block the very people you handed a code to.
   const addressKey = ipKey(clientIp(req.headers));
-  const paused = await isThrottled([addressKey]);
+  const signupKey = signupIpKey(clientIp(req.headers));
+  const paused = await isThrottled([addressKey, signupKey]);
   if (paused) return NextResponse.json({ error: pauseMessage(paused) }, { status: 429 });
 
-  // Closed by default. A landlord account can create LLCs and upload files,
-  // so a stranger who finds the URL shouldn't get one: you need either the
-  // SIGNUP_CODE set in Vercel, or a live join code from someone's team. With
-  // SIGNUP_CODE unset, only join codes work — the gate stays shut rather than
-  // falling open because a setting was forgotten.
+  // Anyone can make an account and set up their own LLC — that's how a new
+  // landlord gets started, and every account only ever sees its own
+  // companies, so an open door exposes nobody else's books. The code box is
+  // optional: a join code from an LLC's owner puts you straight onto that
+  // team. An owner who wants the old invite-only door can set
+  // SIGNUPS=invite-only, and then SIGNUP_CODE or a live join code is needed.
+  const inviteOnly = process.env.SIGNUPS === "invite-only";
   const requiredCode = process.env.SIGNUP_CODE ?? "";
-  const matchesSignupCode = requiredCode !== "" && sameSecret(code, requiredCode);
-  if (!matchesSignupCode) {
-    const token = normalizeJoinCode(code);
-    const invite = token ? await prisma.invite.findUnique({ where: { token } }) : null;
-    const validJoinCode = Boolean(invite && !invite.acceptedAt && invite.expiresAt > new Date());
-    if (!validJoinCode) {
-      await recordFailure([{ key: addressKey, max: MAX_PER_IP }]);
-      return NextResponse.json(
-        { error: requiredCode ? "Invalid signup code." : "You need a join code from an LLC's owner to sign up." },
-        { status: 403 }
-      );
-    }
+  const matchesSignupCode = requiredCode !== "" && code.trim() !== "" && sameSecret(code.trim(), requiredCode);
+
+  const token = matchesSignupCode ? "" : normalizeJoinCode(code);
+  const invite = token ? await prisma.invite.findUnique({ where: { token } }) : null;
+  const validJoinCode = Boolean(invite && !invite.acceptedAt && invite.expiresAt > new Date());
+
+  if (code.trim() && !matchesSignupCode && !validJoinCode) {
+    await recordFailure([{ key: addressKey, max: MAX_PER_IP }]);
+    return NextResponse.json(
+      {
+        error: inviteOnly
+          ? "That code isn't valid — it may have been used already or expired."
+          : "That join code isn't valid — it may have been used already or expired. Leave it blank to set up your own LLC.",
+      },
+      { status: 403 }
+    );
+  }
+  if (inviteOnly && !matchesSignupCode && !validJoinCode) {
+    await recordFailure([{ key: addressKey, max: MAX_PER_IP }]);
+    return NextResponse.json(
+      { error: "Signups here are by invitation. Ask an LLC's owner for a join code." },
+      { status: 403 }
+    );
   }
 
   if (!email || !email.includes("@")) {
@@ -61,9 +77,24 @@ export async function POST(req: Request) {
   }
 
   const passwordHash = await bcrypt.hash(password, 12);
-  await prisma.user.create({
-    data: { email, passwordHash, name: name || null },
+  // The account and, with a join code, its place on that LLC's team go in
+  // together. The code is claimed only while still unused and unexpired, so
+  // two people redeeming it at once can't both get in.
+  const result = await prisma.$transaction(async (tx) => {
+    const user = await tx.user.create({ data: { email, passwordHash, name: name || null } });
+    if (!validJoinCode || !invite) return { joined: null as string | null };
+    const claim = await tx.invite.updateMany({
+      where: { id: invite.id, acceptedAt: null, expiresAt: { gt: new Date() } },
+      data: { acceptedAt: new Date() },
+    });
+    if (claim.count !== 1) return { joined: null };
+    await tx.companyMember.create({ data: { companyId: invite.companyId, userId: user.id, role: invite.role } });
+    return { joined: invite.companyId };
   });
 
-  return NextResponse.json({ ok: true });
+  // Every account made counts against the address, so an open signup form
+  // can't be used to mint accounts by the thousand.
+  await recordFailure([{ key: signupKey, max: MAX_SIGNUPS_PER_IP }]);
+
+  return NextResponse.json({ ok: true, joinedCompanyId: result.joined });
 }
