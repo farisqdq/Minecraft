@@ -72,14 +72,16 @@ model Company {
   contactEmail String?
   createdAt    DateTime @default(now())
 
-  members    CompanyMember[]
-  properties Property[]
-  invites    Invite[]
-  vendors    Vendor[]
-  documents  Document[]
-  reminders  ReminderSettings?
-  sent       ReminderSent[]
-  threads    MessageThread[]
+  members       CompanyMember[]
+  properties    Property[]
+  invites       Invite[]
+  vendors       Vendor[]
+  documents     Document[]
+  reminders     ReminderSettings?
+  sent          ReminderSent[]
+  threads       MessageThread[]
+  /// The company-wide late-fee policy (a15); absent means no automatic late fees.
+  lateFeePolicy LateFeePolicy?
 }
 
 model CompanyMember {
@@ -113,19 +115,19 @@ model Invite {
 }
 
 model Property {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   companyId   String
-  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   createdById String?
-  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   name        String
   address     String?
-  monthlyRent Float    @default(0)
-  vacant      Boolean  @default(false)
+  monthlyRent Float     @default(0)
+  vacant      Boolean   @default(false)
   /// When it went empty — or rather, when rent stopped coming in. Null when
   /// occupied, and on places marked vacant before this was recorded.
   vacantSince DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   units             Unit[]
   transactions      Transaction[]
@@ -144,15 +146,15 @@ model Property {
 // none and are tracked directly, this only kicks in for a duplex/triplex/
 // building where each unit needs its own rent target and tenant.
 model Unit {
-  id          String   @id @default(cuid())
+  id          String    @id @default(cuid())
   propertyId  String
-  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property    Property  @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   name        String
-  monthlyRent Float    @default(0)
-  vacant      Boolean  @default(false)
+  monthlyRent Float     @default(0)
+  vacant      Boolean   @default(false)
   /// As on Property.
   vacantSince DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   transactions      Transaction[]
   recurringExpenses RecurringExpense[]
@@ -236,6 +238,11 @@ model Tenant {
   /// off from the tenant card. Push also needs a device they've enabled.
   emailReminders Boolean @default(true)
   pushReminders  Boolean @default(true)
+
+  /// Which late-fee rules bill this tenant (a15): "default" follows the
+  /// company's LateFeePolicy, "custom" uses only this tenant's own late
+  /// rules, "off" charges no late fees at all. Monthly rules are unaffected.
+  lateFeeMode String @default("default")
 
   @@index([propertyId])
   @@index([unitId])
@@ -759,6 +766,16 @@ model TenantChargeRule {
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime @default(now())
+  /// "late" only (a15): dollars added for every further day the month stays
+  /// owed after the first late day. 0 means the fee is one-off.
+  dailyAmount Float    @default(0)
+  /// "late" only (a15): ceiling on everything this rule charges for one
+  /// month, as a percentage of that month's rent. 0 means no ceiling.
+  capPercent  Float    @default(0)
+  /// Set on the one rule per tenant that lib/statements.ts keeps in step
+  /// with the company's LateFeePolicy. Never edited or deleted by hand: its
+  /// runs are what stop the policy billing a day twice.
+  fromPolicy  Boolean  @default(false)
 
   charges TenantCharge[]
   runs    TenantRuleRun[]
@@ -782,11 +799,15 @@ model TenantRuleRun {
   /// What it charged, kept for the record even after the charge is deleted.
   amount Float
   ranAt  DateTime         @default(now())
+  /// The YYYY-MM-DD a per-day late fee was for (a15), or "" for the
+  /// one-time fee of the month — so a daily rule gets one run per day.
+  day    String           @default("")
 
-  /// Applied at most once per month, enforced by the database rather than by
-  /// remembering to check — two requests landing together is the ordinary
-  /// case on a dashboard and must not bill a tenant twice.
-  @@unique([ruleId, month])
+  /// Applied at most once per month (and per day, for a daily fee),
+  /// enforced by the database rather than by remembering to check — two
+  /// requests landing together is the ordinary case on a dashboard and must
+  /// not bill a tenant twice.
+  @@unique([ruleId, month, day])
 }
 
 // Something on a property that's depreciated rather than deducted at once:
@@ -837,18 +858,18 @@ model AdminLog {
 // secret, and a copy of the database must not be enough to use one. It
 // lives an hour, works once, and issuing a new one retires the old.
 model PasswordReset {
-  id        String    @id @default(cuid())
-  userId    String
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash String    @unique
-  expiresAt DateTime
-  usedAt    DateTime?
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash      String    @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
   /// "self" when asked for on the sign-in page, otherwise the admin's email.
-  issuedBy  String    @default("self")
+  issuedBy       String    @default("self")
   /// The account's sessionVersion when issued. A password change or a
   /// sign-out-everywhere bumps that, and a link from before it is dead.
-  sessionVersion Int  @default(0)
-  createdAt DateTime  @default(now())
+  sessionVersion Int       @default(0)
+  createdAt      DateTime  @default(now())
 
   @@index([userId])
 }
@@ -991,4 +1012,29 @@ model MessageAttachment {
   createdAt   DateTime @default(now())
 
   @@index([messageId])
+}
+
+/// ---- Late fee policy (a15) ----
+
+/// What every tenant of the company is charged when rent is late, unless
+/// their own lateFeeMode says otherwise. One row per company, made the first
+/// time an owner saves the settings; a company without one charges nothing.
+/// It is not a rule row itself: lib/statements.ts materialises it as one
+/// `fromPolicy` TenantChargeRule per tenant, so every fee it produces is an
+/// ordinary TenantCharge with a TenantRuleRun behind it.
+model LateFeePolicy {
+  id          String   @id @default(cuid())
+  companyId   String   @unique
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  enabled     Boolean  @default(false)
+  /// Days after the due day before the first fee.
+  graceDays   Int      @default(5)
+  /// One-time fee on the first late day, as a percentage of that month's rent.
+  percent     Float    @default(7)
+  /// Dollars for each further day the month stays owed.
+  dailyAmount Float    @default(5)
+  /// Ceiling on the month's late fees, as a percentage of that month's rent; 0 = none.
+  capPercent  Float    @default(12)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

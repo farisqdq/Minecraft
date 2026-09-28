@@ -24,7 +24,8 @@ import {
   type ReminderKind,
   type ReminderSettingsDTO,
 } from "@/lib/reminders";
-import { statementForTenant } from "@/lib/statements";
+import { statementForTenant, type StatementResult } from "@/lib/statements";
+import { lateFeeSummary } from "@/lib/late-fee-text";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import { STATUS_LABEL, type RequestStatus } from "@/lib/maintenance";
 
@@ -351,7 +352,15 @@ export async function runReminders(now: Date, origin: string): Promise<RunReport
         const grace = t.rules.length > 0 ? Math.min(...t.rules.map((r) => r.graceDays)) : s.rentLate.graceDays;
         const behindSince = stmt!.statement.behindSince || month;
         if (rentIsLate(today, behindSince, t.dueDay, grace)) {
-          const n = rentLateNotification({ tenantName: t.name, place, company: companyName, owed: balance, behindSince, url: portalUrl });
+          const n = rentLateNotification({
+            tenantName: t.name,
+            place,
+            company: companyName,
+            owed: balance,
+            behindSince,
+            lateFee: lateFeeClause(stmt!, month),
+            url: portalUrl,
+          });
           const result = await notify({ companyId, kind: "rent-late", key: reminderKey.rentLate(t.id, month), recipients: [recipient], channels: s.rentLate, notification: n });
           add(result, `rent late, ${t.name}`);
           // On the record like a chase sent by hand: the portal shows it,
@@ -435,6 +444,32 @@ export async function runReminders(now: Date, origin: string): Promise<RunReport
     }
   }
   return report;
+}
+
+/**
+ * "a $70 late fee was added; $5/day more until paid, up to $120" for the
+ * month being chased — from the company policy, or from the tenant's own
+ * late rule when they're on their own terms. Nothing when no fee applies.
+ */
+function lateFeeClause(stmt: StatementResult, month: string): string {
+  const rent = stmt.statement.rows.find((r) => r.month === month)?.rent ?? 0;
+  const feesSoFar = stmt.lateFeesByMonth[month] ?? 0;
+  if (!(rent > 0) || stmt.lateFeeMode === "off") return "";
+  if (stmt.lateFeeMode === "default") return lateFeeSummary({ rent, policy: stmt.policy, feesSoFar });
+  const rule = stmt.rules.find((r) => r.kind === "late" && r.active && !r.fromPolicy);
+  if (!rule) return "";
+  return lateFeeSummary({
+    rent,
+    policy: {
+      enabled: true,
+      graceDays: rule.graceDays,
+      // A flat fee reads as its share of this month's rent, so the sentence names the dollars.
+      percent: rule.percent ? rule.amount : (rule.amount / rent) * 100,
+      dailyAmount: rule.dailyAmount ?? 0,
+      capPercent: rule.capPercent ?? 0,
+    },
+    feesSoFar,
+  });
 }
 
 /* ---------- The moment something happens ---------- */

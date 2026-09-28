@@ -5,6 +5,7 @@ import { money } from "@/lib/money";
 import { monthName } from "@/lib/notices";
 import type { Statement } from "@/lib/balance";
 import { ruleSummary, type ChargeRule } from "@/lib/charge-rules";
+import { policySentence, type LateFeeMode, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
 import styles from "../dashboard/dashboard.module.css";
 
 type Charge = {
@@ -24,6 +25,9 @@ type Result = {
   startPinned: boolean;
   charges: Charge[];
   rules: (ChargeRule & { dueDay: number })[];
+  /** Which late rules bill them: the LLC's policy, their own, or none. */
+  lateFeeMode: LateFeeMode;
+  policy: LateFeePolicyDTO;
 };
 
 const EMPTY_CHARGE = { kind: "fee" as "fee" | "credit", label: "", amount: "", month: "" };
@@ -34,6 +38,14 @@ const EMPTY_RULE = {
   amount: "",
   percent: false,
   graceDays: "5",
+  dailyAmount: "",
+  capPercent: "",
+};
+
+const MODE_LABEL: Record<LateFeeMode, string> = {
+  default: "The LLC's late-fee policy",
+  custom: "This tenant's own late rules",
+  off: "No late fees",
 };
 
 /**
@@ -102,6 +114,26 @@ export default function StatementPanel({
     }
     apply(body);
     onDone?.();
+  }
+
+  // Which late rules bill them lives on the tenant, not the statement; the
+  // statement is read back afterwards because that is what brings the LLC's
+  // policy rule in step (on, off, or updated) and shows the result.
+  async function setMode(mode: LateFeeMode) {
+    setBusy(true);
+    setError("");
+    const res = await fetch(`/api/tenants/${tenantId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ lateFeeMode: mode }),
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      setBusy(false);
+      setError(body?.error || "That didn't work.");
+      return;
+    }
+    await send(`/api/tenants/${tenantId}/statement`, { method: "GET" });
   }
 
   if (error && !data) return <div className={styles.errorBar}>{error}</div>;
@@ -335,52 +367,96 @@ export default function StatementPanel({
           </button>
         </div>
 
-        {data.rules.length === 0 ? (
+        <div className={styles.graceRow}>
+          <label htmlFor={`late-mode-${tenantId}`}>Late fees</label>
+          <select
+            id={`late-mode-${tenantId}`}
+            value={data.lateFeeMode}
+            disabled={busy}
+            style={{ width: "auto" }}
+            onChange={(e) => setMode(e.target.value as LateFeeMode)}
+          >
+            {(Object.keys(MODE_LABEL) as LateFeeMode[]).map((m) => (
+              <option key={m} value={m}>
+                {MODE_LABEL[m]}
+              </option>
+            ))}
+          </select>
+          <span className={styles.helpText}>
+            {data.lateFeeMode === "default"
+              ? policySentence(data.policy)
+              : data.lateFeeMode === "custom"
+                ? "Only the late rules below apply; the LLC's policy doesn't."
+                : "Nothing is charged when rent is late. Rules for every month still apply."}
+          </span>
+        </div>
+
+        {data.rules.filter((r) => !r.fromPolicy || r.active).length === 0 ? (
           <p className={styles.helpText} style={{ marginTop: 0 }}>
             Nothing yet. A rule saves typing the same lot fee in every month, or adds a late
             fee on its own when rent is still owed after the grace period.
           </p>
         ) : (
           <ul className={styles.ruleList}>
-            {data.rules.map((r) => (
-              <li key={r.id} className={r.active ? undefined : styles.ruleOff}>
-                <span className={styles.chargeWhat}>
-                  {r.label}
-                  <span className={styles.chargeWhen}>
-                    {ruleSummary(r, r.dueDay)}
-                    {r.active ? "" : " · off"}
-                  </span>
-                </span>
-                <button
-                  type="button"
-                  className={styles.portalLink}
-                  disabled={busy}
-                  onClick={() =>
-                    send(`/api/tenants/${tenantId}/rules`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ rule: r.id, active: !r.active }),
-                    })
-                  }
-                >
-                  {r.active ? "Turn off" : "Turn on"}
-                </button>
-                <button
-                  type="button"
-                  className={styles.chargeDel}
-                  aria-label={`Delete the ${r.label} rule`}
-                  title="Delete the rule"
-                  disabled={busy}
-                  onClick={() =>
-                    send(`/api/tenants/${tenantId}/rules?rule=${encodeURIComponent(r.id)}`, {
-                      method: "DELETE",
-                    })
-                  }
-                >
-                  ×
-                </button>
-              </li>
-            ))}
+            {data.rules
+              // The policy rule is only worth a line while it's in force.
+              .filter((r) => !r.fromPolicy || r.active)
+              .map((r) => {
+                const shelved =
+                  r.kind === "late" &&
+                  r.active &&
+                  !r.fromPolicy &&
+                  data.lateFeeMode !== "custom";
+                return (
+                  <li key={r.id} className={r.active && !shelved ? undefined : styles.ruleOff}>
+                    <span className={styles.chargeWhat}>
+                      {r.label}
+                      <span className={styles.chargeWhen}>
+                        {ruleSummary(r, r.dueDay)}
+                        {r.fromPolicy
+                          ? " · the LLC's policy"
+                          : !r.active
+                            ? " · off"
+                            : shelved
+                              ? " · not in use while late fees are set above"
+                              : ""}
+                      </span>
+                    </span>
+                    {!r.fromPolicy && (
+                      <button
+                        type="button"
+                        className={styles.portalLink}
+                        disabled={busy}
+                        onClick={() =>
+                          send(`/api/tenants/${tenantId}/rules`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ rule: r.id, active: !r.active }),
+                          })
+                        }
+                      >
+                        {r.active ? "Turn off" : "Turn on"}
+                      </button>
+                    )}
+                    {!r.fromPolicy && (
+                      <button
+                        type="button"
+                        className={styles.chargeDel}
+                        aria-label={`Delete the ${r.label} rule`}
+                        title="Delete the rule"
+                        disabled={busy}
+                        onClick={() =>
+                          send(`/api/tenants/${tenantId}/rules?rule=${encodeURIComponent(r.id)}`, {
+                            method: "DELETE",
+                          })
+                        }
+                      >
+                        ×
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
           </ul>
         )}
 
@@ -424,7 +500,11 @@ export default function StatementPanel({
               <button
                 type="button"
                 className={`${styles.btn} ${styles.small} ${styles.primary}`}
-                disabled={busy || !rule.label.trim() || !(Number(rule.amount) > 0)}
+                disabled={
+                  busy ||
+                  !rule.label.trim() ||
+                  !(Number(rule.amount) > 0 || (rule.kind === "late" && Number(rule.dailyAmount) > 0))
+                }
                 onClick={() =>
                   send(
                     `/api/tenants/${tenantId}/rules`,
@@ -435,6 +515,8 @@ export default function StatementPanel({
                         ...rule,
                         amount: Number(rule.amount),
                         graceDays: Number(rule.graceDays) || 0,
+                        dailyAmount: Number(rule.dailyAmount) || 0,
+                        capPercent: Number(rule.capPercent) || 0,
                       }),
                     },
                     () => setRule(EMPTY_RULE)
@@ -456,8 +538,30 @@ export default function StatementPanel({
                   value={rule.graceDays}
                   onChange={(e) => setRule((r) => ({ ...r, graceDays: e.target.value }))}
                 />
+                <label htmlFor={`daily-${tenantId}`}>then $/day</label>
+                <input
+                  id={`daily-${tenantId}`}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="0"
+                  value={rule.dailyAmount}
+                  onChange={(e) => setRule((r) => ({ ...r, dailyAmount: e.target.value }))}
+                />
+                <label htmlFor={`cap-${tenantId}`}>up to % of rent</label>
+                <input
+                  id={`cap-${tenantId}`}
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  placeholder="no cap"
+                  value={rule.capPercent}
+                  onChange={(e) => setRule((r) => ({ ...r, capPercent: e.target.value }))}
+                />
                 <span className={styles.helpText}>
-                  Nothing is charged before then, and nothing at all if they&apos;ve paid.
+                  Nothing is charged before then, and nothing at all if they&apos;ve paid. The
+                  daily amount runs until the month&apos;s rent is paid or the cap is reached.
                 </span>
               </div>
             )}

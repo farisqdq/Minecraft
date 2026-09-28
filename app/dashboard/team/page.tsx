@@ -3,6 +3,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { openRepairCount } from "@/lib/requests";
 import { formatJoinCode } from "@/lib/codes";
+import { policyDTO } from "@/lib/statements";
 import TeamClient from "./TeamClient";
 
 export default async function TeamPage() {
@@ -23,6 +24,7 @@ export default async function TeamPage() {
             where: { acceptedAt: null, expiresAt: { gt: new Date() } },
             orderBy: { createdAt: "desc" },
           },
+          lateFeePolicy: true,
         },
       },
     },
@@ -51,6 +53,7 @@ export default async function TeamPage() {
         name: m.company.name,
         contactPhone: m.company.contactPhone ?? "",
         contactEmail: m.company.contactEmail ?? "",
+        lateFees: m.company.lateFeePolicy ? policyDTO(m.company.lateFeePolicy) : null,
         role: m.role as "owner" | "member",
         propertyCount: impact.get(m.companyId)?.properties ?? 0,
         transactionCount: impact.get(m.companyId)?.transactions ?? 0,

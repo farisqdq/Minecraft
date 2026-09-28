@@ -16,6 +16,8 @@ export type TenantDTO = {
   /** Whether automatic reminders may reach them by each channel. */
   emailReminders: boolean;
   pushReminders: boolean;
+  /** "default" (the LLC's late-fee policy) | "custom" (their own rules) | "off". */
+  lateFeeMode: string;
 };
 
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "");
@@ -37,6 +39,7 @@ export function serializeTenant(t: Tenant): TenantDTO {
     note: t.note ?? "",
     emailReminders: t.emailReminders,
     pushReminders: t.pushReminders,
+    lateFeeMode: t.lateFeeMode,
   };
 }
 

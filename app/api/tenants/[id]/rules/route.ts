@@ -13,23 +13,34 @@ const MAX_RULES = 8;
 /** A grace period longer than a month would never fire before the next one. */
 const MAX_GRACE = 28;
 
+const POLICY_RULE_ERROR =
+  "That's the LLC's late-fee policy. Change it on the Team page, or set this tenant to their own rules or no late fees.";
+
 function readBody(body: Record<string, unknown> | null) {
   const kind = body?.kind === "late" ? "late" : "monthly";
   const label = typeof body?.label === "string" ? body.label.trim().slice(0, 80) : "";
   const percent = body?.percent === true;
   const amount = Math.round((Number(body?.amount) || 0) * 100) / 100;
   const graceDays = Math.min(MAX_GRACE, Math.max(0, Math.round(Number(body?.graceDays) || 0)));
+  // Late only: a daily amount after the first late day, and a ceiling on
+  // the month's fees as a percentage of rent. Both optional; 0 means none.
+  const dailyAmount = Math.max(0, Math.round((Number(body?.dailyAmount) || 0) * 100) / 100);
+  const capPercent = Math.max(0, Math.round((Number(body?.capPercent) || 0) * 100) / 100);
   const startMonth = typeof body?.startMonth === "string" ? body.startMonth.trim() : "";
   const endMonth = typeof body?.endMonth === "string" ? body.endMonth.trim() : "";
 
   if (!label) return { error: "What is it for?" as const };
-  if (!(amount > 0)) return { error: "Enter an amount." as const };
+  if (!(amount > 0) && !(kind === "late" && dailyAmount > 0)) return { error: "Enter an amount." as const };
   // A percentage above 100 isn't a fee, it's a typo, and the engine's own cap
   // shouldn't be the only thing standing between a tenant and a huge bill.
   if (percent && amount > 100) return { error: "A percentage can't be over 100." as const };
   if (!percent && amount > MAX_AUTO_CHARGE) {
     return { error: `A rule can't bill more than $${MAX_AUTO_CHARGE} at a time.` as const };
   }
+  if (dailyAmount > MAX_AUTO_CHARGE) {
+    return { error: `A rule can't bill more than $${MAX_AUTO_CHARGE} a day.` as const };
+  }
+  if (capPercent > 100) return { error: "A cap can't be over 100% of rent." as const };
   if (startMonth && !MONTH.test(startMonth)) return { error: "Pick a month to start." as const };
   if (endMonth && !MONTH.test(endMonth)) return { error: "Pick a month to stop." as const };
   if (startMonth && endMonth && endMonth < startMonth) {
@@ -43,6 +54,8 @@ function readBody(body: Record<string, unknown> | null) {
       amount,
       percent,
       graceDays: kind === "late" ? graceDays : 0,
+      dailyAmount: kind === "late" ? dailyAmount : 0,
+      capPercent: kind === "late" ? capPercent : 0,
       startMonth: startMonth || null,
       endMonth: endMonth || null,
       active: body?.active !== false,
@@ -70,7 +83,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const parsed = readBody(await req.json().catch(() => null));
   if ("error" in parsed) return NextResponse.json({ error: parsed.error }, { status: 400 });
 
-  if ((await prisma.tenantChargeRule.count({ where: { tenantId: id } })) >= MAX_RULES) {
+  // The company-policy rule is the app's, not the landlord's, so it doesn't
+  // use up one of their slots.
+  if ((await prisma.tenantChargeRule.count({ where: { tenantId: id, fromPolicy: false } })) >= MAX_RULES) {
     return NextResponse.json(
       { error: `That's already ${MAX_RULES} rules on this tenant. Remove one first.` },
       { status: 400 }
@@ -109,6 +124,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // books can't be reached by passing its id to a tenant you can see.
   const existing = await prisma.tenantChargeRule.findFirst({ where: { id: ruleId, tenantId: id } });
   if (!existing) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (existing.fromPolicy) return NextResponse.json({ error: POLICY_RULE_ERROR }, { status: 409 });
 
   // Switching one off is the common case and needs none of the other fields.
   if (Object.keys(body ?? {}).length === 2 && "active" in (body ?? {})) {
@@ -141,7 +157,19 @@ export async function DELETE(req: Request, { params }: { params: Promise<{ id: s
   }
 
   const ruleId = new URL(req.url).searchParams.get("rule") ?? "";
-  const removed = await prisma.tenantChargeRule.deleteMany({ where: { id: ruleId, tenantId: id } });
+  // The policy rule's runs are what stop the policy billing a day twice;
+  // deleting it would have the next statement recreate it and bill the
+  // month over again. It's switched off by the tenant's late-fee mode.
+  const removed = await prisma.tenantChargeRule.deleteMany({
+    where: { id: ruleId, tenantId: id, fromPolicy: false },
+  });
+  if (removed.count === 0) {
+    const policyRule = await prisma.tenantChargeRule.findFirst({
+      where: { id: ruleId, tenantId: id, fromPolicy: true },
+      select: { id: true },
+    });
+    if (policyRule) return NextResponse.json({ error: POLICY_RULE_ERROR }, { status: 409 });
+  }
   if (removed.count === 0) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   return NextResponse.json(await statementForTenant(id));

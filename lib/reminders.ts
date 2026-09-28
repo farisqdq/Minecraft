@@ -321,22 +321,26 @@ export function rentLateNotification(opts: {
   company: string;
   owed: number;
   behindSince: string;
+  /** The late-fee clause from lib/late-fee-text.ts, or "" when none applies. */
+  lateFee?: string;
   url: string;
 }): Notification {
   const { tenantName, place, company, owed, behindSince, url } = opts;
   const since = behindSince ? ` (going back to ${monthName(behindSince)})` : "";
+  // "…$1,070 is outstanding; a $70 late fee was added; $5/day more until paid, up to $120."
+  const fee = opts.lateFee ? ` ${opts.lateFee.charAt(0).toUpperCase()}${opts.lateFee.slice(1)}.` : "";
   return {
     subject: `${money(owed)} is past due — ${place}`,
     text: [
       `Hi ${firstName(tenantName)} —`,
       "",
-      `Rent on ${place} is past due: ${money(owed)} is outstanding${since}. If you've already sent it, please ignore this.`,
+      `Rent on ${place} is past due: ${money(owed)} is outstanding${since}.${fee} If you've already sent it, please ignore this.`,
       "",
       `Your account: ${url}`,
       "",
       `Thanks — ${company}`,
     ].join("\n"),
-    short: `${money(owed)} is past due on ${place}${since}. If you've already paid, ignore this.`,
+    short: `${money(owed)} is past due on ${place}${since}.${fee} If you've already paid, ignore this.`,
     url,
     tag: "rent-late",
   };

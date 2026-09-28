@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireCompany, requireTenant } from "@/lib/access";
 import { clampDueDay, parseDay, serializeTenant, text } from "@/lib/tenants";
+import { LATE_FEE_MODES, parseLateFeeMode } from "@/lib/late-fee-policy";
 
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -31,6 +32,15 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // in person; push is the tenant's own, from their portal.
   if ("emailReminders" in body) data.emailReminders = body.emailReminders !== false;
   if ("note" in body) data.note = text(body.note, 500);
+  // Which late rules bill them: the LLC's policy, their own, or none. The
+  // policy rule itself is brought in step the next time their statement is
+  // worked out, so nothing is billed or un-billed here.
+  if ("lateFeeMode" in body) {
+    if (!LATE_FEE_MODES.includes(body.lateFeeMode)) {
+      return NextResponse.json({ error: "Pick how late fees apply." }, { status: 400 });
+    }
+    data.lateFeeMode = parseLateFeeMode(body.lateFeeMode);
+  }
   if ("leaseStart" in body) data.leaseStart = parseDay(body.leaseStart);
   if ("leaseEnd" in body) data.leaseEnd = parseDay(body.leaseEnd);
   if ("deposit" in body) data.deposit = Math.max(0, Number(body.deposit) || 0);

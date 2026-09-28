@@ -5,6 +5,7 @@ import { companyIdsForUser } from "@/lib/access";
 import { backupFileKey } from "@/lib/backup-files";
 import { storageAccessOf } from "@/lib/file-links";
 import { settingsFromRow } from "@/lib/reminders";
+import { policyDTO } from "@/lib/statements";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
 export const BACKUP_VERSION = 16;
@@ -177,7 +178,10 @@ type TenantRow = {
     startMonth: string | null;
     endMonth: string | null;
     active: boolean;
-    runs: { month: string; amount: number; ranAt: Date }[];
+    dailyAmount: number;
+    capPercent: number;
+    fromPolicy: boolean;
+    runs: { month: string; day: string; amount: number; ranAt: Date }[];
   }[];
   openingBalance: number;
   balanceFrom: string | null;
@@ -192,6 +196,7 @@ type TenantRow = {
   note: string | null;
   emailReminders: boolean;
   pushReminders: boolean;
+  lateFeeMode: string;
 };
 
 function serializeTenants(rows: TenantRow[], key: FileKey) {
@@ -209,6 +214,10 @@ function serializeTenants(rows: TenantRow[], key: FileKey) {
     // emailing someone who asked it to stop.
     emailReminders: t.emailReminders,
     pushReminders: t.pushReminders,
+    // Whether the LLC's late-fee policy, their own rules, or nothing bills
+    // them when rent is late. A restore that forgot this would put a tenant
+    // the landlord had excused back on the policy.
+    lateFeeMode: t.lateFeeMode,
     // Where the books start for them and what they owed on that day. Without
     // these two a restore would re-infer the start from the first payment and
     // quietly forget an opening balance the landlord had set by hand.
@@ -257,8 +266,16 @@ function serializeTenants(rows: TenantRow[], key: FileKey) {
       startMonth: r.startMonth ?? "",
       endMonth: r.endMonth ?? "",
       active: r.active,
+      // The daily amount and cap, and whether this is the rule the
+      // LLC's late-fee policy keeps in step — restored as such, so the policy
+      // finds it again rather than making a second one and billing twice.
+      dailyAmount: r.dailyAmount,
+      capPercent: r.capPercent,
+      fromPolicy: r.fromPolicy,
       runs: r.runs.map((run) => ({
         month: run.month,
+        // "" for the month's one-time fee, YYYY-MM-DD for a daily one.
+        day: run.day,
         amount: run.amount,
         ranAt: run.ranAt.toISOString(),
       })),
@@ -425,6 +442,7 @@ export async function GET() {
       // licence. Property and tenant documents travel with their property.
       documents: { ...DOCUMENT_INCLUDE, where: { propertyId: null } },
       reminders: true,
+      lateFeePolicy: true,
       properties: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -498,6 +516,8 @@ export async function GET() {
       contactEmail: c.contactEmail ?? "",
       // How automatic reminders are set up, or null when they never were.
       reminders: c.reminders ? settingsFromRow(c.reminders) : null,
+      // The LLC-wide late-fee policy, or null when none was ever saved.
+      lateFees: c.lateFeePolicy ? policyDTO(c.lateFeePolicy) : null,
       // The vendor book, so a restore brings back who did each repair.
       vendors: c.vendors.map((v) => ({
         name: v.name,

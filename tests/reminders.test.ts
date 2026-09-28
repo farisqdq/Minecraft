@@ -119,6 +119,21 @@ test("the late notice names the amount and how far back it goes", () => {
   assert.match(n.subject, /\$1,750 is past due/);
   assert.match(n.text, /going back to August 2026/);
   assert.match(n.text, /already sent it, please ignore/);
+  assert.doesNotMatch(n.text, /late fee/);
+});
+
+test("the late notice carries the late-fee clause when one applies", () => {
+  const n = rentLateNotification({
+    tenantName: "Dana",
+    place: "12 Oak St",
+    company: "C",
+    owed: 1070,
+    behindSince: "2026-09",
+    lateFee: "a $70 late fee was added; $5/day more until paid, up to $120",
+    url: "u",
+  });
+  assert.match(n.text, /\$1,070 is outstanding \(going back to September 2026\)\. A \$70 late fee was added; \$5\/day more until paid, up to \$120\. If you've already sent it/);
+  assert.match(n.short, /up to \$120\. If you've already paid/);
 });
 
 test("lease and document reminders read differently for the tenant and the landlord", () => {

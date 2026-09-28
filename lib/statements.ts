@@ -7,11 +7,22 @@ import {
   type Statement,
 } from "@/lib/balance";
 import {
+  dayOf,
   lateFeesFor,
   monthlyChargesFor,
+  type AppliedFee,
   type AssessedFee,
   type ChargeRule,
+  type DatedPayment,
 } from "@/lib/charge-rules";
+import {
+  DEFAULT_POLICY,
+  parseLateFeeMode,
+  policyCharges,
+  policyRuleFields,
+  type LateFeeMode,
+  type LateFeePolicyDTO,
+} from "@/lib/late-fee-policy";
 
 /**
  * Turning a tenant row into a statement: the database half of lib/balance.ts.
@@ -19,9 +30,17 @@ import {
  * This is also where standing rules become real charges. There is no cron in
  * this app — it runs on serverless functions, where nothing is awake between
  * requests — so a rule is applied when its statement is worked out, for
- * months that have already begun. A unique index on (ruleId, month) means two
- * requests arriving together can't bill the same month twice, and every
- * charge a rule makes is an ordinary row the landlord can see and delete.
+ * months that have already begun. A unique index on (ruleId, month, day)
+ * means two requests arriving together can't bill the same month — or, for
+ * a daily late fee, the same day — twice, and every charge a rule makes is
+ * an ordinary row the landlord can see and delete.
+ *
+ * The company's late-fee policy goes through the same door. It isn't a rule
+ * row of its own, so before the rules are read this keeps one `fromPolicy`
+ * rule per tenant in step with it (see syncPolicyRule). That keeps a single
+ * meaning for TenantCharge.ruleId and TenantRuleRun: a policy fee has a rule
+ * behind it, a run record that stops it being billed again, and the same
+ * delete button as any other charge.
  */
 
 export type StatementResult = {
@@ -53,6 +72,15 @@ export type StatementResult = {
     automatic: boolean;
   }[];
   rules: (ChargeRule & { dueDay: number })[];
+  /** Which late rules bill this tenant: the company policy, their own, or none. */
+  lateFeeMode: LateFeeMode;
+  /** The company's late-fee policy as it stands, whether or not it applies here. */
+  policy: LateFeePolicyDTO;
+  /**
+   * Late fees on the books per YYYY-MM, from the charges — what a rent-late
+   * reminder needs to say "a $70 late fee was added".
+   */
+  lateFeesByMonth: Record<string, number>;
 };
 
 export const monthOf = (d: Date) =>
@@ -71,6 +99,9 @@ type RuleRow = {
   startMonth: string | null;
   endMonth: string | null;
   active: boolean;
+  dailyAmount: number;
+  capPercent: number;
+  fromPolicy: boolean;
 };
 
 const ruleDTO = (r: RuleRow): ChargeRule => ({
@@ -80,10 +111,99 @@ const ruleDTO = (r: RuleRow): ChargeRule => ({
   amount: r.amount,
   percent: r.percent,
   graceDays: r.graceDays,
+  dailyAmount: r.dailyAmount,
+  capPercent: r.capPercent,
   startMonth: r.startMonth,
   endMonth: r.endMonth,
   active: r.active,
+  fromPolicy: r.fromPolicy,
 });
+
+type PolicyRow = {
+  enabled: boolean;
+  graceDays: number;
+  percent: number;
+  dailyAmount: number;
+  capPercent: number;
+};
+
+/** The policy row as plain data; no row means the defaults, switched off. */
+export const policyDTO = (p: PolicyRow | null): LateFeePolicyDTO =>
+  p
+    ? {
+        enabled: p.enabled,
+        graceDays: p.graceDays,
+        percent: p.percent,
+        dailyAmount: p.dailyAmount,
+        capPercent: p.capPercent,
+      }
+    : DEFAULT_POLICY;
+
+const RULE_INCLUDE = {
+  orderBy: { createdAt: "asc" as const },
+  include: { runs: { select: { month: true, day: true, amount: true } } },
+};
+
+/**
+ * Keep the tenant's `fromPolicy` rule in step with the company policy.
+ *
+ * The policy applies when the tenant is on "default" and the policy is on
+ * and charges something. Then there is exactly one policy rule, active, with
+ * the policy's numbers. Otherwise the rule, if it exists, is switched off —
+ * never deleted, because its runs are what remember which days it already
+ * billed, and a deleted-and-recreated rule would bill them all again.
+ *
+ * Switching on (first time or after a spell off) starts the rule at the
+ * current month, the same as a rule typed by hand: a policy turned on today
+ * must not reach back over every month on the books. Changing the numbers
+ * while it's on keeps the start, so the month in progress picks them up.
+ */
+async function syncPolicyRule(opts: {
+  tenantId: string;
+  mode: LateFeeMode;
+  policy: LateFeePolicyDTO;
+  existing: RuleRow | undefined;
+  currentMonth: string;
+}): Promise<boolean> {
+  const { tenantId, mode, policy, existing, currentMonth } = opts;
+  const wanted = mode === "default" && policyCharges(policy);
+  const fields = policyRuleFields(policy);
+
+  if (!wanted) {
+    if (existing && existing.active) {
+      await prisma.tenantChargeRule.update({ where: { id: existing.id }, data: { active: false } });
+      return true;
+    }
+    return false;
+  }
+  if (!existing) {
+    await prisma.tenantChargeRule.create({
+      data: { ...fields, tenantId, fromPolicy: true, active: true, startMonth: currentMonth, endMonth: null },
+    });
+    return true;
+  }
+  const stale =
+    !existing.active ||
+    existing.kind !== fields.kind ||
+    existing.label !== fields.label ||
+    existing.amount !== fields.amount ||
+    existing.percent !== fields.percent ||
+    existing.graceDays !== fields.graceDays ||
+    existing.dailyAmount !== fields.dailyAmount ||
+    existing.capPercent !== fields.capPercent ||
+    existing.endMonth !== null;
+  if (!stale) return false;
+  await prisma.tenantChargeRule.update({
+    where: { id: existing.id },
+    data: {
+      ...fields,
+      active: true,
+      endMonth: null,
+      ...(existing.active ? {} : { startMonth: currentMonth }),
+    },
+  });
+  return true;
+}
 
 export async function statementForTenant(
   tenantId: string,
@@ -99,19 +219,42 @@ export async function statementForTenant(
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     include: {
-      property: { select: { id: true, monthlyRent: true, vacant: true, vacantSince: true } },
+      property: {
+        select: { id: true, companyId: true, monthlyRent: true, vacant: true, vacantSince: true },
+      },
       unit: { select: { id: true, monthlyRent: true, vacant: true, vacantSince: true } },
       moveOut: { select: { lastRentMonth: true } },
       charges: { orderBy: { createdAt: "asc" } },
-      rules: {
-        orderBy: { createdAt: "asc" },
-        include: { runs: { select: { month: true } } },
-      },
+      rules: RULE_INCLUDE,
     },
   });
   if (!tenant) return null;
 
   const currentMonth = currentMonthOf(now);
+
+  // The company policy, materialised as this tenant's own late rule before
+  // the rules are read, so what follows treats it like any other rule. A
+  // tenant who has moved out is left alone: their books are closed and the
+  // policy has nothing to add to a closed month.
+  const policy = policyDTO(
+    await prisma.lateFeePolicy.findUnique({ where: { companyId: tenant.property.companyId } })
+  );
+  const lateFeeMode = parseLateFeeMode(tenant.lateFeeMode);
+  if (tenant.active) {
+    const changed = await syncPolicyRule({
+      tenantId: tenant.id,
+      mode: lateFeeMode,
+      policy,
+      existing: tenant.rules.find((r) => r.fromPolicy),
+      currentMonth,
+    });
+    if (changed) {
+      tenant.rules = await prisma.tenantChargeRule.findMany({
+        where: { tenantId: tenant.id },
+        ...RULE_INCLUDE,
+      });
+    }
+  }
 
   // Rent lands against a property and optionally a unit, not against a
   // person. If two tenants share exactly the same target, there is no way to
@@ -177,8 +320,20 @@ export async function statementForTenant(
         ? monthOf(payments[payments.length - 1].date)
         : startMonth;
 
-  const rules = tenant.rules.map(ruleDTO);
+  // Which late rules are in force is the tenant's lateFeeMode: the policy
+  // rule, their own, or none. Monthly rules ride along regardless. The rules
+  // the mode sets aside are still returned below, so the panel can show what
+  // would apply if the mode changed.
+  const inForce = (r: ChargeRule) =>
+    r.kind !== "late" ||
+    (lateFeeMode === "default"
+      ? Boolean(r.fromPolicy)
+      : lateFeeMode === "custom"
+        ? !r.fromPolicy
+        : false);
+  const rules = tenant.rules.map(ruleDTO).filter(inForce);
   const paymentInputs = payments.map((p) => ({ month: monthOf(p.date), amount: p.amount }));
+  const datedPayments: DatedPayment[] = payments.map((p) => ({ day: dayOf(p.date), amount: p.amount }));
 
   // Work out what the rules imply, write anything missing, then read the
   // charges back — so the statement is built from rows that exist rather than
@@ -196,22 +351,25 @@ export async function statementForTenant(
       rentFor,
       charges: liveCharges(charges),
       payments: paymentInputs,
-      // A month a rule has already run for is never revisited — including one
-      // whose charge was since deleted. Deleting has to stick, and the run
-      // record is what remembers, so the charge itself can go outright.
-      already: new Set(
-        tenant.rules.flatMap((r) => r.runs.map((run) => `${r.id}|${run.month}`))
+      datedPayments,
+      // A month (or, for a daily fee, a day) a rule has already run for is
+      // never revisited — including one whose charge was since deleted.
+      // Deleting has to stick, and the run record is what remembers, so the
+      // charge itself can go outright. The amounts ride along for the cap.
+      applied: tenant.rules.flatMap((r) =>
+        r.runs.map((run) => ({ ruleId: r.id, month: run.month, day: run.day, amount: run.amount }))
       ),
     });
     let wrote = false;
     for (const m of wanted) {
       // The run and its charge go in together or not at all. The run's unique
-      // index is the lock: if another request got to this month first, this
-      // insert fails, the transaction rolls back, and no second charge exists.
+      // index is the lock: if another request got to this month (or day)
+      // first, this insert fails, the transaction rolls back, and no second
+      // charge exists.
       try {
         await prisma.$transaction([
           prisma.tenantRuleRun.create({
-            data: { ruleId: m.ruleId, month: m.month, amount: m.amount },
+            data: { ruleId: m.ruleId, month: m.month, day: m.day ?? "", amount: m.amount },
           }),
           prisma.tenantCharge.create({
             data: {
@@ -247,6 +405,13 @@ export async function statementForTenant(
     payments: paymentInputs,
   });
 
+  const lateRuleIds = new Set(tenant.rules.filter((r) => r.kind === "late").map((r) => r.id));
+  const lateFeesByMonth: Record<string, number> = {};
+  for (const c of charges) {
+    if (c.kind === "credit" || !c.ruleId || !lateRuleIds.has(c.ruleId)) continue;
+    lateFeesByMonth[c.month] = Math.round(((lateFeesByMonth[c.month] ?? 0) + c.amount) * 100) / 100;
+  }
+
   return {
     statement,
     problem:
@@ -270,6 +435,9 @@ export async function statementForTenant(
       automatic: Boolean(c.ruleId),
     })),
     rules: tenant.rules.map((r) => ({ ...ruleDTO(r), dueDay: tenant.dueDay })),
+    lateFeeMode,
+    policy,
+    lateFeesByMonth,
   };
 }
 
@@ -303,13 +471,16 @@ function plannedRuleCharges(opts: {
   rentFor: (month: string) => number;
   charges: ChargeInput[];
   payments: { month: string; amount: number }[];
-  /** "ruleId|month" for every month a rule has already run for. */
-  already: Set<string>;
+  /** The same payments by the day they landed, for what was owed on each day. */
+  datedPayments: DatedPayment[];
+  /** Every run on record: which months and days each rule has already billed. */
+  applied: (AppliedFee & { month: string })[];
 }): (AssessedFee & { month: string })[] {
   const planned: (AssessedFee & { month: string })[] = [];
   // Keyed exactly as the unique index is, so what the planner skips and what
   // the database would refuse are the same set — not two rules that drift.
-  const done = (ruleId: string, month: string) => opts.already.has(`${ruleId}|${month}`);
+  const keys = new Set(opts.applied.map((a) => `${a.ruleId}|${a.month}|${a.day}`));
+  const done = (ruleId: string, month: string, day = "") => keys.has(`${ruleId}|${month}|${day}`);
 
   buildStatement({
     startMonth: opts.startMonth,
@@ -326,6 +497,8 @@ function plannedRuleCharges(opts: {
         (m) => !done(m.ruleId, month)
       );
       const owedWithMonthly = monthly.reduce((sum, m) => sum + m.amount, owed);
+      // The late rule does its own skipping by day from `applied`, and needs
+      // the amounts already charged to honour the month's cap.
       const late = lateFeesFor({
         rules: opts.rules,
         month,
@@ -333,7 +506,9 @@ function plannedRuleCharges(opts: {
         rentThisMonth: rent,
         dueDay: opts.dueDay,
         today: opts.today,
-      }).filter((f) => !done(f.ruleId, month));
+        payments: opts.datedPayments,
+        applied: opts.applied.filter((a) => a.month === month),
+      }).filter((f) => !done(f.ruleId, month, f.day ?? ""));
 
       const fresh = [...monthly, ...late];
       for (const fee of fresh) planned.push({ ...fee, month });

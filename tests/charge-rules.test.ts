@@ -20,6 +20,8 @@ const rule = (over: Partial<ChargeRule> = {}): ChargeRule => ({
   amount: 50,
   percent: false,
   graceDays: 5,
+  dailyAmount: 0,
+  capPercent: 0,
   startMonth: null,
   endMonth: null,
   active: true,
