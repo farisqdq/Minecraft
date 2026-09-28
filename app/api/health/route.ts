@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { chooseDatasource, isPooled } from "@/lib/prisma-url";
 
 export const dynamic = "force-dynamic";
 
@@ -17,7 +18,7 @@ export async function GET() {
   const started = Date.now();
   try {
     await prisma.$queryRaw`SELECT 1`;
-    return NextResponse.json({ ok: true, database: "up", ms: Date.now() - started, pooled: pooled() });
+    return NextResponse.json({ ok: true, database: "up", ms: Date.now() - started, ...where() });
   } catch (e) {
     const err = e as { code?: string; message?: string };
     return NextResponse.json(
@@ -25,7 +26,7 @@ export async function GET() {
         ok: false,
         database: "down",
         ms: Date.now() - started,
-        pooled: pooled(),
+        ...where(),
         code: err.code ?? null,
         error: redact(err.message ?? String(e)),
       },
@@ -34,10 +35,10 @@ export async function GET() {
   }
 }
 
-/** Whether the configured URL goes through a connection pooler. */
-function pooled(): boolean {
-  const url = process.env.DATABASE_URL ?? "";
-  return url.includes("-pooler") || /pgbouncer=true/.test(url) || /:6543\//.test(url);
+/** Which URL is in use and whether it's a pooled one — the first thing to check. */
+function where() {
+  const choice = chooseDatasource();
+  return { source: choice.source, pooled: isPooled(choice.url) };
 }
 
 function redact(message: string): string {
