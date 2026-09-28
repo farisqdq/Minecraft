@@ -69,6 +69,8 @@ function OwnerLoginForm() {
         </button>
       </form>
       <div className="authFoot">
+        <Link href="/owners/forgot">Forgot your password?</Link>
+        <br />
         Got an invite? Use the link in it to set up your login.
         <br />
         Manage properties instead? <Link href="/login">Landlord sign in</Link>

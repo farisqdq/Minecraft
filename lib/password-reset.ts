@@ -33,6 +33,14 @@ export function resetLink(origin: string, token: string): string {
   return `${origin.replace(/\/+$/, "")}/reset?token=${token}`;
 }
 
+/**
+ * The owner portal's reset page. A different path from the landlord's, so a
+ * link always lands on the sign-in it belongs to.
+ */
+export function ownerResetLink(origin: string, token: string): string {
+  return `${origin.replace(/\/+$/, "")}/owners/reset?token=${token}`;
+}
+
 /** Live means unused and not yet expired. */
 export function resetIsLive(row: { usedAt: Date | null; expiresAt: Date }, now = new Date()): boolean {
   return !row.usedAt && row.expiresAt.getTime() > now.getTime();

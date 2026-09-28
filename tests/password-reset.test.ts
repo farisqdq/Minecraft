@@ -82,3 +82,11 @@ test("the email says what the link is, how long it lasts, and that ignoring it i
   assert.match(m.text, /works once/);
   assert.match(m.text, /ignore/);
 });
+
+test("an owner's reset link lands on the owner portal, never the landlord or tenant pages", async () => {
+  const { ownerResetLink, resetLink, newResetToken, plausibleToken } = await import("../lib/password-reset.ts");
+  const { token } = newResetToken();
+  assert.equal(ownerResetLink("https://eqal.rentals/", token), `https://eqal.rentals/owners/reset?token=${token}`);
+  assert.notEqual(ownerResetLink("https://eqal.rentals", token), resetLink("https://eqal.rentals", token));
+  assert.ok(plausibleToken(token), "the same token shape as the landlord's");
+});

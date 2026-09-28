@@ -35,6 +35,8 @@ export default function OwnersClient({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [links, setLinks] = useState<Record<string, { link: string; sent: boolean; reason: string; email: string }>>({});
   const [copied, setCopied] = useState("");
+  /** A reset link to hand over by hand, when this site can't email it. */
+  const [resetLinks, setResetLinks] = useState<Record<string, { email: string; link: string }>>({});
   const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
   const { toasts, push, dismiss } = useToasts();
 
@@ -123,6 +125,29 @@ export default function OwnersClient({
       });
     }
     push("Invite withdrawn.");
+  }
+
+  /** Email an owner a link to set a new password. */
+  async function sendReset(company: CompanyOwnersSnapshot, owner: OwnerDTO) {
+    setBusy(`reset:${owner.id}`);
+    const res = await fetch(`/api/companies/${company.companyId}/owners/${owner.id}/reset`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setBusy("");
+    if (!res.ok) {
+      setError(company.companyId, data?.error || "Couldn't send a reset link.");
+      return;
+    }
+    if (data.sent) {
+      setResetLinks((prev) => {
+        const next = { ...prev };
+        delete next[company.companyId];
+        return next;
+      });
+      push(`Password reset link emailed to ${owner.email}.`);
+    } else {
+      setResetLinks((prev) => ({ ...prev, [company.companyId]: { email: owner.email, link: data.link } }));
+      push("Reset link created — copy it below and send it to them.");
+    }
   }
 
   /** Re-invite someone who exists but has no password — restored from a backup, say. */
@@ -231,7 +256,7 @@ export default function OwnersClient({
               <>
                 {(company.owners.length > 0 || company.invites.length > 0) && (
                   <div className={styles.ledgerWrap}>
-                    <table className={styles.ledger}>
+                    <table className={`${styles.ledger} ${styles.ownerTable}`}>
                       <thead>
                         <tr>
                           <th>Person</th>
@@ -278,7 +303,7 @@ export default function OwnersClient({
                                   ))
                                 )}
                               </td>
-                              <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                              <td className={styles.ownerActions}>
                                 {edit ? (
                                   <>
                                     <button
@@ -314,6 +339,18 @@ export default function OwnersClient({
                                           onClick={() => reinvite(company, o)}
                                         >
                                           {busy === o.id ? "Sending…" : "Send invite"}
+                                        </button>{" "}
+                                      </>
+                                    )}
+                                    {o.hasPassword && (
+                                      <>
+                                        <button
+                                          type="button"
+                                          className={`${styles.btn} ${styles.small}`}
+                                          disabled={busy === `reset:${o.id}`}
+                                          onClick={() => sendReset(company, o)}
+                                        >
+                                          {busy === `reset:${o.id}` ? "Sending…" : "Send password reset"}
                                         </button>{" "}
                                       </>
                                     )}
@@ -354,7 +391,7 @@ export default function OwnersClient({
                                 </span>
                               ))}
                             </td>
-                            <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                            <td className={styles.ownerActions}>
                               <button
                                 type="button"
                                 className={`${styles.btn} ${styles.small}`}
@@ -375,6 +412,25 @@ export default function OwnersClient({
                         ))}
                       </tbody>
                     </table>
+                  </div>
+                )}
+
+                {resetLinks[company.companyId] && (
+                  <div className={styles.successBar}>
+                    <strong>Password reset link for {resetLinks[company.companyId].email}</strong>{" "}
+                    This site can&apos;t email it, so send it to them yourself:
+                    <code
+                      className={styles.portalCode}
+                      style={{ display: "block", wordBreak: "break-all", whiteSpace: "normal", letterSpacing: 0, fontSize: 12, margin: "8px 0" }}
+                    >
+                      {resetLinks[company.companyId].link}
+                    </code>
+                    <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => copy(resetLinks[company.companyId].link)}>
+                      {copied === resetLinks[company.companyId].link ? "Copied" : "Copy link"}
+                    </button>
+                    <div className={styles.note} style={{ marginTop: 6 }}>
+                      Works once, for an hour, and signs them out everywhere else when used.
+                    </div>
                   </div>
                 )}
 

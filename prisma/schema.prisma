@@ -1077,6 +1077,7 @@ model PropertyOwner {
   lastLoginAt    DateTime?
 
   access PropertyOwnerAccess[]
+  resets OwnerPasswordReset[]
 }
 
 /// One property an owner may read. Everything the portal shows is scoped
@@ -1115,4 +1116,27 @@ model PropertyOwnerInvite {
 
   @@index([companyId])
   @@index([email])
+}
+
+/// ---- Owner password resets (a19) ----
+
+/// A one-time link to set a new owner-portal password. The same shape and
+/// rules as PasswordReset (lib/password-reset.ts: hashed token, an hour,
+/// single use, dead once the account's sessions move on), in a table of its
+/// own so an owner's link can only ever reset an owner's password — the
+/// landlord reset never sees these rows, and this one never sees theirs.
+model OwnerPasswordReset {
+  id             String        @id @default(cuid())
+  ownerId        String
+  owner          PropertyOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  tokenHash      String        @unique
+  expiresAt      DateTime
+  usedAt         DateTime?
+  /// "self" from the forgot-password page, otherwise the landlord's email.
+  issuedBy       String        @default("self")
+  /// The owner's sessionVersion when issued; a later sign-out-everywhere kills the link.
+  sessionVersion Int           @default(0)
+  createdAt      DateTime      @default(now())
+
+  @@index([ownerId])
 }

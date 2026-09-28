@@ -45,7 +45,15 @@ const TENANT_PUBLIC = ["/portal/login", "/portal/signup", "/api/portal/signup"];
 
 /** The owner portal (property owners and investors). Login and invite acceptance are public. */
 const OWNER_AREA = ["/owners", "/api/owners"];
-const OWNER_PUBLIC = ["/owners/login", "/owners/accept", "/api/owners/accept"];
+const OWNER_PUBLIC = [
+  "/owners/login",
+  "/owners/accept",
+  "/owners/forgot",
+  "/owners/reset",
+  "/api/owners/accept",
+  "/api/owners/forgot",
+  "/api/owners/reset",
+];
 
 /** Files and push devices: any kind of session; the route decides whose is whose. */
 const EITHER_AREA = ["/api/files", "/api/push"];

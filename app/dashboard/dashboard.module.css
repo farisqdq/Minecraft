@@ -3682,3 +3682,44 @@ tr:hover .rowDel {
   background: var(--gold-soft);
   color: var(--ink);
 }
+
+/* Property owners: the row's buttons wrap on a phone instead of pushing
+   the table wider than the screen. */
+.ownerActions {
+  text-align: right;
+}
+
+/* On a phone each owner is a small card: name, properties, then the
+   buttons — a table three columns wide doesn't fit an email address. */
+@media (max-width: 720px) {
+  .ownerTable thead {
+    display: none;
+  }
+  .ownerTable,
+  .ownerTable tbody,
+  .ownerTable tr,
+  .ownerTable td {
+    display: block;
+    width: auto;
+  }
+  .ledger.ownerTable {
+    min-width: 0;
+  }
+  .ownerTable td {
+    padding: 4px 14px;
+    border: 0;
+    overflow-wrap: anywhere;
+  }
+  .ownerTable tr {
+    padding: 10px 0;
+  }
+  .ownerTable tr + tr {
+    border-top: 1px solid var(--line);
+  }
+  .ownerActions {
+    text-align: left;
+  }
+  .ownerActions .btn {
+    margin: 4px 6px 0 0;
+  }
+}

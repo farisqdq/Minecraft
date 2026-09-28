@@ -379,6 +379,28 @@ trusted devices work as for the other two doors. Backups carry owners by
 email with their properties by position; a restored owner has no password
 and is re-invited from the Property owners page.
 
+### Owner password reset
+
+The owner sign-in has a **Forgot your password?** link (`/owners/forgot`)
+that emails a reset link through the same Resend setup as the landlord's,
+with the same rules: the link works once, lasts an hour, only its hash is
+stored, asking is rate-limited per address and per email, a link younger
+than five minutes is left standing, and the page answers the same way
+whether or not the email has an owner login. The link opens
+`/owners/reset` and, once used, sends them back to the owner sign-in;
+setting the new password signs the owner out everywhere else.
+
+Owner links live in their own table (`OwnerPasswordReset`) rather than the
+landlord's `PasswordReset`, whose rows are tied to landlord accounts: an
+owner's link can only ever reset an owner's password, and a landlord's
+link does nothing at `/owners/reset`.
+
+Under **Team → Property owners**, **Send password reset** next to an owner
+emails them a link (a few times an hour at most). When the site can't send
+email the link is shown on screen to copy and hand over, as invite links
+are. Only an owner of the LLC can use it, and only for owners of that
+LLC's properties.
+
 ## Repairs
 
 A tenant reports what's wrong, where it is, how urgent, and up to six photos.
