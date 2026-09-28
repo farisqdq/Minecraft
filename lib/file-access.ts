@@ -15,6 +15,8 @@ export type ViewableFile = { url: string; filename: string };
  *                tenant who filed the report.
  *   document   — the landlord team for that LLC, or the tenant it's filed
  *                under, and only once it's been shared with them.
+ *   message    — something attached to a message: the landlord team for
+ *                that LLC, or the tenant whose thread it's in.
  *
  * Every refusal is the same null, so a stranger can't tell a file that
  * exists from one that doesn't.
@@ -60,6 +62,21 @@ export async function viewableFile(kind: string, id: string): Promise<ViewableFi
         ? await requireCompany(userId, d.companyId)
         : d.shared && d.tenantId === tenant!.tenant.id;
       return allowed ? { url: d.url, filename: d.filename } : null;
+    }
+    case "message": {
+      const a = await prisma.messageAttachment.findUnique({
+        where: { id },
+        select: {
+          url: true,
+          filename: true,
+          message: { select: { thread: { select: { tenantId: true, companyId: true } } } },
+        },
+      });
+      if (!a) return null;
+      const allowed = userId
+        ? await requireCompany(userId, a.message.thread.companyId)
+        : a.message.thread.tenantId === tenant!.tenant.id;
+      return allowed ? { url: a.url, filename: a.filename } : null;
     }
     default:
       return null;
