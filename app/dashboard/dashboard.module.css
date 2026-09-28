@@ -3412,23 +3412,6 @@ tr:hover .rowDel {
   flex: 0 1 220px;
 }
 
-/* The page head's buttons are hidden on a phone; these take their place. */
-.cabinetActions {
-  display: none;
-  gap: 8px;
-  flex: 1 0 100%;
-}
-
-@media (max-width: 720px) {
-  .cabinetActions {
-    display: flex;
-  }
-  .cabinetActions .btn {
-    flex: 1;
-    justify-content: center;
-  }
-}
-
 .chipRow {
   display: flex;
   gap: 6px;

@@ -211,10 +211,6 @@ export default function FilingCabinet({
             ))}
           </select>
         )}
-        <div className={styles.cabinetActions}>
-          {uploadButton}
-          {scanButton}
-        </div>
       </div>
 
       {kindsPresent.length > 1 && (
