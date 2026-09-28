@@ -160,9 +160,19 @@ from the **Team** page:
 
 The four numbers — grace days, the one-time percentage, the daily amount and
 the cap — are the LLC's, and the page reads the policy back in a sentence as
-you type. It is off until an owner switches it on, and switching it on starts
-from the current month: it never reaches back over months already on the
-books.
+you type. It is off until an owner switches it on.
+
+**Switching it on when rent is already overdue.** Saving applies the policy
+at once to every tenant of the LLC and lists, tenant by tenant, what was
+charged or exactly why not (paid up, still in the grace period, set to no
+late fees, on their own rules, at the month's cap, …). Rent already overdue
+that day — this month's, or an earlier month's that is still unpaid — gets
+the one-time 7% fee that day. Daily fees count only from the next day; the
+days before the policy existed are never backfilled. "Still unpaid" means
+after later payments are set against the oldest rent first, so a tenant
+who carried a shortfall but has since caught up isn't charged for it. The
+12% cap per month holds regardless. **Run late fees now** does the same
+thing at any time and never charges twice.
 
 Each tenant's account then says which late fees apply to them, under **What
 bills itself**: the LLC's policy (the default), **their own late rules** with
@@ -186,10 +196,13 @@ Every fee is an ordinary charge on the tenant's account — "Late fee", "Late
 fee (Sep 8)" — that you can see and **delete**, and the tenant sees it on
 their portal. Deleting one is final: the app remembers that the day was
 charged and never charges it again, and a deleted fee still counts toward the
-month's cap. The fees are applied whenever a statement is worked out, which
-the daily reminder run does for every current tenant, so they land on the day
-without anyone opening the app. Rent-late reminders can say what was added
-("a $70 late fee was added; $5/day more until paid, up to $120").
+month's cap. The fees are applied when the policy is saved, by **Run late fees now**, by
+the daily job at 13:00 UTC for every LLC whose policy is on (whether or not
+its reminders are), and whenever a tenant's statement or portal is opened.
+Every one of those writes each fee once. The overview's **Needs attention**
+shows the month's late fees in what a tenant owes, and **Mark paid** records
+the full amount. Rent-late reminders say what was added ("A $70 late fee was
+added; $5/day more until paid, up to $120.").
 
 Backups carry the policy, each tenant's choice, and every day already
 charged, so a restore neither forgets a fee nor bills it twice.

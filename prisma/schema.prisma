@@ -782,6 +782,11 @@ model TenantChargeRule {
   /// with the company's LateFeePolicy. Never edited or deleted by hand: its
   /// runs are what stop the policy billing a day twice.
   fromPolicy  Boolean  @default(false)
+  /// "late" only (a18): the YYYY-MM-DD this rule started charging. Rent that
+  /// was already overdue by then gets its one-time fee on this day, and
+  /// daily fees only from the day after — never backfilled to before the
+  /// rule existed. "" means no such limit (rules typed before a18).
+  accrueFrom  String   @default("")
 
   charges TenantCharge[]
   runs    TenantRuleRun[]

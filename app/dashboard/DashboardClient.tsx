@@ -202,6 +202,7 @@ export default function DashboardClient({
   initialRepairs,
   expiringDocs,
   initialChases,
+  lateFees = {},
   userLabel,
   storageReady,
   serverToday,
@@ -224,6 +225,8 @@ export default function DashboardClient({
   expiringDocs: DocumentDTO[];
   /** The last rent chase per tenant id, so a row can say when you last asked. */
   initialChases: Record<string, { at: string; month: string; read: boolean }>;
+  /** Late fees on the books, keyed "tenantId|YYYY-MM". */
+  lateFees?: Record<string, number>;
   userLabel: string;
   storageReady: boolean;
   serverToday: string;
@@ -624,16 +627,19 @@ export default function DashboardClient({
           target: t,
           expected: expectedRent(t, barMonth),
           paid: rentInMonth(t.propertyId, t.unitId, barMonth),
+          // Late fees for the month are part of what they owe for it, and a
+          // rent payment goes against them the same way on their statement.
+          fees: tenant ? lateFees[`${tenant.id}|${barMonth}`] ?? 0 : 0,
           tenant,
           // Only a month that has actually started can be late, so a future
           // month shows as owed rather than overdue.
           late: tenant ? Math.max(0, daysLate(barMonth, tenant.dueDay, now)) : 0,
         };
       })
-      .filter(({ expected, paid }) => paid < expected)
+      .filter(({ expected, paid, fees }) => paid < expected + fees - 0.005)
       // Longest overdue first, then by how much is outstanding.
-      .sort((a, b) => b.late - a.late || b.expected - b.paid - (a.expected - a.paid));
-  }, [visibleTargets, transactions, barMonth, tenants, now, rentChanges]);
+      .sort((a, b) => b.late - a.late || b.expected + b.fees - b.paid - (a.expected + a.fees - a.paid));
+  }, [visibleTargets, transactions, barMonth, tenants, now, rentChanges, lateFees]);
 
   // How far through the month's rent roll we are. Each unit's contribution is
   // capped at what it owes, so one tenant paying double can't hide another
@@ -879,11 +885,11 @@ export default function DashboardClient({
   function markAllPaid() {
     const rows = unpaidThisMonth;
     if (rows.length === 0) return;
-    const total = rows.reduce((sum, r) => sum + (r.expected - r.paid), 0);
+    const total = rows.reduce((sum, r) => sum + (r.expected + r.fees - r.paid), 0);
     setConfirming({
       title: `Record ${money(total)} of rent?`,
       body: `One entry per tenant, dated in ${monthName(barMonth)}, for the full amount each still owes: ${rows
-        .map((r) => `${r.tenant?.name ?? r.target.label} ${money(r.expected - r.paid)}`)
+        .map((r) => `${r.tenant?.name ?? r.target.label} ${money(r.expected + r.fees - r.paid)}`)
         .join(", ")}.`,
       confirmLabel: `Record ${rows.length} payments`,
       onConfirm: async () => {
@@ -891,7 +897,7 @@ export default function DashboardClient({
         let done = 0;
         let failed = 0;
         for (const r of rows) {
-          const result = await postRent(r.target, r.expected - r.paid, r.tenant?.name);
+          const result = await postRent(r.target, r.expected + r.fees - r.paid, r.tenant?.name);
           if (result.ok) done += 1;
           else failed += 1;
         }
@@ -1739,7 +1745,7 @@ export default function DashboardClient({
                       </div>
                     </div>
                   ))}
-                  {unpaidThisMonth.map(({ target, expected, paid, tenant, late }) => (
+                  {unpaidThisMonth.map(({ target, expected, paid, fees, tenant, late }) => (
                     <div key={`u-${target.key}`} className={styles.attnRow}>
                       <div className={styles.attnMain}>
                         <div className={styles.attnLabel}>
@@ -1767,10 +1773,11 @@ export default function DashboardClient({
                           {paid > 0
                             ? `${money(paid)} of ${money(expected)} paid so far`
                             : `Nothing received of ${money(expected)}`}
+                          {fees > 0.005 ? ` · includes ${money(fees)} in late fees` : ""}
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} ${late > 0 ? styles.neg : styles.due} num`}>
-                        {money(expected - paid)}
+                        {money(expected + fees - paid)}
                       </span>
                       <div className={styles.attnActions}>
                         {tenant &&
@@ -1841,7 +1848,7 @@ export default function DashboardClient({
                           type="button"
                           className={`${styles.btn} ${styles.small} ${styles.primary}`}
                           disabled={markingKey === target.key}
-                          onClick={() => markPaid(target, expected - paid, tenant?.name)}
+                          onClick={() => markPaid(target, expected + fees - paid, tenant?.name)}
                         >
                           {markingKey === target.key ? "Saving…" : "Mark paid"}
                         </button>

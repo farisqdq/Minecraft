@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runReminders } from "@/lib/reminders-db";
 import { runOwnerStatements } from "@/lib/owners-db";
+import { runDailyLateFees } from "@/lib/late-fees-db";
 import { siteOrigin } from "@/lib/site";
 
 /**
@@ -27,6 +28,12 @@ export async function GET(req: Request) {
   }
   const now = new Date();
   const origin = siteOrigin(req.url);
+  // Late fees first, for every LLC whose policy is on (reminders or not),
+  // so a rent-late reminder sent below can mention today's fee.
+  const lateFees = await runDailyLateFees(now).catch((err) => {
+    console.error("Late fees", err);
+    return { error: "failed" };
+  });
   const report = await runReminders(now, origin);
   // Property owners who asked for one get last month's statement by email
   // once it's complete; claimed under its own key like everything else.
@@ -34,6 +41,6 @@ export async function GET(req: Request) {
     console.error("Owner statements", err);
     return { error: "failed" };
   });
-  console.log("Reminders", JSON.stringify({ ...report, owners }));
-  return NextResponse.json({ ...report, owners });
+  console.log("Reminders", JSON.stringify({ ...report, lateFees, owners }));
+  return NextResponse.json({ ...report, lateFees, owners });
 }

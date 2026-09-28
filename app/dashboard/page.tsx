@@ -72,6 +72,21 @@ export default async function DashboardPage() {
     }),
   ]);
 
+  // Late fees on the books, per tenant per month, so Needs attention shows
+  // what a late tenant actually owes rather than the rent alone. Only fees a
+  // late rule wrote; anything typed by hand stays on the tenant's statement.
+  const lateFeeRows = await prisma.tenantCharge.groupBy({
+    by: ["tenantId", "month"],
+    where: {
+      kind: "fee",
+      rule: { kind: "late" },
+      tenant: { active: true, property: { companyId: { in: companyIds } } },
+    },
+    _sum: { amount: true },
+  });
+  const lateFees: Record<string, number> = {};
+  for (const r of lateFeeRows) lateFees[`${r.tenantId}|${r.month}`] = Math.round((r._sum.amount ?? 0) * 100) / 100;
+
   const loans = await loansWhere({ property: { companyId: { in: companyIds } }, active: true });
   const deposits = await prisma.moveOut.findMany({
     where: { returnedOn: null, deposit: { gt: 0 }, tenant: { property: { companyId: { in: companyIds } } } },
@@ -84,6 +99,7 @@ export default async function DashboardPage() {
       openRepairs={openRepairs}
       initialRepairs={openRequests.map(serializeRequestForLandlord)}
       expiringDocs={await expiringDocuments(companyIds, new Date(Date.now() + (SOON_DAYS + 1) * 86_400_000))}
+      lateFees={lateFees}
       initialChases={Object.fromEntries(
         // findMany came back newest first, so the first entry per tenant wins.
         allNotices.reduce((seen, n) => {

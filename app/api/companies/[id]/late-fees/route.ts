@@ -4,12 +4,12 @@ import { getCurrentUserId } from "@/lib/session";
 import { requireCompany } from "@/lib/access";
 import { parsePolicy } from "@/lib/late-fee-policy";
 import { policyDTO } from "@/lib/statements";
+import { runLateFeesForCompany } from "@/lib/late-fees-db";
 
 /**
  * The company's late-fee policy: what every tenant on "default" is charged
- * when rent is late. Saving it changes nothing on its own — each tenant's
- * policy rule is brought in step the next time their statement is worked
- * out, which the daily reminder run does for everyone.
+ * when rent is late. Saving applies it straight away to every tenant of the
+ * LLC; after that the daily job (/api/cron/reminders) keeps it up to date.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
@@ -44,5 +44,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
     create: { companyId: id, ...next },
     update: next,
   });
-  return NextResponse.json(policyDTO(saved));
+  // Apply it now rather than at tomorrow's daily run: overdue rent gets its
+  // fee the moment the policy is on. Idempotent (lib/late-fees-db), so a
+  // second save changes nothing already charged.
+  const report = await runLateFeesForCompany(id);
+  return NextResponse.json({ ...policyDTO(saved), report });
 }

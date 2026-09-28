@@ -52,6 +52,14 @@ export type ChargeRule = {
   active: boolean;
   /** Kept in step with the company's late-fee policy rather than typed on the tenant. */
   fromPolicy?: boolean;
+  /**
+   * "late" only: the YYYY-MM-DD the rule started charging. Rent already
+   * overdue by then gets its one-time fee on this day (if still owed), and
+   * daily fees count only from the day after — a rule switched on today
+   * never reaches back and bills the days before it existed. Absent or ""
+   * means no such limit.
+   */
+  accrueFrom?: string;
 };
 
 const MONTH = /^\d{4}-\d{2}$/;
@@ -244,8 +252,17 @@ export function lateFeesFor(opts: {
       return cents(Math.min(wanted, room, owedOn(day), MAX_AUTO_CHARGE));
     };
 
+    // The day fees start for this month: the first late day, or the day the
+    // rule began charging if that came later. Rent that was already overdue
+    // when the rule was switched on is judged as of that day — still owed
+    // then, it gets the one-time fee then — and daily fees run from the day
+    // after, so switching a policy on never backfills a month of $5 days.
+    const accrueFrom = rule.accrueFrom && DAY.test(rule.accrueFrom) ? rule.accrueFrom : "";
+    const startDay = accrueFrom && accrueFrom > dayOf(firstLateAt) ? accrueFrom : dayOf(firstLateAt);
+    if (startDay > todayDay) continue;
+
     if (!done.has("")) {
-      const amount = fee(ruleAmount(rule, rentThisMonth), dayOf(firstLateAt));
+      const amount = fee(ruleAmount(rule, rentThisMonth), startDay);
       if (amount > 0.005) {
         out.push({ ruleId: rule.id, label: rule.label, amount });
         charged = cents(charged + amount);
@@ -253,7 +270,7 @@ export function lateFeesFor(opts: {
     }
 
     if (!(dailyAmount > 0)) continue;
-    let day = nextDay(dayOf(firstLateAt));
+    let day = nextDay(startDay);
     for (let n = 0; n < MAX_DAILY_FEES && day <= todayDay; n++, day = nextDay(day)) {
       if (charged >= cap - 0.005) break;
       if (done.has(day)) continue;

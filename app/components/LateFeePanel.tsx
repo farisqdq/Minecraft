@@ -7,6 +7,7 @@ import {
   policySentence,
   type LateFeePolicyDTO,
 } from "@/lib/late-fee-policy";
+import type { LateFeeLine } from "@/lib/late-fee-report";
 import styles from "../dashboard/dashboard.module.css";
 
 type Draft = {
@@ -30,9 +31,9 @@ const toDraft = (p: LateFeePolicyDTO): Draft => ({
  * sentence as it's typed, because "7, 5, 12" only means something once it
  * says "$70, then $5 a day, up to $120".
  *
- * Saving changes nothing on the books by itself. Each tenant picks the new
- * numbers up the next time their statement is worked out, which the daily
- * reminder run does for everyone.
+ * Saving applies the policy at once to every tenant of the LLC and shows,
+ * tenant by tenant, what was charged or why not; the daily run keeps it up
+ * to date after that. Nothing is ever charged twice.
  */
 export default function LateFeePanel({
   companyId,
@@ -50,6 +51,8 @@ export default function LateFeePanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [note, setNote] = useState("");
+  const [report, setReport] = useState<LateFeeLine[] | null>(null);
+  const [running, setRunning] = useState(false);
 
   // The draft as the server would read it, so the sentence and the Save
   // button agree with what a save would actually store.
@@ -88,13 +91,28 @@ export default function LateFeePanel({
       setError(data?.error || "Couldn't save that.");
       return;
     }
-    setSaved(data);
-    setDraft(toDraft(data));
+    const { report: lines, ...policy } = data;
+    setSaved(policy);
+    setDraft(toDraft(policy));
+    setReport(Array.isArray(lines) ? lines : null);
     setNote(
-      data.enabled
-        ? "Saved. Tenants on the LLC's policy pick this up from today; nothing already charged changes."
+      policy.enabled
+        ? "Saved and applied. Overdue rent got its fee now; the daily run keeps it going. Nothing already charged changes."
         : "Saved. No late fees are charged automatically for this LLC."
     );
+  }
+
+  async function runNow() {
+    setRunning(true);
+    setError("");
+    const res = await fetch(`/api/companies/${companyId}/late-fees/run`, { method: "POST" });
+    const data = await res.json().catch(() => ({}));
+    setRunning(false);
+    if (!res.ok) {
+      setError(data?.error || "Couldn't run late fees.");
+      return;
+    }
+    setReport(Array.isArray(data.report) ? data.report : []);
   }
 
   const id = (name: string) => `late-fees-${name}-${companyId}`;
@@ -206,6 +224,26 @@ export default function LateFeePanel({
         <span className={styles.helpText} style={{ margin: 0 }}>
           Only an owner of this LLC can change it.
         </span>
+      )}
+
+      <div>
+        <button type="button" className={`${styles.btn} ${styles.small}`} onClick={runNow} disabled={running || busy}>
+          {running ? "Running…" : "Run late fees now"}
+        </button>
+        <span className={styles.helpText} style={{ margin: "0 0 0 10px" }}>
+          Applies any fee that's due today and shows why each tenant was or wasn&apos;t charged. It never charges twice.
+        </span>
+      </div>
+
+      {report && (
+        <ul className={styles.lateReport} aria-label="Late fees by tenant">
+          {report.length === 0 && <li>No current tenants in this LLC.</li>}
+          {report.map((r, i) => (
+            <li key={i} className={r.tone === "charged" ? styles.lateCharged : r.tone === "check" ? styles.lateCheck : ""}>
+              <strong>{r.tenantName}</strong> — {r.text}
+            </li>
+          ))}
+        </ul>
       )}
     </form>
   );

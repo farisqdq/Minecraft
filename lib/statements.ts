@@ -102,6 +102,7 @@ type RuleRow = {
   dailyAmount: number;
   capPercent: number;
   fromPolicy: boolean;
+  accrueFrom: string;
 };
 
 const ruleDTO = (r: RuleRow): ChargeRule => ({
@@ -113,6 +114,7 @@ const ruleDTO = (r: RuleRow): ChargeRule => ({
   graceDays: r.graceDays,
   dailyAmount: r.dailyAmount,
   capPercent: r.capPercent,
+  accrueFrom: r.accrueFrom,
   startMonth: r.startMonth,
   endMonth: r.endMonth,
   active: r.active,
@@ -153,19 +155,21 @@ const RULE_INCLUDE = {
  * never deleted, because its runs are what remember which days it already
  * billed, and a deleted-and-recreated rule would bill them all again.
  *
- * Switching on (first time or after a spell off) starts the rule at the
- * current month, the same as a rule typed by hand: a policy turned on today
- * must not reach back over every month on the books. Changing the numbers
- * while it's on keeps the start, so the month in progress picks them up.
+ * Switching on (first time or after a spell off) starts the rule today
+ * (`accrueFrom`). Rent already overdue on that day — this month's or an
+ * earlier month's still unpaid — gets the one-time fee straight away, and
+ * daily fees count from tomorrow; the days before the policy existed are
+ * never billed. Changing the numbers while it's on keeps the start.
  */
 async function syncPolicyRule(opts: {
   tenantId: string;
   mode: LateFeeMode;
   policy: LateFeePolicyDTO;
   existing: RuleRow | undefined;
-  currentMonth: string;
+  /** YYYY-MM-DD, UTC: the day a rule switched on today starts charging. */
+  today: string;
 }): Promise<boolean> {
-  const { tenantId, mode, policy, existing, currentMonth } = opts;
+  const { tenantId, mode, policy, existing, today } = opts;
   const wanted = mode === "default" && policyCharges(policy);
   const fields = policyRuleFields(policy);
 
@@ -177,8 +181,10 @@ async function syncPolicyRule(opts: {
     return false;
   }
   if (!existing) {
+    // From today, not from the start of the month: overdue rent gets the
+    // one-time fee now, and daily fees count from tomorrow (lateFeesFor).
     await prisma.tenantChargeRule.create({
-      data: { ...fields, tenantId, fromPolicy: true, active: true, startMonth: currentMonth, endMonth: null },
+      data: { ...fields, tenantId, fromPolicy: true, active: true, startMonth: null, endMonth: null, accrueFrom: today },
     });
     return true;
   }
@@ -199,7 +205,9 @@ async function syncPolicyRule(opts: {
       ...fields,
       active: true,
       endMonth: null,
-      ...(existing.active ? {} : { startMonth: currentMonth }),
+      // Switched back on after a spell off: charging starts again today, and
+      // the days it was off are not billed.
+      ...(existing.active ? {} : { startMonth: null, accrueFrom: today }),
     },
   });
   return true;
@@ -246,7 +254,7 @@ export async function statementForTenant(
       mode: lateFeeMode,
       policy,
       existing: tenant.rules.find((r) => r.fromPolicy),
-      currentMonth,
+      today: dayOf(now),
     });
     if (changed) {
       tenant.rules = await prisma.tenantChargeRule.findMany({

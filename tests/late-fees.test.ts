@@ -376,3 +376,70 @@ test("policy input is clamped, and a mode is one of three", () => {
   assert.equal(parseLateFeeMode("custom"), "custom");
   assert.equal(parseLateFeeMode("anything else"), "default");
 });
+
+/* ---- switching the policy on when rent is already overdue ---- */
+
+test("switched on late in the month: the 7% fee now, daily fees only from tomorrow", () => {
+  const on = rule({ accrueFrom: "2026-09-28" });
+  const today = lateFeesFor({ rules: [on], month: "2026-09", owed: 1000, rentThisMonth: 1000, dueDay: 1, today: utc("2026-09-28") });
+  assert.deepEqual(today, [{ ruleId: "p", label: "Late fee", amount: 70 }], "no backfill of Sep 7–28");
+  const fees = simulate({ rent: 1000, rules: [on], month: "2026-09", from: "2026-09-28", to: "2026-09-30" });
+  assert.deepEqual(fees.map((f) => [f.on, f.amount]), [["2026-09-28", 70], ["2026-09-29", 5], ["2026-09-30", 5]]);
+});
+
+test("switched on: the month still stops at 12%, whenever it started", () => {
+  const fees = simulate({ rent: 1000, rules: [rule({ accrueFrom: "2026-09-28" })], month: "2026-09", from: "2026-09-28", to: "2026-11-30" });
+  assert.equal(total(fees), 120);
+  assert.equal(daily(fees).length, 10);
+  assert.equal(daily(fees).at(-1)!.day, "2026-10-08");
+});
+
+test("switched on: nothing is charged for days before the policy existed, or before today", () => {
+  const on = rule({ accrueFrom: "2026-09-28" });
+  assert.deepEqual(lateFeesFor({ rules: [on], month: "2026-09", owed: 1000, rentThisMonth: 1000, dueDay: 1, today: utc("2026-09-27") }), []);
+});
+
+test("switched on: an earlier month still unpaid gets its 7% now too — but only what's genuinely unpaid", () => {
+  const on = rule({ accrueFrom: "2026-09-28" });
+  // August's rent never came: $70 on the day the policy went on.
+  assert.deepEqual(
+    lateFeesFor({ rules: [on], month: "2026-08", owed: 1000, rentThisMonth: 1000, dueDay: 1, today: utc("2026-09-28") }),
+    [{ ruleId: "p", label: "Late fee", amount: 70 }]
+  );
+  // August was short at the end of August, but September's payments cleared
+  // it (older rent is paid first): no fee for August.
+  assert.deepEqual(
+    lateFeesFor({
+      rules: [on],
+      month: "2026-08",
+      owed: 1000,
+      rentThisMonth: 1000,
+      dueDay: 1,
+      today: utc("2026-09-28"),
+      payments: [{ day: "2026-09-10", amount: 2000 }],
+    }),
+    []
+  );
+});
+
+test("switched on: rent paid before the policy went on is never charged", () => {
+  assert.deepEqual(
+    lateFeesFor({
+      rules: [rule({ accrueFrom: "2026-09-28" })],
+      month: "2026-09",
+      owed: 0,
+      rentThisMonth: 1000,
+      dueDay: 1,
+      today: utc("2026-09-28"),
+      payments: [{ day: "2026-09-20", amount: 1000 }],
+    }),
+    []
+  );
+});
+
+test("switched on: a vacant month carries no fee", () => {
+  assert.deepEqual(
+    lateFeesFor({ rules: [rule({ accrueFrom: "2026-09-28" })], month: "2026-09", owed: 0, rentThisMonth: 0, dueDay: 1, today: utc("2026-09-28") }),
+    []
+  );
+});
