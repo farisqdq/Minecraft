@@ -6,6 +6,7 @@ import { isOpen } from "@/lib/maintenance";
 import { balancesForTenants } from "@/lib/statements";
 import { requireProperty } from "@/lib/access";
 import { serializeTenant } from "@/lib/tenants";
+import { unreadByTenantForProperty } from "@/lib/messages-db";
 import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
 import { documentsWhere } from "@/lib/documents-db";
@@ -79,6 +80,8 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
     where: { tenant: { propertyId: property.id } },
     include: moveOutInclude,
   });
+  // For the "Messages (n unread)" link on each tenant's card.
+  const unreadMessages = await unreadByTenantForProperty(property.id);
 
   return (
     <PropertyManageClient
@@ -122,6 +125,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       initialLoans={loans}
       initialAssets={assets.map(serializeAsset)}
       initialMoveOuts={Object.fromEntries(moveOuts.map((m) => [m.tenantId, serializeMoveOut(m)]))}
+      unreadMessages={unreadMessages}
       storageReady={blobConfigured()}
       initialRequests={requests
         .map(serializeRequestForLandlord)

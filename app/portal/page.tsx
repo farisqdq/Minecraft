@@ -8,9 +8,11 @@ import { money } from "@/lib/money";
 import { requestInclude, serializeRequest } from "@/lib/requests";
 import { statementForTenant } from "@/lib/statements";
 import { monthName } from "@/lib/notices";
+import { threadForTenant } from "@/lib/messages-db";
 import PortalShell from "./PortalShell";
 import PortalRequests from "./PortalRequests";
 import PortalNotices from "./PortalNotices";
+import PortalMessages from "./PortalMessages";
 import styles from "./portal.module.css";
 
 export const dynamic = "force-dynamic";
@@ -57,6 +59,11 @@ export default async function PortalHome() {
     orderBy: { createdAt: "desc" },
   });
 
+  // Their one conversation with the company, looked up by the session's
+  // tenant id like everything else here; the landlord's side is signed
+  // with the company's name inside threadForTenant.
+  const thread = await threadForTenant(tenant.id, "tenant");
+
   const status = leaseStatus(
     {
       active: tenant.active,
@@ -93,6 +100,12 @@ export default async function PortalHome() {
           readAt: n.readAt ? n.readAt.toISOString() : "",
         }))}
       />
+
+      {/* The conversation, right under the notices: it's the same kind of
+          thing — words from the landlord — and a reply belongs beside them. */}
+      {thread && (
+        <PortalMessages initial={thread} storageReady={blobConfigured()} serverNow={new Date().toISOString()} />
+      )}
 
       {/* Reporting next. It is the reason a tenant has this login at all, and
           burying it under the lease details would make them scroll for it. */}

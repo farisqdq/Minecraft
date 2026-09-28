@@ -1,11 +1,13 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useCallback, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOutTo } from "./sign-out";
 import PropertySearch from "./PropertySearch";
 import { useShellInfo } from "./ShellContext";
+import { useLivePulse } from "./useLivePulse";
+import { MESSAGES_READ_EVENT } from "./messages-client";
 import styles from "./shell.module.css";
 
 /** The pill beside a page title that opens its edit form. */
@@ -120,10 +122,31 @@ function IconFiles(props: { className?: string }) {
   );
 }
 
-const NAV = [
+function IconMessages(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M4 5.5h16a1.5 1.5 0 0 1 1.5 1.5v8a1.5 1.5 0 0 1-1.5 1.5H9l-4.5 3.5V16.5H4A1.5 1.5 0 0 1 2.5 15V7A1.5 1.5 0 0 1 4 5.5Z" />
+      <path d="M7.5 9.5h9M7.5 12.5h6" />
+    </svg>
+  );
+}
+
+/** Which count a tab carries: repairs waiting on you, or messages you haven't read. */
+type Badge = "repairs" | "messages";
+
+const NAV: {
+  href: string;
+  label: string;
+  short: string;
+  Icon: ComponentType<{ className?: string }>;
+  badge?: Badge;
+  adminOnly?: boolean;
+}[] = [
   { href: "/dashboard", label: "Overview", short: "Home", Icon: IconHome },
   { href: "/dashboard/calendar", label: "Calendar", short: "Calendar", Icon: IconCalendar },
-  { href: "/dashboard/repairs", label: "Repairs", short: "Repairs", Icon: IconRepairs, badge: true },
+  { href: "/dashboard/repairs", label: "Repairs", short: "Repairs", Icon: IconRepairs, badge: "repairs" },
+  { href: "/dashboard/messages", label: "Messages", short: "Inbox", Icon: IconMessages, badge: "messages" },
   { href: "/dashboard/files", label: "Files", short: "Files", Icon: IconFiles },
   { href: "/dashboard/team", label: "Team", short: "Team", Icon: IconTeam },
   { href: "/dashboard/backup", label: "Backup", short: "Backup", Icon: IconBackup },
@@ -162,6 +185,30 @@ export default function AppShell({
   const { admin } = useShellInfo();
   const nav = NAV.filter((item) => !item.adminOnly || admin);
 
+  // Unread messages, fetched here so no page has to know about them. It
+  // rides on the repairs heartbeat at a gentle pace, and drops the moment
+  // a thread page marks itself read.
+  const [unreadMessages, setUnreadMessages] = useState(0);
+  const refreshUnread = useCallback(async () => {
+    try {
+      const res = await fetch("/api/messages/unread", { cache: "no-store" });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (typeof data?.count === "number") setUnreadMessages(data.count);
+    } catch {
+      // Offline: keep whatever the badge said.
+    }
+  }, []);
+  useEffect(() => {
+    void refreshUnread();
+    window.addEventListener(MESSAGES_READ_EVENT, refreshUnread);
+    return () => window.removeEventListener(MESSAGES_READ_EVENT, refreshUnread);
+  }, [refreshUnread, pathname]);
+  useLivePulse("/api/requests/pulse", refreshUnread, 30000);
+
+  const countFor = (badge?: Badge) =>
+    badge === "repairs" ? openRepairs : badge === "messages" ? unreadMessages : 0;
+
   // "/dashboard" must not light up for every page nested under it.
   const isOn = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
@@ -183,7 +230,7 @@ export default function AppShell({
               <Link key={href} href={href} className={`${styles.navLink} ${isOn(href) ? styles.on : ""}`} title={label}>
                 <Icon className={styles.navIcon} />
                 <span className={styles.navLabel}>{label}</span>
-                {badge && openRepairs > 0 && <span className={styles.badge}>{openRepairs}</span>}
+                {countFor(badge) > 0 && <span className={styles.badge}>{countFor(badge)}</span>}
               </Link>
             ))}
           </nav>
@@ -242,7 +289,7 @@ export default function AppShell({
           >
             <span className={styles.tabIconWrap}>
               <Icon className={styles.tabIcon} />
-              {badge && openRepairs > 0 && <span className={styles.tabBadge}>{openRepairs}</span>}
+              {countFor(badge) > 0 && <span className={styles.tabBadge}>{countFor(badge)}</span>}
             </span>
             {short}
           </Link>
