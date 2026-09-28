@@ -27,3 +27,6 @@ tsconfig.tsbuildinfo
 
 # local file storage for testing (LOCAL_STORAGE_DIR)
 /.local-storage/
+
+# Subagent worktrees (local only)
+.claude/worktrees/
