@@ -8,7 +8,8 @@ import styles from "./owners.module.css";
 
 const TABS = [
   { href: "/owners", label: "Overview" },
-  { href: "/owners/money", label: "Income & expenses" },
+  // Short enough that all four fit across a phone without scrolling.
+  { href: "/owners/money", label: "Money" },
   { href: "/owners/statement", label: "Statement" },
   { href: "/owners/account", label: "Account" },
 ];

@@ -386,14 +386,17 @@ export default function OwnersClient({
                       : shown.reason === "unconfigured"
                         ? "This site can't send email, so send it to them yourself:"
                         : "The email didn't go through, so send it to them yourself:"}
-                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginTop: 8 }}>
-                      <code className={styles.portalCode} style={{ overflowWrap: "anywhere", whiteSpace: "normal", letterSpacing: 0, fontSize: 12 }}>
-                        {shown.link}
-                      </code>
-                      <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => copy(shown.link)}>
-                        {copied === shown.link ? "Copied" : "Copy link"}
-                      </button>
-                    </div>
+                    {/* A block, not a flex item: a flex item won't shrink below the
+                        unbroken token, which is wider than a phone. */}
+                    <code
+                      className={styles.portalCode}
+                      style={{ display: "block", wordBreak: "break-all", whiteSpace: "normal", letterSpacing: 0, fontSize: 12, margin: "8px 0" }}
+                    >
+                      {shown.link}
+                    </code>
+                    <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => copy(shown.link)}>
+                      {copied === shown.link ? "Copied" : "Copy link"}
+                    </button>
                     <div className={styles.note} style={{ marginTop: 6 }}>
                       Works once, for 14 days. It isn&apos;t shown again — use Resend for a fresh one.
                     </div>

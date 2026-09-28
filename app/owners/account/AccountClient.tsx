@@ -12,16 +12,21 @@ export default function OwnerAccountClient({ monthlyEmail: initial, emailReady }
   const [ending, setEnding] = useState(false);
 
   async function toggle(next: boolean) {
+    // Flip it at once and put it back if the save fails: a switch that
+    // waits a round-trip to move reads as broken on a phone.
+    const before = monthlyEmail;
+    setMonthlyEmail(next);
     setSaving(true);
     setError("");
     const res = await fetch("/api/owners/preferences", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ monthlyEmail: next }),
-    });
-    const data = await res.json().catch(() => ({}));
+    }).catch(() => null);
+    const data = await res?.json().catch(() => ({}));
     setSaving(false);
-    if (!res.ok) {
+    if (!res?.ok) {
+      setMonthlyEmail(before);
       setError(data?.error || "Couldn't save that.");
       return;
     }

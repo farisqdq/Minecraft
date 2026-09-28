@@ -102,7 +102,7 @@ export default async function OwnerStatementPage({ searchParams }: { searchParam
         <section key={p.id} className={styles.card}>
           <div className={styles.cardHead}>
             <h2>{p.name}</h2>
-            <span className={styles.sub}>{p.statement.entries === 0 ? "nothing recorded" : `${p.statement.entries} entries`}</span>
+            <span className={styles.sub}>{p.statement.entries === 0 ? "nothing recorded" : `${p.statement.entries} ${p.statement.entries === 1 ? "entry" : "entries"}`}</span>
           </div>
           <Lines s={p.statement} />
         </section>
