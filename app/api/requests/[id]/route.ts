@@ -1,9 +1,11 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { releaseBlob } from "@/lib/blob-release";
 import { getCurrentUser } from "@/lib/session";
 import { normalizeStatus, STATUS_LABEL, text } from "@/lib/maintenance";
 import { addUpdate, requestForUser, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
+import { notifyRepairUpdate } from "@/lib/reminders-db";
+import { siteOrigin } from "@/lib/site";
 
 /** Move a request along the queue, optionally with a note to the tenant. */
 export async function PATCH(req: Request, { params }: { params: Promise<{ id: string }> }) {
@@ -22,6 +24,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   const who = me.name || me.email || "Your landlord";
   const now = new Date();
 
+  // One notification for the whole change, even when it's a new status and
+  // a note together: the tenant gets "Scheduled — plumber Tuesday", not two.
+  let firstUpdateId = "";
   if (status !== existing.status) {
     await prisma.maintenanceRequest.update({
       where: { id },
@@ -32,17 +37,29 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
         resolvedAt: status === "done" || status === "declined" ? now : null,
       },
     });
-    await addUpdate({
+    const u = await addUpdate({
       requestId: id,
       authorName: who,
       authorUserId: me.id,
       body: STATUS_LABEL[status].landlord,
       statusTo: status,
     });
+    firstUpdateId = u.id;
   }
 
   if (note) {
-    await addUpdate({ requestId: id, authorName: who, authorUserId: me.id, body: note });
+    const u = await addUpdate({ requestId: id, authorName: who, authorUserId: me.id, body: note });
+    firstUpdateId ||= u.id;
+  }
+
+  if (firstUpdateId) {
+    const origin = siteOrigin(req.url);
+    const changed = status !== existing.status ? status : null;
+    after(() =>
+      notifyRepairUpdate({ requestId: id, updateId: firstUpdateId, status: changed, note, origin }).catch((err) =>
+        console.error("Repair notify", err)
+      )
+    );
   }
 
   const fresh = await prisma.maintenanceRequest.findUnique({ where: { id }, include: requestInclude });

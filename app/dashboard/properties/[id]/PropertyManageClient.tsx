@@ -95,6 +95,7 @@ const EMPTY_TENANT = {
   deposit: "",
   dueDay: "1",
   note: "",
+  emailReminders: true,
 };
 
 export default function PropertyManageClient({
@@ -422,6 +423,7 @@ export default function PropertyManageClient({
             deposit: t.deposit ? String(t.deposit) : "",
             dueDay: String(t.dueDay),
             note: t.note,
+            emailReminders: t.emailReminders,
           }
         : { ...EMPTY_TENANT, unitId: units[0]?.id ?? "" }
     );
@@ -445,6 +447,7 @@ export default function PropertyManageClient({
       deposit: parseFloat(tenantForm.deposit) || 0,
       dueDay: parseInt(tenantForm.dueDay, 10) || 1,
       note: tenantForm.note,
+      emailReminders: tenantForm.emailReminders,
     };
 
     const editing = Boolean(tenantForm.id);
@@ -2060,6 +2063,14 @@ export default function PropertyManageClient({
                 onChange={(e) => setTenantForm((f) => ({ ...f, email: e.target.value }))}
               />
             </div>
+            <label className={`${styles.checkboxField} ${styles.wide}`}>
+              <input
+                type="checkbox"
+                checked={tenantForm.emailReminders}
+                onChange={(e) => setTenantForm((f) => ({ ...f, emailReminders: e.target.checked }))}
+              />
+              Email them automatic reminders (rent due, lease ending) — set up under Reminders
+            </label>
             <div className={styles.field}>
               <label htmlFor="t-start">Lease starts</label>
               <input

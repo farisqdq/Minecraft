@@ -13,6 +13,9 @@ export type TenantDTO = {
   dueDay: number;
   active: boolean;
   note: string;
+  /** Whether automatic reminders may reach them by each channel. */
+  emailReminders: boolean;
+  pushReminders: boolean;
 };
 
 const day = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : "");
@@ -32,6 +35,8 @@ export function serializeTenant(t: Tenant): TenantDTO {
     dueDay: t.dueDay,
     active: t.active,
     note: t.note ?? "",
+    emailReminders: t.emailReminders,
+    pushReminders: t.pushReminders,
   };
 }
 

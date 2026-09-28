@@ -4,9 +4,10 @@ import { getCurrentUser } from "@/lib/session";
 import { companyIdsForUser } from "@/lib/access";
 import { backupFileKey } from "@/lib/backup-files";
 import { storageAccessOf } from "@/lib/file-links";
+import { settingsFromRow } from "@/lib/reminders";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 15;
+export const BACKUP_VERSION = 16;
 
 /** Signs a private file's link for the account exporting it; see lib/backup-files. */
 type FileKey = (url: string) => string | undefined;
@@ -178,6 +179,8 @@ type TenantRow = {
   dueDay: number;
   active: boolean;
   note: string | null;
+  emailReminders: boolean;
+  pushReminders: boolean;
 };
 
 function serializeTenants(rows: TenantRow[]) {
@@ -191,6 +194,10 @@ function serializeTenants(rows: TenantRow[]) {
     dueDay: t.dueDay,
     active: t.active,
     note: t.note ?? "",
+    // Their say over automatic reminders, so a restore doesn't start
+    // emailing someone who asked it to stop.
+    emailReminders: t.emailReminders,
+    pushReminders: t.pushReminders,
     // Where the books start for them and what they owed on that day. Without
     // these two a restore would re-infer the start from the first payment and
     // quietly forget an opening balance the landlord had set by hand.
@@ -384,6 +391,7 @@ export async function GET() {
       // Paperwork not tied to a property: a vendor's insurance, an LLC's own
       // licence. Property and tenant documents travel with their property.
       documents: { ...DOCUMENT_INCLUDE, where: { propertyId: null } },
+      reminders: true,
       properties: {
         orderBy: { createdAt: "asc" },
         include: {
@@ -453,6 +461,8 @@ export async function GET() {
       name: c.name,
       contactPhone: c.contactPhone ?? "",
       contactEmail: c.contactEmail ?? "",
+      // How automatic reminders are set up, or null when they never were.
+      reminders: c.reminders ? settingsFromRow(c.reminders) : null,
       // The vendor book, so a restore brings back who did each repair.
       vendors: c.vendors.map((v) => ({
         name: v.name,

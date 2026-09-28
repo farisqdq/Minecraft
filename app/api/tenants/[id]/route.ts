@@ -27,6 +27,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if ("email" in body) data.email = text(body.email, 200);
   if ("phone" in body) data.phone = text(body.phone, 40);
+  // Email reminders are the landlord's to switch off for a tenant who asked
+  // in person; push is the tenant's own, from their portal.
+  if ("emailReminders" in body) data.emailReminders = body.emailReminders !== false;
   if ("note" in body) data.note = text(body.note, 500);
   if ("leaseStart" in body) data.leaseStart = parseDay(body.leaseStart);
   if ("leaseEnd" in body) data.leaseEnd = parseDay(body.leaseEnd);

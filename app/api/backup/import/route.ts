@@ -10,6 +10,7 @@ import { acceptBackupFile } from "@/lib/backup-files";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
 import { MAX_AMOUNT } from "@/lib/money";
 import { parseAssetInput, type AssetInput } from "@/lib/depreciation";
+import { parseSettings, settingsToRow, type ReminderSettingsDTO } from "@/lib/reminders";
 
 type Tx = Prisma.TransactionClient;
 
@@ -130,6 +131,8 @@ type CleanTenant = {
   dueDay: number;
   active: boolean;
   note: string | null;
+  emailReminders: boolean;
+  pushReminders: boolean;
 };
 type CleanRentChange = { effectiveFrom: Date; amount: number };
 type CleanRequestUpdate = {
@@ -205,6 +208,8 @@ type CleanCompany = {
   name: string;
   contactPhone: string | null;
   contactEmail: string | null;
+  /** Reminder settings, when the backup carries them (v16 on). */
+  reminders: ReminderSettingsDTO | null;
   vendors: CleanVendor[];
   documents: CleanDocument[];
   properties: CleanProperty[];
@@ -681,6 +686,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
       name,
       contactPhone: str(c.contactPhone, 40) || null,
       contactEmail: str(c.contactEmail, 200) || null,
+      reminders: c.reminders && typeof c.reminders === "object" ? parseSettings(c.reminders) : null,
       vendors,
       documents: parseDocuments(c.documents),
       properties,
@@ -1048,6 +1054,9 @@ export async function POST(req: Request) {
         },
       });
       created.companies += 1;
+      if (company.reminders) {
+        await tx.reminderSettings.create({ data: { companyId: record.id, ...settingsToRow(company.reminders) } });
+      }
 
       // The book goes in before any property, so the repairs and expenses
       // written below can name who did the work.

@@ -58,6 +58,7 @@ model User {
   assetsAdded         DepreciableAsset[]
   adminActions        AdminLog[]
   passwordResets      PasswordReset[]
+  pushSubscriptions   PushSubscription[]
 }
 
 model Company {
@@ -75,6 +76,8 @@ model Company {
   invites    Invite[]
   vendors    Vendor[]
   documents  Document[]
+  reminders  ReminderSettings?
+  sent       ReminderSent[]
 }
 
 model CompanyMember {
@@ -224,6 +227,13 @@ model Tenant {
   openingBalance Float   @default(0)
   balanceFrom    String?
 
+  /// Whether automatic reminders (rent due, lease ending, repair updates)
+  /// may reach this tenant by each channel. Both on by default; the tenant
+  /// can switch either off from the portal, the landlord can switch email
+  /// off from the tenant card. Push also needs a device they've enabled.
+  emailReminders Boolean @default(true)
+  pushReminders  Boolean @default(true)
+
   @@index([propertyId])
   @@index([unitId])
 }
@@ -250,6 +260,8 @@ model TenantAccount {
   lastLoginAt    DateTime?
   /// As on User: bump it and every session for this login ends.
   sessionVersion Int       @default(0)
+
+  pushSubscriptions PushSubscription[]
 }
 
 // The only way a TenantAccount comes into existence. The landlord issues a
@@ -836,4 +848,90 @@ model PasswordReset {
   createdAt DateTime  @default(now())
 
   @@index([userId])
+}
+
+/// How and when a company's automatic reminders go out. One row per company,
+/// made the first time someone opens the settings; a company without one is
+/// off. Channels are per reminder type: email, push, and room for a text
+/// channel later. Days lists are "60,30" strings, parsed by lib/reminders.
+model ReminderSettings {
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// The master switch. Nothing goes out for a company until it's on.
+  enabled   Boolean @default(false)
+
+  rentDueOn    Boolean @default(true)
+  rentDueDays  Int     @default(3)
+  rentDueEmail Boolean @default(true)
+  rentDuePush  Boolean @default(true)
+
+  rentLateOn        Boolean @default(true)
+  /// Used when the tenant has no late-fee rule saying otherwise.
+  rentLateGraceDays Int     @default(5)
+  rentLateEmail     Boolean @default(true)
+  rentLatePush      Boolean @default(true)
+
+  leaseEndOn     Boolean @default(true)
+  leaseEndDays   String  @default("60,30")
+  /// Whether the tenant hears about it too, not only the landlord.
+  leaseEndTenant Boolean @default(false)
+  leaseEndEmail  Boolean @default(true)
+  leaseEndPush   Boolean @default(true)
+
+  docExpiryOn    Boolean @default(true)
+  docExpiryDays  String  @default("30,7")
+  docExpiryEmail Boolean @default(true)
+  docExpiryPush  Boolean @default(true)
+
+  maintenanceOn    Boolean @default(true)
+  maintenanceEmail Boolean @default(true)
+  maintenancePush  Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+/// Every reminder that went out, or was tried. The unique key is what makes
+/// the daily run safe to repeat: a second run finds the row and stops, so a
+/// tenant is never told twice that rent is due on the 1st.
+model ReminderSent {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  /// "rent-due" | "rent-late" | "lease-end" | "doc-expiry" | "maintenance" | "message" | "test"
+  kind      String
+  /// What was being reminded about: "rent-due:<tenantId>:<month>" and the like.
+  key       String
+  /// "email" | "push" (a text channel would be "sms").
+  channel   String
+  /// The address, or "user:<id>" / "tenant:<accountId>" for push.
+  to        String
+  /// "sending" while in flight, then "sent" | "failed" | "skipped".
+  status    String   @default("sending")
+  detail    String?
+  createdAt DateTime @default(now())
+
+  @@unique([key, channel, to])
+  @@index([companyId, createdAt])
+}
+
+/// A phone or browser that asked for push notifications. One per device, for
+/// a landlord (userId) or a tenant login (tenantAccountId). Dropped when the
+/// push service says the endpoint is gone.
+model PushSubscription {
+  id              String         @id @default(cuid())
+  userId          String?
+  user            User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tenantAccountId String?
+  tenantAccount   TenantAccount? @relation(fields: [tenantAccountId], references: [id], onDelete: Cascade)
+  endpoint        String         @unique
+  p256dh          String
+  auth            String
+  userAgent       String?
+  createdAt       DateTime       @default(now())
+  lastUsedAt      DateTime?
+
+  @@index([userId])
+  @@index([tenantAccountId])
 }

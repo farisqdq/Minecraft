@@ -57,6 +57,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       name,
       email: text(body?.email, 200),
       phone: text(body?.phone, 40),
+      emailReminders: body?.emailReminders !== false,
       leaseStart: parseDay(body?.leaseStart),
       leaseEnd: parseDay(body?.leaseEnd),
       deposit: Math.max(0, Number(body?.deposit) || 0),

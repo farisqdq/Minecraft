@@ -42,8 +42,8 @@ const LANDLORD_AREA = [
 const TENANT_AREA = ["/portal", "/api/portal"];
 const TENANT_PUBLIC = ["/portal/login", "/portal/signup", "/api/portal/signup"];
 
-/** Files: either kind of session; the route decides who may see which file. */
-const EITHER_AREA = ["/api/files"];
+/** Files and push devices: either kind of session; the route decides whose is whose. */
+const EITHER_AREA = ["/api/files", "/api/push"];
 
 type Area = "landlord" | "tenant" | "either" | "public";
 
