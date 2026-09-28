@@ -135,6 +135,17 @@ function serializeLoans(rows: LoanRow[]) {
 
 type TenantRow = {
   notices?: { kind: string; month: string | null; amount: number | null; body: string; createdAt: Date; readAt: Date | null }[];
+  thread?: {
+    tenantReadAt: Date | null;
+    landlordReadAt: Date | null;
+    messages: {
+      fromTenant: boolean;
+      authorName: string;
+      body: string;
+      createdAt: Date;
+      attachments: { url: string; filename: string; contentType: string; size: number }[];
+    }[];
+  } | null;
   charges?: {
     month: string;
     kind: string;
@@ -183,7 +194,7 @@ type TenantRow = {
   pushReminders: boolean;
 };
 
-function serializeTenants(rows: TenantRow[]) {
+function serializeTenants(rows: TenantRow[], key: FileKey) {
   return rows.map((t) => ({
     name: t.name,
     email: t.email ?? "",
@@ -261,6 +272,28 @@ function serializeTenants(rows: TenantRow[]) {
       body: n.body,
       createdAt: n.createdAt.toISOString(),
       readAt: n.readAt ? n.readAt.toISOString() : "",
+    })),
+    // The conversation with them, and how far each side had read. The
+    // author of a landlord message is kept by name, like a repair reply;
+    // attachments are links into storage, signed like receipts.
+    messagesReadAt: t.thread
+      ? {
+          tenant: t.thread.tenantReadAt ? t.thread.tenantReadAt.toISOString() : "",
+          landlord: t.thread.landlordReadAt ? t.thread.landlordReadAt.toISOString() : "",
+        }
+      : null,
+    messages: (t.thread?.messages ?? []).map((m) => ({
+      fromTenant: m.fromTenant,
+      authorName: m.authorName,
+      body: m.body,
+      createdAt: m.createdAt.toISOString(),
+      attachments: m.attachments.map((a) => ({
+        url: a.url,
+        key: key(a.url),
+        filename: a.filename,
+        contentType: a.contentType,
+        size: a.size,
+      })),
     })),
   }));
 }
@@ -414,6 +447,7 @@ export async function GET() {
             include: {
               notices: { orderBy: { createdAt: "asc" } },
               charges: { orderBy: { createdAt: "asc" } },
+              thread: { include: { messages: { orderBy: { createdAt: "asc" }, include: { attachments: { orderBy: { createdAt: "asc" } } } } } },
               moveOut: { include: { deductions: { orderBy: { id: "asc" } } } },
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
             },
@@ -439,6 +473,7 @@ export async function GET() {
                 include: {
                   notices: { orderBy: { createdAt: "asc" } },
                   charges: { orderBy: { createdAt: "asc" } },
+                  thread: { include: { messages: { orderBy: { createdAt: "asc" }, include: { attachments: { orderBy: { createdAt: "asc" } } } } } },
                   moveOut: { include: { deductions: { orderBy: { id: "asc" } } } },
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
                 },
@@ -493,7 +528,7 @@ export async function GET() {
           inService: a.inService,
           note: a.note ?? "",
         })),
-        tenants: serializeTenants(p.tenants),
+        tenants: serializeTenants(p.tenants, key),
         rentChanges: serializeRentChanges(p.rentChanges),
         requests: serializeRequests(p.requests, key),
         documents: serializeDocuments(p.documents, key),
@@ -504,7 +539,7 @@ export async function GET() {
           vacantSince: u.vacantSince ? u.vacantSince.toISOString().slice(0, 10) : "",
           transactions: serializeTxns(u.transactions, key, loanIndex, new Map(u.tenants.map((t, i) => [t.id, i]))),
           recurringExpenses: serializeRecurring(u.recurringExpenses),
-          tenants: serializeTenants(u.tenants),
+          tenants: serializeTenants(u.tenants, key),
           rentChanges: serializeRentChanges(u.rentChanges),
           requests: serializeRequests(u.requests, key),
         })),

@@ -45,3 +45,16 @@ export async function repairPulse(
     notices?._max.createdAt?.getTime() ?? 0,
   ].join(".");
 }
+
+/**
+ * The same idea for messages: how many, and when the newest arrived, across
+ * the threads in scope. Attachments arrive a moment after their message, so
+ * they're counted too — a photo landing on an open thread redraws it.
+ */
+export async function messagePulse(scope: Prisma.MessageWhereInput): Promise<string> {
+  const [messages, attachments] = await Promise.all([
+    prisma.message.aggregate({ where: scope, _count: { _all: true }, _max: { createdAt: true } }),
+    prisma.messageAttachment.aggregate({ where: { message: scope }, _count: { _all: true } }),
+  ]);
+  return [messages._count._all, messages._max.createdAt?.getTime() ?? 0, attachments._count._all].join(".");
+}

@@ -303,6 +303,45 @@ danger — call 911**, and the form itself says to call the LLC's line rather
 than type for no heat, no water or a lock that won't open. A web form is not
 an emergency line and shouldn't pretend to be.
 
+## Messages
+
+Each tenant has **one conversation** with the company that manages their
+place — not with a person. On the dashboard it's the **Messages** tab: an
+inbox of every tenant you've written with, newest activity first, with a
+count of what you haven't read, and a thread page per tenant with a composer.
+Every tenant card on a property page carries a **Messages (n unread)** link
+to that thread, so you can write to someone before they have a phone number
+on file or a portal login. In the portal it's the **Messages** card under the
+notices, with a badge in the bar that jumps to it.
+
+A message is text (up to 4,000 characters) plus up to four photos or PDFs.
+Files are checked by their bytes, capped at 4 MB each, kept in private
+storage, and served only through `/api/files/message/<id>` after the same
+check as every other file: the LLC's team, or the tenant whose thread it's
+in. Phone photos are shrunk in the browser before they're sent.
+
+Everything from your side is signed with the **company's name** in the
+portal, never a team member's name or email — the same rule as repair
+replies. On the dashboard you see who on the team wrote each line.
+
+**Read** means read, not delivered. Each thread keeps two stamps,
+`tenantReadAt` and `landlordReadAt`; a message from the other side newer than
+your stamp is unread. The stamp moves only after the thread has actually been
+on screen for a couple of seconds with the tab in front, so a page you open
+and leave doesn't count. One stamp serves the whole team: a tenant is talking
+to the company, and one of you reading it is the company reading it.
+
+A new message **emails and pushes the other side** — the tenant, or every
+member of the team — through the same once-only log the reminders use, with
+the tenant's own reminder switches respected. It's batched: at most one
+notification per thread, per side, per half hour, and it says how many
+messages are waiting. Thirty lines in a row cost the other person one buzz.
+
+Tenants can only ever reach their own thread: every portal route resolves the
+thread from the session, never from an id in the request. A tenant may send
+thirty messages an hour. Backups carry each tenant's conversation, with the
+read stamps and links to the attachments, the way they carry receipts.
+
 ## Rent changes
 
 Rent goes up. The app records what a place rented for **and from when**, so

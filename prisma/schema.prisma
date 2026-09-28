@@ -46,6 +46,7 @@ model User {
   RentChange          RentChange[]
   tenantInvitesSent   TenantInvite[]      @relation("TenantInviteSender")
   requestUpdates      MaintenanceUpdate[]
+  messages            Message[]
   requestPhotos       MaintenancePhoto[]
   noticesSent         TenantNotice[]
   chargesRaised       TenantCharge[]
@@ -78,6 +79,7 @@ model Company {
   documents  Document[]
   reminders  ReminderSettings?
   sent       ReminderSent[]
+  threads    MessageThread[]
 }
 
 model CompanyMember {
@@ -217,6 +219,7 @@ model Tenant {
   rules     TenantChargeRule[]
   documents Document[]
   moveOut   MoveOut?
+  thread    MessageThread?
 
   // What they owed on the day you started keeping books here, and the first
   // month to charge rent for. Without these, a lease that began in 2023 and a
@@ -934,4 +937,58 @@ model PushSubscription {
 
   @@index([userId])
   @@index([tenantAccountId])
+}
+
+/// ---- Messaging (a16) ----
+
+/// One conversation per tenant, between them and the company that manages
+/// their place. The two read stamps are what "unread" means: a message from
+/// the other side newer than your stamp. One stamp for the whole team,
+/// because the team answers as the company.
+model MessageThread {
+  id             String    @id @default(cuid())
+  tenantId       String    @unique
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  companyId      String
+  company        Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lastMessageAt  DateTime  @default(now())
+  tenantReadAt   DateTime?
+  landlordReadAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  messages Message[]
+
+  @@index([companyId, lastMessageAt])
+}
+
+model Message {
+  id           String        @id @default(cuid())
+  threadId     String
+  thread       MessageThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  fromTenant   Boolean
+  /// The tenant's name, or the team member's — the portal shows the company
+  /// name for anything from the landlord's side, never this.
+  authorName   String
+  authorUserId String?
+  author       User?         @relation(fields: [authorUserId], references: [id], onDelete: SetNull)
+  body         String
+  createdAt    DateTime      @default(now())
+
+  attachments MessageAttachment[]
+
+  @@index([threadId, createdAt])
+}
+
+model MessageAttachment {
+  id          String   @id @default(cuid())
+  messageId   String
+  message     Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  url         String
+  pathname    String
+  filename    String
+  contentType String
+  size        Int
+  createdAt   DateTime @default(now())
+
+  @@index([messageId])
 }

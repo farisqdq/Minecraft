@@ -57,6 +57,50 @@
   white-space: nowrap;
 }
 
+/* The way to the Messages card, with a count of what the landlord wrote
+   that hasn't been read. Sits in the bar so it's there before scrolling. */
+.inboxLink {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 999px;
+  color: var(--muted);
+  text-decoration: none;
+  flex: none;
+}
+
+.inboxLink svg {
+  width: 21px;
+  height: 21px;
+}
+
+.inboxLink:hover {
+  color: var(--ink);
+  background: var(--surface-2);
+}
+
+.inboxLinkNew {
+  color: var(--ink);
+}
+
+.inboxBadge {
+  position: absolute;
+  top: 1px;
+  right: 0;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: var(--expense);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 17px;
+  text-align: center;
+}
+
 .signOut {
   border: 1px solid var(--line-strong);
   background: var(--surface);

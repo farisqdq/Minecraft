@@ -28,6 +28,7 @@ import { formatJoinCode } from "@/lib/codes";
 import { NO_ACCESS, type PortalAccess } from "@/lib/portal";
 import { STATUS_LABEL, ago, isOpen, type RequestDTO } from "@/lib/maintenance";
 import { monthName } from "@/lib/notices";
+import { messagesLabel } from "@/lib/messages";
 import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 
 type Property = {
@@ -118,6 +119,7 @@ export default function PropertyManageClient({
   transactions: initialTransactions,
   initialPortal,
   initialRequests,
+  unreadMessages = {},
 }: {
   /** Repairs waiting on you, for the nav badge. */
   openRepairs?: number;
@@ -148,6 +150,8 @@ export default function PropertyManageClient({
   initialPortal: Record<string, PortalAccess>;
   /** What's been reported on this property, urgent first. */
   initialRequests: RequestDTO[];
+  /** Messages from each tenant the team hasn't read, by tenant id. */
+  unreadMessages?: Record<string, number>;
 }) {
   const router = useRouter();
 
@@ -1064,8 +1068,13 @@ export default function PropertyManageClient({
                     </div>
                   </div>
 
-                  {(t.phone || t.email) && (
-                    <div className={styles.contactRow}>
+                  <div className={styles.contactRow}>
+                      {/* The written record with them, always here: a
+                          conversation can start before they have a phone
+                          number on file, or a portal login. */}
+                      <Link className={styles.contactBtn} href={`/dashboard/messages/${t.id}`}>
+                        {messagesLabel(unreadMessages[t.id] ?? 0)}
+                      </Link>
                       {t.phone && (
                         <>
                           <a className={styles.contactBtn} href={telHref(t.phone)}>
@@ -1081,8 +1090,7 @@ export default function PropertyManageClient({
                           Email
                         </a>
                       )}
-                    </div>
-                  )}
+                  </div>
 
                   <div className={styles.tenantFacts}>
                     <div className={styles.figure}>

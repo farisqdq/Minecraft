@@ -4,7 +4,7 @@
  * copied out of a page, a browser history or an email is useless to anyone
  * not signed in with access to that file.
  */
-export type FileKind = "attachment" | "photo" | "document";
+export type FileKind = "attachment" | "photo" | "document" | "message";
 
 export const fileLink = (kind: FileKind, id: string) => `/api/files/${kind}/${encodeURIComponent(id)}`;
 
