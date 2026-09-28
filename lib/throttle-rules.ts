@@ -49,8 +49,8 @@ export function afterFailure(row: ThrottleRow | null, max: number, now = new Dat
   };
 }
 
-/** "user" and "tenant" are the two sign-in doors; the address rule is shared. */
-export type ThrottleKind = "user" | "tenant";
+/** "user", "tenant" and "owner" are the three sign-in doors; the address rule is shared. */
+export type ThrottleKind = "user" | "tenant" | "owner";
 
 export function accountKey(kind: ThrottleKind, email: string) {
   return `${kind}:${email.trim().toLowerCase()}`;

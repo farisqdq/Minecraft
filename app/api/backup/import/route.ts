@@ -194,8 +194,16 @@ type CleanDocument = {
   expiresOn: Date | null;
   note: string | null;
   shared: boolean;
+  sharedWithOwners: boolean;
   tenantName: string;
   vendorName: string;
+};
+type CleanPropertyOwner = {
+  email: string;
+  name: string;
+  monthlyEmail: boolean;
+  /** Positions in the company's `properties`. */
+  properties: number[];
 };
 type CleanVendor = {
   name: string;
@@ -212,6 +220,8 @@ type CleanCompany = {
   reminders: ReminderSettingsDTO | null;
   vendors: CleanVendor[];
   documents: CleanDocument[];
+  /** Owner-portal access, when the backup carries it (v17 on). */
+  propertyOwners: CleanPropertyOwner[];
   properties: CleanProperty[];
 };
 
@@ -501,6 +511,9 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         dueDay: Math.min(31, Math.max(1, Math.round(num(t.dueDay)) || 1)),
         active: t.active !== false,
         note: str(t.note, 500) || null,
+        // On unless the backup says they switched it off (older backups don't say).
+        emailReminders: t.emailReminders !== false,
+        pushReminders: t.pushReminders !== false,
       });
     }
     return out;
@@ -542,9 +555,34 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         expiresOn: /^\d{4}-\d{2}-\d{2}$/.test(exp) ? new Date(`${exp}T00:00:00.000Z`) : null,
         note: str(d.note, 500) || null,
         shared: d.shared === true,
+        sharedWithOwners: d.sharedWithOwners === true,
         tenantName: str(d.tenantName, 120),
         vendorName: str(d.vendorName, 120),
       });
+    }
+    return out;
+  }
+
+  /** Owner-portal access by email; each named property must be a position in the company's list. */
+  function parsePropertyOwners(raw: unknown, propertyCount: number): CleanPropertyOwner[] {
+    const out: CleanPropertyOwner[] = [];
+    const seen = new Set<string>();
+    for (const rawO of (Array.isArray(raw) ? raw : []).slice(0, 500)) {
+      const o = (rawO ?? {}) as Record<string, unknown>;
+      const email = str(o.email, 200).toLowerCase();
+      if (!email || !email.includes("@") || seen.has(email)) continue;
+      const properties = Array.from(
+        new Set(
+          (Array.isArray(o.properties) ? o.properties : []).filter(
+            (n): n is number => Number.isInteger(n) && (n as number) >= 0 && (n as number) < propertyCount
+          )
+        )
+      );
+      // An owner with nothing to see is not restored: there'd be nothing to
+      // invite them to, and the account would only be clutter.
+      if (properties.length === 0) continue;
+      seen.add(email);
+      out.push({ email, name: str(o.name, 120) || email.split("@")[0], monthlyEmail: o.monthlyEmail === true, properties });
     }
     return out;
   }
@@ -689,6 +727,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
       reminders: c.reminders && typeof c.reminders === "object" ? parseSettings(c.reminders) : null,
       vendors,
       documents: parseDocuments(c.documents),
+      propertyOwners: parsePropertyOwners(c.propertyOwners, properties.length),
       properties,
     });
   }
@@ -759,6 +798,7 @@ export async function POST(req: Request) {
     loanPayments: 0,
     moveOuts: 0,
     assets: 0,
+    propertyOwners: 0,
   };
 
   /**
@@ -1019,8 +1059,10 @@ export async function POST(req: Request) {
           propertyId,
           tenantId,
           vendorId: (vendorName && vendorsByName.get(vendorName)) || null,
-          // A tenant who didn't come back can't have anything shared with them.
+          // A tenant who didn't come back can't have anything shared with them;
+          // owners only ever see documents on a property.
           shared: d.shared && Boolean(tenantId),
+          sharedWithOwners: d.sharedWithOwners && Boolean(propertyId),
           uploadedById: userId,
         },
       });
@@ -1069,6 +1111,9 @@ export async function POST(req: Request) {
         created.vendors += 1;
       }
 
+      /** Each restored property's id by its position in the file — how owners find theirs. */
+      const propertyIdsByPosition: string[] = [];
+
       for (const property of company.properties) {
         const prop = await tx.property.create({
           data: {
@@ -1082,6 +1127,7 @@ export async function POST(req: Request) {
           },
         });
         created.properties += 1;
+        propertyIdsByPosition.push(prop.id);
 
         // Loans before the ledger, so interest entries can point at the
         // payment that wrote them.
@@ -1128,6 +1174,24 @@ export async function POST(req: Request) {
         await createDocuments(tx, record.id, prop.id, property.documents, everyTenant);
       }
       await createDocuments(tx, record.id, null, company.documents, new Map());
+
+      // Owner-portal access, after every property has an id. An owner who
+      // already has a login here (the same email, another LLC or an earlier
+      // restore) keeps it and gains these properties; a new one comes back
+      // without a password and is re-invited from the Property owners page.
+      for (const o of company.propertyOwners) {
+        const owner = await tx.propertyOwner.upsert({
+          where: { email: o.email },
+          create: { email: o.email, name: o.name, passwordHash: "", monthlyEmail: o.monthlyEmail },
+          update: {},
+          select: { id: true },
+        });
+        await tx.propertyOwnerAccess.createMany({
+          data: o.properties.map((at) => ({ ownerId: owner.id, propertyId: propertyIdsByPosition[at] })),
+          skipDuplicates: true,
+        });
+        created.propertyOwners += 1;
+      }
     }
   }, { timeout: 55_000, maxWait: 20_000 });
 

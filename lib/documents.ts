@@ -99,6 +99,8 @@ export type DocumentDTO = {
   expiresOn: string;
   note: string;
   shared: boolean;
+  /** Property documents only: whether the property's owners (owner portal) may read it. */
+  sharedWithOwners: boolean;
   createdAt: string;
 };
 

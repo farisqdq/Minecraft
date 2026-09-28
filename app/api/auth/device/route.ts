@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { requireTenantSession } from "@/lib/tenant-access";
+import { requireOwnerSession } from "@/lib/owner-access";
 import { TRUST_DAYS, makeTrustToken, trustCookieName, type TrustKind } from "@/lib/device-trust";
 
 /**
@@ -29,16 +30,28 @@ export async function POST() {
     email = user.email;
     sessionVersion = row.sessionVersion;
   } else {
-    const me = await requireTenantSession();
-    if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    const row = await prisma.tenantAccount.findUnique({
-      where: { id: me.accountId },
-      select: { sessionVersion: true },
-    });
-    if (!row) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-    kind = "tenant";
-    email = me.email;
-    sessionVersion = row.sessionVersion;
+    const tenant = await requireTenantSession();
+    if (tenant) {
+      const row = await prisma.tenantAccount.findUnique({
+        where: { id: tenant.accountId },
+        select: { sessionVersion: true },
+      });
+      if (!row) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      kind = "tenant";
+      email = tenant.email;
+      sessionVersion = row.sessionVersion;
+    } else {
+      const owner = await requireOwnerSession();
+      if (!owner) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      const row = await prisma.propertyOwner.findUnique({
+        where: { id: owner.ownerId },
+        select: { sessionVersion: true },
+      });
+      if (!row) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      kind = "owner";
+      email = owner.email;
+      sessionVersion = row.sessionVersion;
+    }
   }
 
   const res = NextResponse.json({ ok: true });

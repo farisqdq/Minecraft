@@ -8,7 +8,7 @@ import { signOut } from "next-auth/react";
  * out to a Vercel login page. Ending the session without its redirect and
  * navigating here keeps them on this site whatever that setting says.
  */
-export async function signOutTo(path: "/login" | "/portal/login") {
+export async function signOutTo(path: "/login" | "/portal/login" | "/owners/login") {
   await signOut({ redirect: false });
   window.location.assign(path);
 }

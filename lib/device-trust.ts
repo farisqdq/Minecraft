@@ -14,7 +14,7 @@ import { createHmac, timingSafeEqual } from "crypto";
  * everywhere" and a password change also make every device untrusted.
  */
 
-export type TrustKind = "user" | "tenant";
+export type TrustKind = "user" | "tenant" | "owner";
 
 /** How long a device stays trusted without signing in again. */
 export const TRUST_DAYS = 90;
