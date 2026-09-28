@@ -44,5 +44,17 @@ export function datasourceUrl(raw = chooseDatasource().url): string {
 
 /** Whether a URL goes through a connection pooler, as far as its shape says. */
 export function isPooled(url: string): boolean {
-  return url.includes("-pooler") || /[?&]pgbouncer=true/.test(url) || /:6543\//.test(url);
+  let host = "";
+  try {
+    host = new URL(url).hostname;
+  } catch {
+    host = url;
+  }
+  return (
+    host.includes("-pooler") || // Neon
+    host.startsWith("pooled.") || // Prisma Postgres
+    host.includes("pooler.") || // Supabase
+    /[?&]pgbouncer=true/.test(url) ||
+    /:6543\//.test(url)
+  );
 }

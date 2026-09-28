@@ -3,8 +3,11 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Migrations go straight to the database, not through the pooler the app
+  // uses: a pooler in transaction mode can't run a migration's DDL safely.
+  directUrl = env("DATABASE_POSTGRES_URL")
 }
 
 model User {

@@ -519,6 +519,10 @@ Two things keep it from happening again:
   Supabase calls it the transaction pooler, on port 6543, and wants
   `?pgbouncer=true` on the end. A pooler multiplexes thousands of client
   connections onto a few real ones, which removes the limit altogether.
+- **Migrations use the direct string.** `DATABASE_POSTGRES_URL` is the
+  unpooled connection (the same value as `DATABASE_URL` on a database with
+  no pooler); `prisma migrate deploy` at build time goes through it,
+  because a pooler in transaction mode can't run a migration safely.
 - **One connection per instance.** Unless the URL sets its own
   `connection_limit`, the app uses one, and waits up to twenty seconds for
   it rather than failing the page. Queries on one instance then run one at

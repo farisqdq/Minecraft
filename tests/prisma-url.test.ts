@@ -50,4 +50,6 @@ test("a pooled URL is recognised by its shape", () => {
   assert.equal(isPooled("postgresql://u:p@host/db?pgbouncer=true&connect_timeout=15"), true);
   assert.equal(isPooled("postgresql://u:p@aws-0-us-east-1.pooler.supabase.com:6543/postgres"), true);
   assert.equal(isPooled("postgresql://u:p@db.abc.supabase.co:5432/postgres"), false);
+  assert.equal(isPooled("postgres://u:p@pooled.db.prisma.io:5432/postgres?sslmode=require"), true, "Prisma Postgres");
+  assert.equal(isPooled("postgres://u:p@db.prisma.io:5432/postgres?sslmode=require"), false, "its direct host");
 });
