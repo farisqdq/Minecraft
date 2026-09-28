@@ -124,8 +124,10 @@ export async function POST(req: Request) {
       size: file.size,
       expiresOn,
       note: field("note").slice(0, 500) || null,
-      // Sharing only means anything for a tenant's own document.
+      // Sharing only means anything for a tenant's own document; sharing
+      // with owners only for a document on a property.
       shared: Boolean(target.tenantId) && field("shared") === "1",
+      sharedWithOwners: Boolean(target.propertyId) && field("sharedWithOwners") === "1",
       uploadedById: userId,
     },
     include: documentInclude,

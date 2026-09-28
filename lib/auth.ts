@@ -17,12 +17,15 @@ import { TWO_FACTOR_INVALID, TWO_FACTOR_REQUIRED } from "@/lib/auth-messages";
  *              user -> company -> property, which is the whole ledger.
  *   "tenant" — someone renting one unit. Reaches exactly their own tenant row
  *              and nothing that hangs off a company.
+ *   "owner"  — a property owner or investor (PropertyOwner), reading only
+ *              the properties they've been assigned. Never writes.
  *
  * Every token carries this, and `getCurrentUserId` refuses anything that
- * isn't "user". A role column on a shared table would put the two one missed
- * `if` apart; this keeps them in separate tables with separate providers.
+ * isn't "user". A role column on a shared table would put the three one
+ * missed `if` apart; this keeps them in separate tables with separate
+ * providers.
  */
-export type SessionKind = "user" | "tenant";
+export type SessionKind = "user" | "tenant" | "owner";
 
 /**
  * A real bcrypt hash of a random string, compared against when an email has
@@ -198,20 +201,56 @@ export const authOptions: AuthOptions = {
         };
       },
     }),
+    CredentialsProvider({
+      id: "owner",
+      name: "Owner portal",
+      credentials: {
+        email: { label: "Email", type: "email" },
+        password: { label: "Password", type: "password" },
+      },
+      async authorize(credentials, req) {
+        const email = credentials?.email?.trim().toLowerCase();
+        const password = credentials?.password;
+        if (!email || !password || email.length > 200 || password.length > 200) return null;
+
+        const owner = await prisma.propertyOwner.findUnique({ where: { email } });
+        const keys = loginThrottleKeys({
+          kind: "owner",
+          email,
+          ip: clientIp(req?.headers),
+          trustedSince: owner ? trustedSince("owner", email, owner.sessionVersion, req?.headers) : null,
+        });
+        if (await isThrottled(keys.map((k) => k.key))) return null;
+
+        // An owner restored from a backup has no password yet (see the
+        // schema); they compare against the dummy like an unknown email.
+        const valid = await bcrypt.compare(password, owner?.passwordHash || DUMMY_HASH);
+        if (!owner || !owner.passwordHash || !valid) {
+          await recordFailure(keys);
+          return null;
+        }
+
+        for (const k of keys) if (k.key && !k.key.startsWith("ip:")) await clearFailures(k.key);
+        await prisma.propertyOwner.update({ where: { id: owner.id }, data: { lastLoginAt: new Date() } });
+
+        return { id: owner.id, email: owner.email, name: owner.name, kind: "owner", sv: owner.sessionVersion };
+      },
+    }),
   ],
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.kind = (user as { kind?: SessionKind }).kind === "tenant" ? "tenant" : "user";
+        const kind = (user as { kind?: SessionKind }).kind;
+        token.kind = kind === "tenant" || kind === "owner" ? kind : "user";
         token.sv = (user as { sv?: number }).sv ?? 0;
       }
       // Landlord tokens minted before this field existed carry no kind. They
       // were landlords, so that is what they stay — and it means nobody gets
-      // signed out by the deploy. A tenant token can only come from the
-      // provider above, which always stamps "tenant", so nothing gains access
-      // by having the field missing.
-      if (token.kind !== "tenant") token.kind = "user";
+      // signed out by the deploy. A tenant or owner token can only come from
+      // the providers above, which always stamp their kind, so nothing gains
+      // access by having the field missing.
+      if (token.kind !== "tenant" && token.kind !== "owner") token.kind = "user";
       // Likewise a token from before sessionVersion existed: version 0, which
       // is every account's starting value, so it stays valid until the
       // account's first "sign out everywhere".
@@ -219,7 +258,7 @@ export const authOptions: AuthOptions = {
       return token;
     },
     async session({ session, token }) {
-      session.kind = token.kind === "tenant" ? "tenant" : "user";
+      session.kind = token.kind === "tenant" || token.kind === "owner" ? token.kind : "user";
       session.sv = typeof token.sv === "number" ? token.sv : 0;
       if (session.user) {
         session.user.id = token.id as string;

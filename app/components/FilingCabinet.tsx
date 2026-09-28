@@ -13,7 +13,7 @@ import { KINDS, expiryLabel, expiryState, formatSize, type DocumentDTO } from "@
 
 export type CabinetProperty = ScanProperty & { companyId: string; companyName: string };
 
-const EMPTY_EDIT = { id: "", title: "", kind: "Other", expiresOn: "", note: "", shared: false, tenant: false };
+const EMPTY_EDIT = { id: "", title: "", kind: "Other", expiresOn: "", note: "", shared: false, sharedWithOwners: false, tenant: false, onProperty: false };
 
 /**
  * Every document a company keeps, in one place: a drawer per property, a
@@ -54,7 +54,7 @@ export default function FilingCabinet({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
-  const [upload, setUpload] = useState({ propertyId: property?.id ?? properties[0]?.id ?? "", tenantId: "", title: "", kind: "Lease", expiresOn: "", shared: false });
+  const [upload, setUpload] = useState({ propertyId: property?.id ?? properties[0]?.id ?? "", tenantId: "", title: "", kind: "Lease", expiresOn: "", shared: false, sharedWithOwners: false });
   const fileRef = useRef<HTMLInputElement>(null);
 
   const propertyName = (id: string) => properties.find((p) => p.id === id)?.name ?? "";
@@ -99,6 +99,7 @@ export default function FilingCabinet({
     form.set("kind", upload.kind);
     form.set("expiresOn", upload.expiresOn);
     form.set("shared", upload.shared && upload.tenantId ? "1" : "0");
+    form.set("sharedWithOwners", upload.sharedWithOwners ? "1" : "0");
     setBusy(true);
     setError("");
     const res = await fetch("/api/documents", { method: "POST", body: form });
@@ -119,7 +120,7 @@ export default function FilingCabinet({
     const res = await fetch(`/api/documents/${editing.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: editing.title, kind: editing.kind, expiresOn: editing.expiresOn, note: editing.note, shared: editing.shared }),
+      body: JSON.stringify({ title: editing.title, kind: editing.kind, expiresOn: editing.expiresOn, note: editing.note, shared: editing.shared, sharedWithOwners: editing.sharedWithOwners }),
     });
     const data = await res.json().catch(() => ({}));
     setBusy(false);
@@ -163,7 +164,7 @@ export default function FilingCabinet({
       className={styles.btn}
       onClick={() => {
         setError("");
-        setUpload((u) => ({ ...u, propertyId: property?.id ?? u.propertyId ?? properties[0]?.id ?? "", tenantId: "", title: "", expiresOn: "", shared: false }));
+        setUpload((u) => ({ ...u, propertyId: property?.id ?? u.propertyId ?? properties[0]?.id ?? "", tenantId: "", title: "", expiresOn: "", shared: false, sharedWithOwners: false }));
         setAdding(true);
       }}
       disabled={properties.length === 0}
@@ -254,6 +255,7 @@ export default function FilingCabinet({
                     {d.size ? ` · ${formatSize(d.size)}` : ""}
                     {` · ${formatDay(d.createdAt.slice(0, 10))}`}
                     {d.shared ? " · on their portal" : ""}
+                    {d.sharedWithOwners ? " · shown to owners" : ""}
                   </span>
                 </a>
                 {d.expiresOn && (
@@ -269,7 +271,7 @@ export default function FilingCabinet({
                   className={styles.portalLink}
                   onClick={() => {
                     setError("");
-                    setEditing({ id: d.id, title: d.title, kind: d.kind, expiresOn: d.expiresOn, note: d.note, shared: d.shared, tenant: Boolean(d.tenantId) });
+                    setEditing({ id: d.id, title: d.title, kind: d.kind, expiresOn: d.expiresOn, note: d.note, shared: d.shared, sharedWithOwners: d.sharedWithOwners, tenant: Boolean(d.tenantId), onProperty: Boolean(d.propertyId) });
                   }}
                 >
                   Edit
@@ -362,6 +364,10 @@ export default function FilingCabinet({
                   Show it on their portal so they can download it
                 </label>
               )}
+              <label className={`${styles.checkboxField} ${styles.span4}`}>
+                <input type="checkbox" checked={upload.sharedWithOwners} onChange={(e) => setUpload((u) => ({ ...u, sharedWithOwners: e.target.checked }))} />
+                Show to property owners (owner portal)
+              </label>
             </div>
             <div className={styles.formFoot}>
               <button type="button" className={`${styles.btn} ${styles.quiet}`} onClick={() => setAdding(false)}>
@@ -405,6 +411,12 @@ export default function FilingCabinet({
               <label className={`${styles.checkboxField} ${styles.span4}`}>
                 <input type="checkbox" checked={editing.shared} onChange={(e) => setEditing((d) => ({ ...d, shared: e.target.checked }))} />
                 Show it on their portal so they can download it
+              </label>
+            )}
+            {editing.onProperty && (
+              <label className={`${styles.checkboxField} ${styles.span4}`}>
+                <input type="checkbox" checked={editing.sharedWithOwners} onChange={(e) => setEditing((d) => ({ ...d, sharedWithOwners: e.target.checked }))} />
+                Show to property owners (owner portal)
               </label>
             )}
           </div>

@@ -326,6 +326,7 @@ type DocumentRow = {
   expiresOn: Date | null;
   note: string | null;
   shared: boolean;
+  sharedWithOwners: boolean;
   tenant: { name: string } | null;
   vendor: { name: string } | null;
 };
@@ -347,9 +348,32 @@ function serializeDocuments(rows: DocumentRow[], key: FileKey) {
     expiresOn: d.expiresOn ? d.expiresOn.toISOString().slice(0, 10) : "",
     note: d.note ?? "",
     shared: d.shared,
+    // Whether the property's owners (owner portal) may read it.
+    sharedWithOwners: d.sharedWithOwners,
     tenantName: d.tenant?.name ?? "",
     vendorName: d.vendor?.name ?? "",
   }));
+}
+
+/**
+ * Property owners (the owner portal) by email, with their properties as
+ * positions in the company's `properties`. No password: a restored owner
+ * is re-invited and picks a new one, which is also the right thing when
+ * the backup came from someone else's export.
+ */
+function serializePropertyOwners(properties: { ownerAccess: { owner: { email: string; name: string; monthlyEmail: boolean } }[] }[]) {
+  const out = new Map<string, { email: string; name: string; monthlyEmail: boolean; properties: number[] }>();
+  properties.forEach((p, at) => {
+    for (const a of p.ownerAccess) {
+      let entry = out.get(a.owner.email);
+      if (!entry) {
+        entry = { email: a.owner.email, name: a.owner.name, monthlyEmail: a.owner.monthlyEmail, properties: [] };
+        out.set(a.owner.email, entry);
+      }
+      entry.properties.push(at);
+    }
+  });
+  return Array.from(out.values());
 }
 
 const DOCUMENT_INCLUDE = {
@@ -473,6 +497,7 @@ export async function GET() {
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
           requests: { ...REQUEST_INCLUDE, where: { unitId: null } },
           documents: DOCUMENT_INCLUDE,
+          ownerAccess: { include: { owner: { select: { email: true, name: true, monthlyEmail: true } } } },
           units: {
             orderBy: { createdAt: "asc" },
             include: {
@@ -527,6 +552,8 @@ export async function GET() {
         note: v.note ?? "",
       })),
       documents: serializeDocuments(c.documents, key),
+      // Who has owner-portal access to which of these properties.
+      propertyOwners: serializePropertyOwners(c.properties),
       properties: c.properties.map((p) => {
         const loanIndex: LoanIndex = new Map(p.loans.map((l, i) => [l.id, i]));
         return {

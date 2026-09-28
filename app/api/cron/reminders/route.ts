@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 import { runReminders } from "@/lib/reminders-db";
+import { runOwnerStatements } from "@/lib/owners-db";
 import { siteOrigin } from "@/lib/site";
 
 /**
@@ -24,7 +25,15 @@ export async function GET(req: Request) {
   if (!authorized(req.headers.get("authorization"), secret)) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
-  const report = await runReminders(new Date(), siteOrigin(req.url));
-  console.log("Reminders", JSON.stringify(report));
-  return NextResponse.json(report);
+  const now = new Date();
+  const origin = siteOrigin(req.url);
+  const report = await runReminders(now, origin);
+  // Property owners who asked for one get last month's statement by email
+  // once it's complete; claimed under its own key like everything else.
+  const owners = await runOwnerStatements(now, origin).catch((err) => {
+    console.error("Owner statements", err);
+    return { error: "failed" };
+  });
+  console.log("Reminders", JSON.stringify({ ...report, owners }));
+  return NextResponse.json({ ...report, owners });
 }

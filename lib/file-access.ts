@@ -2,6 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireCompany, requireProperty } from "@/lib/access";
 import { requireTenantSession } from "@/lib/tenant-access";
+import { requireOwnerSession } from "@/lib/owner-access";
+import { ownerMayViewDocument } from "@/lib/owners";
 import type { FileKind } from "@/lib/file-links";
 
 export type ViewableFile = { url: string; filename: string };
@@ -10,11 +12,13 @@ export type ViewableFile = { url: string; filename: string };
  * The file behind /api/files/<kind>/<id>, if whoever is signed in may see it.
  *
  *   attachment — a receipt on a ledger entry: the landlord team for that
- *                property. Tenants never.
+ *                property. Tenants and owners never.
  *   photo      — a repair photo: the landlord team for that property, or the
- *                tenant who filed the report.
+ *                tenant who filed the report. Owners never.
  *   document   — the landlord team for that LLC, or the tenant it's filed
- *                under, and only once it's been shared with them.
+ *                under once it's been shared with them, or a property owner
+ *                of the property it's filed under once it's been shared
+ *                with owners.
  *   message    — something attached to a message: the landlord team for
  *                that LLC, or the tenant whose thread it's in.
  *
@@ -25,7 +29,8 @@ export async function viewableFile(kind: string, id: string): Promise<ViewableFi
   if (!id || id.length > 64) return null;
   const userId = await getCurrentUserId();
   const tenant = userId ? null : await requireTenantSession();
-  if (!userId && !tenant) return null;
+  const owner = userId || tenant ? null : await requireOwnerSession();
+  if (!userId && !tenant && !owner) return null;
 
   switch (kind as FileKind) {
     case "attachment": {
@@ -49,18 +54,22 @@ export async function viewableFile(kind: string, id: string): Promise<ViewableFi
       if (!p) return null;
       const allowed = userId
         ? await requireCompany(userId, p.request.property.companyId)
-        : p.request.tenantId === tenant!.tenant.id;
+        : tenant
+          ? p.request.tenantId === tenant.tenant.id
+          : false;
       return allowed ? { url: p.url, filename: p.filename } : null;
     }
     case "document": {
       const d = await prisma.document.findUnique({
         where: { id },
-        select: { url: true, filename: true, companyId: true, tenantId: true, shared: true },
+        select: { url: true, filename: true, companyId: true, propertyId: true, tenantId: true, shared: true, sharedWithOwners: true },
       });
       if (!d) return null;
       const allowed = userId
         ? await requireCompany(userId, d.companyId)
-        : d.shared && d.tenantId === tenant!.tenant.id;
+        : tenant
+          ? d.shared && d.tenantId === tenant.tenant.id
+          : ownerMayViewDocument(d, owner!.propertyIds);
       return allowed ? { url: d.url, filename: d.filename } : null;
     }
     case "message": {

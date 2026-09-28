@@ -53,3 +53,14 @@ export async function getCurrentTenantSession(): Promise<{ accountId: string; sv
 export async function getCurrentTenantAccountId(): Promise<string | null> {
   return (await getCurrentTenantSession())?.accountId ?? null;
 }
+
+/**
+ * The property owner's id from the session, if the session is an owner's.
+ * requireOwnerSession (lib/owner-access) does the database checks —
+ * account still exists, sessionVersion unchanged — and loads their scope.
+ */
+export async function getCurrentOwnerSession(): Promise<{ ownerId: string; sv: number } | null> {
+  const session = await getServerSession(authOptions);
+  if (session?.kind !== "owner" || !session.user?.id) return null;
+  return { ownerId: session.user.id, sv: session.sv ?? 0 };
+}

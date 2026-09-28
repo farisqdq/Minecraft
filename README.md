@@ -317,6 +317,55 @@ A role column on a shared `User` table would put the two one missed `if`
 apart. This way there is no check to miss, because the landlord queries never
 join to the tenant table at all.
 
+## Owner portal
+
+A property owner or investor who is **not** on your team — someone who put
+money into a house and wants to see how it's doing — can be given a
+read-only login of their own at `/owners`. From **Team → Property owners**
+(`/dashboard/owners`), an owner of the LLC types their email, ticks the
+properties they may see, and sends the invite. The link goes by email when
+the site can send it; either way it's shown on screen to copy and send
+yourself. It works once, for 14 days, and **Resend** retires it for a fresh
+one. Only the hash of the link's token is stored, like a password reset.
+
+The invitee sets a name and password at `/owners/accept` and lands on the
+portal. Someone who already has an owner login (another LLC invited them,
+or you're adding properties) enters that password instead, and the new
+properties join what they had. You can **Edit** which of the LLC's
+properties each owner sees at any time, and **Remove** takes the access
+away — and the login with it, if that leaves them nothing anywhere.
+
+Signed in, an owner sees, for their properties only:
+
+- **Overview** — the rent roll and occupancy. Each unit shows its asking
+  rent, whether it's let, the tenant's *first name* and the month their
+  lease ends, and how long a vacant place has stood empty. Nothing else
+  about a tenant: not a surname, phone, email, deposit, balance or notes.
+  Below it, open repairs (title, category, status, when it was opened — no
+  reporter, no thread, no vendor or price) and the documents you've ticked
+  **Show to property owners** on in the filing cabinet.
+- **Income & expenses** — the last twelve months by month and the year to
+  date, per property and all together.
+- **Statement** — one month's owner statement: rent collected, other income
+  (deposit money kept at a move-out), expenses by category, net; per
+  property and combined, with **Download PDF**. The PDF is a real text PDF
+  (`lib/pdf-text.ts`, base-14 Helvetica, no dependencies).
+- **Account** — a switch for a monthly email when each statement is ready
+  (goes out on the 2nd via the daily reminders run, once per owner per
+  month), and **Sign out everywhere**.
+
+Owners are `PropertyOwner` rows — a third table, a third credentials
+provider (`"owner"`) and a third session `kind`, for the same reason
+tenants are separate: the landlord's queries never join to it. `proxy.ts`
+keeps `/owners` and `/api/owners` to owner sessions and everything else
+away from them; `requireOwnerSession()` resolves the session into a list of
+property ids and every owner query filters by that list. What an owner may
+know about a tenant is one pure function, `occupantForOwner` in
+`lib/owners.ts`, with a test that pins its shape. Sign-in throttling and
+trusted devices work as for the other two doors. Backups carry owners by
+email with their properties by position; a restored owner has no password
+and is re-invited from the Property owners page.
+
 ## Repairs
 
 A tenant reports what's wrong, where it is, how urgent, and up to six photos.

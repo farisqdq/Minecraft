@@ -31,6 +31,7 @@ export function serializeDocument(d: Row): DocumentDTO {
     expiresOn: day(d.expiresOn),
     note: d.note ?? "",
     shared: d.shared,
+    sharedWithOwners: d.sharedWithOwners,
     createdAt: d.createdAt.toISOString(),
   };
 }

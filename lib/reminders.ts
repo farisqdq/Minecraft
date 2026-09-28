@@ -12,7 +12,15 @@ import { monthName } from "./notices.ts";
 import { formatDay } from "./lease.ts";
 import type { Notification } from "./notify.ts";
 
-export type ReminderKind = "rent-due" | "rent-late" | "lease-end" | "doc-expiry" | "maintenance" | "message" | "test";
+export type ReminderKind =
+  | "rent-due"
+  | "rent-late"
+  | "lease-end"
+  | "doc-expiry"
+  | "maintenance"
+  | "message"
+  | "owner-statement"
+  | "test";
 
 export const KIND_LABEL: Record<ReminderKind, string> = {
   "rent-due": "Rent due soon",
@@ -21,6 +29,7 @@ export const KIND_LABEL: Record<ReminderKind, string> = {
   "doc-expiry": "Document expiring",
   maintenance: "Repair update",
   message: "New message",
+  "owner-statement": "Owner statement",
   test: "Test",
 };
 

@@ -17,14 +17,16 @@ import { cookieFrom, readTrustToken, trustCookieName } from "@/lib/device-trust"
  */
 export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
-  const kind: ThrottleKind = body?.kind === "tenant" ? "tenant" : "user";
+  const kind: ThrottleKind = body?.kind === "tenant" ? "tenant" : body?.kind === "owner" ? "owner" : "user";
   const email = typeof body?.email === "string" ? body.email.trim().toLowerCase().slice(0, 200) : "";
   if (!email) return NextResponse.json({ lockedForSeconds: 0 });
 
   const account =
     kind === "user"
       ? await prisma.user.findUnique({ where: { email }, select: { sessionVersion: true } })
-      : await prisma.tenantAccount.findUnique({ where: { email }, select: { sessionVersion: true } });
+      : kind === "owner"
+        ? await prisma.propertyOwner.findUnique({ where: { email }, select: { sessionVersion: true } })
+        : await prisma.tenantAccount.findUnique({ where: { email }, select: { sessionVersion: true } });
   const trustedSince = account
     ? readTrustToken({
         secret: process.env.NEXTAUTH_SECRET ?? "",

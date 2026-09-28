@@ -16,7 +16,7 @@ import {
 /** Something a document can be filed against: "property:ID", "tenant:ID" or "vendor:ID". */
 export type DocTarget = { key: string; label: string };
 
-const EMPTY_EDIT = { id: "", title: "", kind: "Other", expiresOn: "", note: "", shared: false, tenant: false };
+const EMPTY_EDIT = { id: "", title: "", kind: "Other", expiresOn: "", note: "", shared: false, sharedWithOwners: false, tenant: false, onProperty: false };
 
 /**
  * A list of documents with their expiry dates, and the forms to add, change
@@ -54,15 +54,18 @@ export default function DocumentsPanel({
     expiresOn: "",
     note: "",
     shared: false,
+    sharedWithOwners: false,
   });
   const fileRef = useRef<HTMLInputElement>(null);
 
   const sorted = useMemo(() => byUrgency(docs, today), [docs, today]);
   const uploadingForTenant = upload.target.startsWith("tenant:");
+  // A vendor's paperwork is the LLC's business, not an investor's.
+  const uploadingForVendor = upload.target.startsWith("vendor:");
 
   function openUpload() {
     setError("");
-    setUpload((u) => ({ ...u, target: u.target || targets[0]?.key || "", title: "", expiresOn: "", note: "", shared: false }));
+    setUpload((u) => ({ ...u, target: u.target || targets[0]?.key || "", title: "", expiresOn: "", note: "", shared: false, sharedWithOwners: false }));
     setAdding(true);
   }
 
@@ -82,6 +85,7 @@ export default function DocumentsPanel({
     form.set("expiresOn", upload.expiresOn);
     form.set("note", upload.note);
     form.set("shared", upload.shared && kind === "tenant" ? "1" : "0");
+    form.set("sharedWithOwners", upload.sharedWithOwners && kind !== "vendor" ? "1" : "0");
 
     setBusy(true);
     setError("");
@@ -110,6 +114,7 @@ export default function DocumentsPanel({
         expiresOn: editing.expiresOn,
         note: editing.note,
         shared: editing.shared,
+        sharedWithOwners: editing.sharedWithOwners,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -161,6 +166,7 @@ export default function DocumentsPanel({
                     {d.kind}
                     {targets.length > 1 ? ` · ${d.ownerLabel}` : ""}
                     {d.shared ? " · on their portal" : ""}
+                    {d.sharedWithOwners ? " · shown to owners" : ""}
                   </span>
                 </a>
                 {d.expiresOn && (
@@ -184,7 +190,9 @@ export default function DocumentsPanel({
                       expiresOn: d.expiresOn,
                       note: d.note,
                       shared: d.shared,
+                      sharedWithOwners: d.sharedWithOwners,
                       tenant: Boolean(d.tenantId),
+                      onProperty: Boolean(d.propertyId),
                     });
                   }}
                 >
@@ -293,6 +301,16 @@ export default function DocumentsPanel({
                   Show it on their portal so they can download it
                 </label>
               )}
+              {!uploadingForVendor && (
+                <label className={`${styles.checkboxField} ${styles.span4}`}>
+                  <input
+                    type="checkbox"
+                    checked={upload.sharedWithOwners}
+                    onChange={(e) => setUpload((u) => ({ ...u, sharedWithOwners: e.target.checked }))}
+                  />
+                  Show to property owners (owner portal)
+                </label>
+              )}
             </div>
             <div className={styles.formFoot}>
               <button type="button" className={`${styles.btn} ${styles.quiet}`} onClick={() => setAdding(false)}>
@@ -365,6 +383,16 @@ export default function DocumentsPanel({
                   onChange={(e) => setEditing((d) => ({ ...d, shared: e.target.checked }))}
                 />
                 Show it on their portal so they can download it
+              </label>
+            )}
+            {editing.onProperty && (
+              <label className={`${styles.checkboxField} ${styles.span4}`}>
+                <input
+                  type="checkbox"
+                  checked={editing.sharedWithOwners}
+                  onChange={(e) => setEditing((d) => ({ ...d, sharedWithOwners: e.target.checked }))}
+                />
+                Show to property owners (owner portal)
               </label>
             )}
           </div>

@@ -37,14 +37,14 @@ model User {
   isAdmin           Boolean   @default(false)
 
   memberships         CompanyMember[]
-  invitesSent         Invite[]            @relation("InviteSender")
+  invitesSent         Invite[]              @relation("InviteSender")
   createdProperties   Property[]
   createdTransactions Transaction[]
   uploadedAttachments Attachment[]
   createdRecurring    RecurringExpense[]
   createdTenants      Tenant[]
   RentChange          RentChange[]
-  tenantInvitesSent   TenantInvite[]      @relation("TenantInviteSender")
+  tenantInvitesSent   TenantInvite[]        @relation("TenantInviteSender")
   requestUpdates      MaintenanceUpdate[]
   messages            Message[]
   requestPhotos       MaintenancePhoto[]
@@ -60,6 +60,7 @@ model User {
   adminActions        AdminLog[]
   passwordResets      PasswordReset[]
   pushSubscriptions   PushSubscription[]
+  ownerInvitesSent    PropertyOwnerInvite[] @relation("PropertyOwnerInviteSender")
 }
 
 model Company {
@@ -82,6 +83,7 @@ model Company {
   threads       MessageThread[]
   /// The company-wide late-fee policy (a15); absent means no automatic late fees.
   lateFeePolicy LateFeePolicy?
+  ownerInvites  PropertyOwnerInvite[]
 }
 
 model CompanyMember {
@@ -138,6 +140,7 @@ model Property {
   documents         Document[]
   loans             Loan[]
   assets            DepreciableAsset[]
+  ownerAccess       PropertyOwnerAccess[]
 
   @@index([companyId])
 }
@@ -489,33 +492,36 @@ model Vendor {
 // it, so the property page, the tenant card and the vendor book can each
 // show what belongs to them.
 model Document {
-  id           String    @id @default(cuid())
-  companyId    String
-  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  propertyId   String?
-  property     Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  tenantId     String?
-  tenant       Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
-  vendorId     String?
-  vendor       Vendor?   @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-  title        String
+  id               String    @id @default(cuid())
+  companyId        String
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  propertyId       String?
+  property         Property? @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  tenantId         String?
+  tenant           Tenant?   @relation(fields: [tenantId], references: [id], onDelete: SetNull)
+  vendorId         String?
+  vendor           Vendor?   @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  title            String
   /// One of lib/documents.ts KINDS.
-  kind         String    @default("Other")
-  url          String
-  pathname     String
-  filename     String
-  contentType  String
-  size         Int
+  kind             String    @default("Other")
+  url              String
+  pathname         String
+  filename         String
+  contentType      String
+  size             Int
   /// The day it stops being valid, if it ever does. Stored as a UTC midnight.
-  expiresOn    DateTime?
-  note         String?
+  expiresOn        DateTime?
+  note             String?
   /// Tenant documents only: whether it shows on that tenant's portal. Off
   /// unless someone turns it on — a lease is theirs to read, the landlord's
   /// notes on their application are not.
-  shared       Boolean   @default(false)
-  uploadedById String?
-  uploadedBy   User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
-  createdAt    DateTime  @default(now())
+  shared           Boolean   @default(false)
+  /// Property documents only: whether the property's owners (the owner
+  /// portal) may read it. Off unless someone turns it on, like `shared`.
+  sharedWithOwners Boolean   @default(false)
+  uploadedById     String?
+  uploadedBy       User?     @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
 
   @@index([companyId])
   @@index([propertyId])
@@ -1037,4 +1043,71 @@ model LateFeePolicy {
   capPercent  Float    @default(12)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+/// ---- Owner portal (a17) ----
+
+/// A property owner or investor who is not on the landlord's team: someone
+/// who put money into a house and wants to see how it's doing, not someone
+/// who records rent. Their own table, credentials provider and session
+/// kind, for the same reason tenants have theirs (see TenantAccount): the
+/// landlord's queries never join to it, so there is no role check to miss.
+/// Not to be confused with CompanyMember.role = "owner", which is the
+/// company-admin role on the landlord side.
+///
+/// One account per email across the whole site; what they can see is the
+/// set of PropertyOwnerAccess rows, which may span more than one LLC.
+model PropertyOwner {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  /// Empty until they've accepted an invite and chosen a password — an
+  /// owner restored from a backup can't sign in until re-invited.
+  passwordHash   String
+  /// As on User: bump it and every session for this login ends.
+  sessionVersion Int       @default(0)
+  /// Whether to email them when a month's statement is ready.
+  monthlyEmail   Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  lastLoginAt    DateTime?
+
+  access PropertyOwnerAccess[]
+}
+
+/// One property an owner may read. Everything the portal shows is scoped
+/// by these rows and nothing else.
+model PropertyOwnerAccess {
+  id         String        @id @default(cuid())
+  ownerId    String
+  owner      PropertyOwner @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  propertyId String
+  property   Property      @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  createdAt  DateTime      @default(now())
+
+  @@unique([ownerId, propertyId])
+  @@index([propertyId])
+}
+
+/// The only way an owner gets access: a landlord who is an owner of the LLC
+/// invites an email address to some of its properties. The link carries a
+/// random token; only its hash is stored, like a password reset. It lives
+/// 14 days, works once, and a re-send retires the old one.
+model PropertyOwnerInvite {
+  id          String    @id @default(cuid())
+  companyId   String
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  email       String
+  /// What the landlord called them; the owner can change it when accepting.
+  name        String?
+  tokenHash   String    @unique
+  /// JSON array of property ids in this company. Parsed by lib/owners.ts.
+  propertyIds String    @default("[]")
+  invitedById String?
+  invitedBy   User?     @relation("PropertyOwnerInviteSender", fields: [invitedById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+
+  @@index([companyId])
+  @@index([email])
 }

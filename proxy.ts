@@ -7,9 +7,9 @@ import { buildCsp, makeNonce } from "./lib/csp";
  * Runs in front of every page and API route. Three jobs, in this order:
  *
  *   1. Refuse changes that come from another website (forged requests).
- *   2. Keep each kind of session to its own half of the app: a tenant token
- *      never reaches landlord code and vice versa. Route handlers check
- *      again — this is the outer wall, not the only lock.
+ *   2. Keep each kind of session to its own part of the app: a tenant or
+ *      owner token never reaches landlord code and vice versa. Route
+ *      handlers check again — this is the outer wall, not the only lock.
  *   3. Give each page a fresh random nonce and a Content-Security-Policy
  *      that only lets scripts carrying it run.
  */
@@ -43,18 +43,29 @@ const LANDLORD_AREA = [
 const TENANT_AREA = ["/portal", "/api/portal"];
 const TENANT_PUBLIC = ["/portal/login", "/portal/signup", "/api/portal/signup"];
 
-/** Files and push devices: either kind of session; the route decides whose is whose. */
+/** The owner portal (property owners and investors). Login and invite acceptance are public. */
+const OWNER_AREA = ["/owners", "/api/owners"];
+const OWNER_PUBLIC = ["/owners/login", "/owners/accept", "/api/owners/accept"];
+
+/** Files and push devices: any kind of session; the route decides whose is whose. */
 const EITHER_AREA = ["/api/files", "/api/push"];
 
-type Area = "landlord" | "tenant" | "either" | "public";
+type Area = "landlord" | "tenant" | "owner" | "either" | "public";
 
 function areaOf(path: string): Area {
-  if (under(path, TENANT_PUBLIC)) return "public";
+  if (under(path, TENANT_PUBLIC) || under(path, OWNER_PUBLIC)) return "public";
   if (under(path, TENANT_AREA)) return "tenant";
+  if (under(path, OWNER_AREA)) return "owner";
   if (under(path, LANDLORD_AREA)) return "landlord";
   if (under(path, EITHER_AREA)) return "either";
   return "public";
 }
+
+const LOGIN_FOR: Record<Exclude<Area, "public" | "either">, string> = {
+  landlord: "/login",
+  tenant: "/portal/login",
+  owner: "/owners/login",
+};
 
 export default async function proxy(req: NextRequest) {
   const path = req.nextUrl.pathname;
@@ -80,16 +91,18 @@ export default async function proxy(req: NextRequest) {
   if (area !== "public") {
     const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
     // A token without a kind predates the field and was a landlord's.
-    const kind = token ? (token.kind === "tenant" ? "tenant" : "user") : null;
+    const kind = token ? (token.kind === "tenant" || token.kind === "owner" ? token.kind : "user") : null;
     const allowed =
       kind !== null &&
-      (area === "either" || (area === "tenant" ? kind === "tenant" : kind === "user"));
+      (area === "either" ||
+        (area === "tenant" ? kind === "tenant" : area === "owner" ? kind === "owner" : kind === "user"));
     if (!allowed) {
       if (path.startsWith("/api/")) {
         return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
       }
-      const login = new URL(area === "tenant" ? "/portal/login" : "/login", req.url);
-      if (area !== "tenant") login.searchParams.set("callbackUrl", `${path}${req.nextUrl.search}`);
+      // A shared route with no session at all goes to the landlord login, as before.
+      const login = new URL(LOGIN_FOR[area === "either" ? "landlord" : area], req.url);
+      if (area === "landlord" || area === "either") login.searchParams.set("callbackUrl", `${path}${req.nextUrl.search}`);
       return NextResponse.redirect(login);
     }
   }

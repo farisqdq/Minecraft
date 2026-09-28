@@ -35,6 +35,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   if (typeof body?.note === "string") data.note = body.note.trim().slice(0, 500) || null;
   if ("shared" in (body ?? {})) data.shared = Boolean(doc.tenantId) && body.shared === true;
+  if ("sharedWithOwners" in (body ?? {})) data.sharedWithOwners = Boolean(doc.propertyId) && body.sharedWithOwners === true;
 
   const fresh = await prisma.document.update({ where: { id }, data, include: documentInclude });
   return NextResponse.json(serializeDocument(fresh));
