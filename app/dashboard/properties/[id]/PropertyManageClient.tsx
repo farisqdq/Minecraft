@@ -1277,10 +1277,14 @@ export default function PropertyManageClient({
       <section className={styles.block}>
         <div className={styles.blockHead}>
           <h2>Documents</h2>
+          <Link href={`/dashboard/properties/${property.id}/files`} className={styles.portalLink}>
+            Open the filing cabinet →
+          </Link>
         </div>
         <p className={styles.helpText} style={{ marginTop: -6 }}>
           Leases, insurance certificates, licences and inspections — with the date each runs
-          out. Anything expiring in the next 30 days shows on the overview.
+          out. Anything expiring in the next 30 days shows on the overview. To photograph
+          paper with your phone and save it as a PDF, open the filing cabinet.
         </p>
         <DocumentsPanel
           initial={initialDocuments}

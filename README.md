@@ -469,6 +469,41 @@ Private links in a backup are signed for the account that exported it: the
 same account restoring its own backup gets its files back, but anyone else
 importing a copy of it does not.
 
+## The filing cabinet
+
+Every document across your properties lives in one place — the **Files** tab —
+and each property has its own drawer at `/dashboard/properties/<id>/files`
+(there's a link at the top of the property's Documents section). Filter by
+kind (lease, insurance certificate, tax, receipt, statement, notice, photo…)
+or by property, search by name, tenant or note, open a file in a new tab,
+download it, rename or refile it, and delete it (owners only — it's the only
+copy). Documents filed against a tenant can still be shown on their portal.
+
+**Scan** turns paper into a PDF with a phone. Tap Scan, take a photo of each
+page (or choose photos already taken), and each one is cleaned up in the
+browser before anything is uploaded:
+
+- turned the right way up, from the photo's own orientation tag;
+- cropped to the sheet — the paper is whatever's clearly brighter than the
+  desk around the edge of the photo, so a shadow across the page doesn't cut
+  the crop short (turn "Crop to the page" off for a photo that's already
+  tight);
+- **Color**: the contrast stretched so grey paper reads white and faint ink
+  dark; **Black & white**: each pixel judged against its neighbourhood, so a
+  page half in shadow comes out evenly black-on-white;
+- shrunk to about 150 dpi and re-encoded until all the pages fit the 4 MB
+  upload — a ten-page lease gets roughly 390 KB a page.
+
+Pages can be rotated, reordered and removed before saving. Saving builds the
+PDF in the browser (`lib/pdf.ts` writes the file directly — each page is the
+JPEG embedded as-is, no library) and files it against the property or tenant
+you choose, under the kind you choose, named "Lease – 12 Oak St – Sep 28, 2026"
+unless you type something else. Up to 20 pages a scan; a longer document goes
+in as two. The picture arithmetic is in `lib/scan.ts` and the PDF writer in
+`lib/pdf.ts`, both pure and covered by `tests/scan.test.ts` and
+`tests/pdf.test.ts`. What the server receives is an ordinary PDF upload, with
+the same type sniffing and size limit as any other document.
+
 ## Installing it on a phone
 
 Most of the logging happens standing in a doorway, so the app ships a web

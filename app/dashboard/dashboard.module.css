@@ -3381,3 +3381,197 @@ tr:hover .rowDel {
     gap: 2px;
   }
 }
+
+/* ---------- Filing cabinet ---------- */
+
+.cabinetTools {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.cabinetSearch,
+.cabinetSelect {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink);
+  min-width: 0;
+}
+
+.cabinetSearch {
+  flex: 1 1 220px;
+}
+
+.cabinetSelect {
+  flex: 0 1 220px;
+}
+
+/* The page head's buttons are hidden on a phone; these take their place. */
+.cabinetActions {
+  display: none;
+  gap: 8px;
+  flex: 1 0 100%;
+}
+
+@media (max-width: 720px) {
+  .cabinetActions {
+    display: flex;
+  }
+  .cabinetActions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+}
+
+.chipRow {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chipRow::-webkit-scrollbar {
+  display: none;
+}
+
+.cabinetEmpty {
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  padding: 28px 18px;
+  text-align: center;
+}
+
+.cabinetEmpty p {
+  margin: 0 0 6px;
+}
+
+/* ---------- Scanner ---------- */
+
+.scanGrid {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 12px;
+}
+
+.scanPage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.scanThumb {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+}
+
+.scanThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: var(--surface-3);
+}
+
+.scanThumbText {
+  font-size: 22px;
+  color: var(--muted);
+}
+
+.scanNumber {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--ink);
+  color: var(--bg);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 20px;
+  text-align: center;
+}
+
+.scanTools {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+}
+
+.scanTools button {
+  font: inherit;
+  font-size: 15px;
+  line-height: 1;
+  min-height: 34px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+  cursor: pointer;
+}
+
+.scanTools button:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+.scanTools button[disabled] {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.scanTools .scanRemove {
+  color: var(--expense);
+}
+
+.scanError {
+  margin: 0;
+  font-size: 12px;
+  color: var(--expense);
+}
+
+.scanAdd {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.scanAdd .helpText {
+  margin: 0;
+}
+
+.scanOptions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.scanOptionLabel {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-weight: 500;
+}

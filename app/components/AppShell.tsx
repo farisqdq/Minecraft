@@ -110,10 +110,21 @@ function IconAdmin(props: { className?: string }) {
   );
 }
 
+function IconFiles(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M3.5 7.5a1.5 1.5 0 0 1 1.5-1.5h4.2l2 2.2H19a1.5 1.5 0 0 1 1.5 1.5v8.8a1.5 1.5 0 0 1-1.5 1.5H5a1.5 1.5 0 0 1-1.5-1.5Z" />
+      <path d="M3.5 12h17" />
+    </svg>
+  );
+}
+
 const NAV = [
   { href: "/dashboard", label: "Overview", short: "Home", Icon: IconHome },
   { href: "/dashboard/calendar", label: "Calendar", short: "Calendar", Icon: IconCalendar },
   { href: "/dashboard/repairs", label: "Repairs", short: "Repairs", Icon: IconRepairs, badge: true },
+  { href: "/dashboard/files", label: "Files", short: "Files", Icon: IconFiles },
   { href: "/dashboard/team", label: "Team", short: "Team", Icon: IconTeam },
   { href: "/dashboard/backup", label: "Backup", short: "Backup", Icon: IconBackup },
   { href: "/dashboard/export", label: "Export", short: "Export", Icon: IconExport },
@@ -169,9 +180,9 @@ export default function AppShell({
 
           <nav className={styles.nav} aria-label="Sections">
             {nav.map(({ href, label, Icon, badge }) => (
-              <Link key={href} href={href} className={`${styles.navLink} ${isOn(href) ? styles.on : ""}`}>
+              <Link key={href} href={href} className={`${styles.navLink} ${isOn(href) ? styles.on : ""}`} title={label}>
                 <Icon className={styles.navIcon} />
-                {label}
+                <span className={styles.navLabel}>{label}</span>
                 {badge && openRepairs > 0 && <span className={styles.badge}>{openRepairs}</span>}
               </Link>
             ))}

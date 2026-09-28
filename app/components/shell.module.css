@@ -404,6 +404,41 @@
   display: none;
 }
 
+/* A laptop screen: seven sections, the search box and the account controls
+   only fit the bar with the person's name and some padding given up; on a
+   small laptop the sections go down to their icons (the tab bar's, so they
+   read the same), with the name as a tooltip. */
+@media (max-width: 1180px) and (min-width: 721px) {
+  .navLabel {
+    display: none;
+  }
+  .navLink {
+    padding: 8px;
+  }
+  .navIcon {
+    width: 19px;
+    height: 19px;
+  }
+}
+
+@media (max-width: 1340px) and (min-width: 721px) {
+  .bar,
+  .barInner {
+    gap: 12px;
+  }
+  .who {
+    display: none;
+  }
+  .navLink {
+    padding-left: 9px;
+    padding-right: 9px;
+    gap: 6px;
+  }
+  .searchField {
+    width: 150px;
+  }
+}
+
 @media (max-width: 720px) {
   .nav,
   .who,
@@ -529,6 +564,17 @@
   }
   .brandShort {
     display: inline;
+  }
+  /* Seven tabs (eight for an admin) on a small phone: a touch smaller so
+     "Calendar" still fits on one line. */
+  .tab {
+    font-size: 9.5px;
+    padding: 6px 0;
+  }
+  .tabBar {
+    gap: 0;
+    padding-left: 2px;
+    padding-right: 2px;
   }
 }
 

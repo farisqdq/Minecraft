@@ -10,6 +10,11 @@ export const KINDS = [
   "Permit",
   "W-9",
   "Contract",
+  "Tax",
+  "Receipt",
+  "Statement",
+  "Notice",
+  "Photo",
   "Other",
 ] as const;
 
@@ -96,3 +101,16 @@ export type DocumentDTO = {
   shared: boolean;
   createdAt: string;
 };
+
+/** "824 KB", "2.3 MB" — for a filing cabinet listing. */
+export function formatSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return "";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes < 10 * 1024 * 1024 ? 1 : 0)} MB`;
+}
+
+/** The name a scan gets unless someone types one: "Lease – 12 Oak St – Sep 28, 2026". */
+export function scanTitle(kind: string, propertyName: string, dayLabel: string): string {
+  return [kind || "Document", propertyName, dayLabel].filter(Boolean).join(" – ");
+}

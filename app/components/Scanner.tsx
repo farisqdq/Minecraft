@@ -1,0 +1,620 @@
+"use client";
+
+import { useEffect, useMemo, useRef, useState } from "react";
+import Modal from "./Modal";
+import styles from "../dashboard/dashboard.module.css";
+import { formatDay } from "@/lib/lease";
+import { KINDS, scanTitle, type DocumentDTO } from "@/lib/documents";
+import { buildPdf, jpegInfo, type JpegPage } from "@/lib/pdf";
+import {
+  MAX_DOCUMENT_BYTES,
+  QUALITY_STEPS,
+  SCAN_MAX_EDGE,
+  adaptiveThreshold,
+  contrastTable,
+  exifOrientation,
+  findPaper,
+  pageBudget,
+  rotationFor,
+  toGray,
+} from "@/lib/scan";
+
+/** Enough for a lease; more than this and a phone starts running out of memory. */
+export const MAX_PAGES = 20;
+/** A phone photo is 3–12 MB; anything past this isn't a photo of a page. */
+const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
+
+type Look = "color" | "bw";
+
+type Page = {
+  key: number;
+  /** The photo as it came off the phone; everything else is rebuilt from it. */
+  original: File;
+  /** Quarter turns the person added on top of the photo's own orientation. */
+  turns: number;
+  /** The cleaned-up page as a JPEG, or null while it's being made. */
+  jpeg: Blob | null;
+  width: number;
+  height: number;
+  previewUrl: string;
+  error: string;
+};
+
+export type ScanProperty = { id: string; name: string };
+export type ScanTenant = { id: string; name: string; propertyId: string };
+
+let nextKey = 1;
+
+/**
+ * Photos of paper in, one PDF out. Every step runs in the browser: the
+ * photo is straightened by its EXIF tag, cropped to the sheet, cleaned up
+ * (contrast, or black-and-white for a shadowed page), shrunk to fit the
+ * upload cap, and the pages are stitched into a PDF by lib/pdf. The server
+ * only ever sees a finished PDF, the same as any other upload.
+ */
+export default function Scanner({
+  open,
+  onClose,
+  properties,
+  tenants,
+  defaultPropertyId,
+  today,
+  storageReady,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  properties: ScanProperty[];
+  tenants: ScanTenant[];
+  defaultPropertyId?: string;
+  /** YYYY-MM-DD, for the default title. */
+  today: string;
+  storageReady: boolean;
+  onSaved: (doc: DocumentDTO) => void;
+}) {
+  const [pages, setPages] = useState<Page[]>([]);
+  const [look, setLook] = useState<Look>("color");
+  const [autoCrop, setAutoCrop] = useState(true);
+  const [propertyId, setPropertyId] = useState(defaultPropertyId ?? properties[0]?.id ?? "");
+  const [tenantId, setTenantId] = useState("");
+  const [kind, setKind] = useState("Lease");
+  const [title, setTitle] = useState("");
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [shared, setShared] = useState(false);
+  const [stage, setStage] = useState<"" | "building" | "uploading">("");
+  const [error, setError] = useState("");
+  const cameraRef = useRef<HTMLInputElement>(null);
+  const filesRef = useRef<HTMLInputElement>(null);
+  // Work is done one page at a time, so a burst of photos doesn't decode all
+  // at once; the settings are read through refs so a queued page uses the
+  // look chosen by the time its turn comes.
+  const queue = useRef(Promise.resolve());
+  const settings = useRef({ look, autoCrop });
+  settings.current = { look, autoCrop };
+  const pagesRef = useRef<Page[]>([]);
+  pagesRef.current = pages;
+
+  const propertyName = properties.find((p) => p.id === propertyId)?.name ?? "";
+  const propertyTenants = useMemo(() => tenants.filter((t) => t.propertyId === propertyId), [tenants, propertyId]);
+  const defaultTitle = scanTitle(kind, propertyName, formatDay(today));
+  const busy = pages.some((p) => !p.jpeg && !p.error);
+  const ready = pages.length > 0 && !busy && stage === "";
+
+  // Start over each time the sheet opens, and drop the preview URLs.
+  useEffect(() => {
+    if (open) {
+      setPropertyId(defaultPropertyId ?? properties[0]?.id ?? "");
+      setTenantId("");
+      setKind("Lease");
+      setTitle("");
+      setTitleTouched(false);
+      setShared(false);
+      setStage("");
+      setError("");
+    } else {
+      setPages((prev) => {
+        prev.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+        return [];
+      });
+    }
+  }, [open, defaultPropertyId, properties]);
+
+  // A tenant belongs to one property; changing the property drops them.
+  useEffect(() => {
+    if (tenantId && !propertyTenants.some((t) => t.id === tenantId)) setTenantId("");
+  }, [propertyTenants, tenantId]);
+
+  function replacePage(key: number, patch: Partial<Page>) {
+    setPages((prev) =>
+      prev.map((p) => {
+        if (p.key !== key) return p;
+        if (patch.previewUrl && p.previewUrl) URL.revokeObjectURL(p.previewUrl);
+        return { ...p, ...patch };
+      })
+    );
+  }
+
+  /** Rebuild one page from its photo with the current settings. */
+  function process(page: Page) {
+    queue.current = queue.current
+      .then(async () => {
+        const result = await renderPage(page.original, page.turns, settings.current);
+        replacePage(page.key, {
+          jpeg: result.jpeg,
+          width: result.width,
+          height: result.height,
+          previewUrl: URL.createObjectURL(result.jpeg),
+          error: "",
+        });
+      })
+      .catch((err) => {
+        console.error("Scan failed", err);
+        replacePage(page.key, {
+          error: "Couldn't read this photo. Try a JPG or PNG.",
+          jpeg: null,
+        });
+      });
+  }
+
+  function addFiles(list: FileList | null) {
+    if (!list || list.length === 0) return;
+    setError("");
+    const files = Array.from(list);
+    const room = MAX_PAGES - pages.length;
+    if (files.length > room) {
+      setError(`A scan can have up to ${MAX_PAGES} pages; the first ${Math.max(0, room)} were added.`);
+    }
+    const added: Page[] = files.slice(0, Math.max(0, room)).map((file) => ({
+      key: nextKey++,
+      original: file,
+      turns: 0,
+      jpeg: null,
+      width: 0,
+      height: 0,
+      previewUrl: "",
+      error: file.size > MAX_PHOTO_BYTES ? "That photo is too large." : "",
+    }));
+    setPages((prev) => [...prev, ...added]);
+    added.filter((p) => !p.error).forEach(process);
+  }
+
+  function changeLook(next: Look) {
+    if (next === look) return;
+    setLook(next);
+    settings.current = { ...settings.current, look: next };
+    reprocessAll();
+  }
+
+  function changeAutoCrop(next: boolean) {
+    setAutoCrop(next);
+    settings.current = { ...settings.current, autoCrop: next };
+    reprocessAll();
+  }
+
+  function reprocessAll() {
+    const current = pagesRef.current.filter((p) => !p.error);
+    setPages((prev) => prev.map((p) => (p.error ? p : { ...p, jpeg: null })));
+    current.forEach((p) => process(p));
+  }
+
+  function rotate(page: Page) {
+    const turns = (page.turns + 1) % 4;
+    replacePage(page.key, { turns, jpeg: null });
+    process({ ...page, turns });
+  }
+
+  function move(index: number, by: -1 | 1) {
+    setPages((prev) => {
+      const to = index + by;
+      if (to < 0 || to >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[to]] = [next[to], next[index]];
+      return next;
+    });
+  }
+
+  function remove(page: Page) {
+    if (page.previewUrl) URL.revokeObjectURL(page.previewUrl);
+    setPages((prev) => prev.filter((p) => p.key !== page.key));
+  }
+
+  async function save(e: React.FormEvent) {
+    e.preventDefault();
+    if (!ready) return;
+    const good = pages.filter((p) => p.jpeg);
+    if (good.length === 0) {
+      setError("Add at least one page.");
+      return;
+    }
+    if (!propertyId) {
+      setError("Choose a property.");
+      return;
+    }
+    setError("");
+    setStage("building");
+    try {
+      // Every page gets an equal share of the upload cap; a page over its
+      // share is re-encoded smaller until it fits.
+      const budget = pageBudget(good.length);
+      const jpegPages: JpegPage[] = [];
+      for (const p of good) {
+        const fitted = await fitToBudget(p.jpeg!, budget);
+        const bytes = new Uint8Array(await fitted.arrayBuffer());
+        const info = jpegInfo(bytes);
+        if (!info) throw new Error("The browser produced a JPEG this can't read.");
+        jpegPages.push({ data: bytes, ...info });
+      }
+      const finalTitle = (titleTouched ? title.trim() : "") || defaultTitle;
+      const pdf = buildPdf(jpegPages, { title: finalTitle, created: new Date() });
+      if (pdf.length > MAX_DOCUMENT_BYTES + 64 * 1024) {
+        throw new Error("Even shrunk, these pages don't fit in one upload. Split them into two scans.");
+      }
+      setStage("uploading");
+      const form = new FormData();
+      form.set("file", new File([pdf as BlobPart], "scan.pdf", { type: "application/pdf" }));
+      if (tenantId) form.set("tenantId", tenantId);
+      else form.set("propertyId", propertyId);
+      form.set("title", finalTitle);
+      form.set("kind", kind);
+      form.set("shared", shared && tenantId ? "1" : "0");
+      const res = await fetch("/api/documents", { method: "POST", body: form });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || "Couldn't upload the scan.");
+      onSaved(data);
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't build the PDF.");
+    } finally {
+      setStage("");
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      title="Scan a document"
+      subtitle="Photograph each page. It's straightened, cropped and cleaned up here on your phone, then saved as one PDF."
+      onClose={() => stage === "" && onClose()}
+    >
+      {!storageReady ? (
+        <div className={styles.errorBar} style={{ marginTop: 0 }}>
+          File storage isn&apos;t set up yet, so scans can&apos;t be saved.
+        </div>
+      ) : (
+        <form onSubmit={save}>
+          {error && <div className={styles.errorBar} style={{ marginTop: 0, marginBottom: 14 }}>{error}</div>}
+
+          <input
+            ref={cameraRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            hidden
+            onChange={(e) => {
+              addFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+          <input
+            ref={filesRef}
+            type="file"
+            accept="image/*"
+            multiple
+            hidden
+            onChange={(e) => {
+              addFiles(e.target.files);
+              e.target.value = "";
+            }}
+          />
+
+          {pages.length > 0 && (
+            <ol className={styles.scanGrid} aria-label="Pages">
+              {pages.map((p, i) => (
+                <li key={p.key} className={styles.scanPage}>
+                  <div className={styles.scanThumb}>
+                    {p.previewUrl ? (
+                      <img src={p.previewUrl} alt={`Page ${i + 1}`} />
+                    ) : (
+                      <span className={styles.scanThumbText}>{p.error ? "✕" : "…"}</span>
+                    )}
+                    <span className={styles.scanNumber}>{i + 1}</span>
+                  </div>
+                  {p.error ? (
+                    <p className={styles.scanError}>{p.error}</p>
+                  ) : (
+                    <div className={styles.scanTools}>
+                      <button type="button" onClick={() => rotate(p)} title="Rotate" aria-label={`Rotate page ${i + 1}`} disabled={!p.jpeg}>
+                        ⟳
+                      </button>
+                      <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label={`Move page ${i + 1} earlier`}>
+                        ←
+                      </button>
+                      <button type="button" onClick={() => move(i, 1)} disabled={i === pages.length - 1} aria-label={`Move page ${i + 1} later`}>
+                        →
+                      </button>
+                      <button type="button" onClick={() => remove(p)} aria-label={`Remove page ${i + 1}`} className={styles.scanRemove}>
+                        ✕
+                      </button>
+                    </div>
+                  )}
+                  {p.error && (
+                    <button type="button" className={styles.portalLink} onClick={() => remove(p)}>
+                      Remove
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+
+          <div className={styles.scanAdd}>
+            <button
+              type="button"
+              className={`${styles.btn} ${pages.length === 0 ? styles.primary : ""}`}
+              onClick={() => cameraRef.current?.click()}
+              disabled={pages.length >= MAX_PAGES || stage !== ""}
+            >
+              📷 {pages.length === 0 ? "Take a photo" : "Add a page"}
+            </button>
+            <button
+              type="button"
+              className={styles.btn}
+              onClick={() => filesRef.current?.click()}
+              disabled={pages.length >= MAX_PAGES || stage !== ""}
+            >
+              Choose photos
+            </button>
+            {busy && <span className={styles.helpText}>Cleaning up…</span>}
+          </div>
+
+          <div className={styles.scanOptions}>
+            <span className={styles.scanOptionLabel}>Look</span>
+            <button
+              type="button"
+              className={`${styles.chip} ${look === "color" ? styles.active : ""}`}
+              onClick={() => changeLook("color")}
+              aria-pressed={look === "color"}
+            >
+              Color
+            </button>
+            <button
+              type="button"
+              className={`${styles.chip} ${look === "bw" ? styles.active : ""}`}
+              onClick={() => changeLook("bw")}
+              aria-pressed={look === "bw"}
+            >
+              Black &amp; white
+            </button>
+            <label className={styles.checkboxField} style={{ marginLeft: "auto" }}>
+              <input type="checkbox" checked={autoCrop} onChange={(e) => changeAutoCrop(e.target.checked)} />
+              Crop to the page
+            </label>
+          </div>
+
+          <div className={`${styles.fieldGrid} ${styles.modalGrid}`} style={{ marginTop: 16 }}>
+            <div className={`${styles.field} ${styles.wide}`}>
+              <label htmlFor="scan-property">Property</label>
+              <select id="scan-property" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} required>
+                {properties.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={`${styles.field} ${styles.wide}`}>
+              <label htmlFor="scan-tenant">Tenant (optional)</label>
+              <select id="scan-tenant" value={tenantId} onChange={(e) => setTenantId(e.target.value)}>
+                <option value="">— The property itself —</option>
+                {propertyTenants.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={`${styles.field} ${styles.wide}`}>
+              <label htmlFor="scan-kind">Kind</label>
+              <select id="scan-kind" value={kind} onChange={(e) => setKind(e.target.value)}>
+                {KINDS.map((k) => (
+                  <option key={k} value={k}>
+                    {k}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={`${styles.field} ${styles.wide}`}>
+              <label htmlFor="scan-title">Name</label>
+              <input
+                id="scan-title"
+                type="text"
+                value={titleTouched ? title : defaultTitle}
+                onChange={(e) => {
+                  setTitleTouched(true);
+                  setTitle(e.target.value);
+                }}
+                maxLength={120}
+              />
+            </div>
+            {tenantId && (
+              <label className={`${styles.checkboxField} ${styles.span4}`}>
+                <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
+                Show it on their portal so they can download it
+              </label>
+            )}
+          </div>
+
+          <div className={styles.formFoot}>
+            <button type="button" className={`${styles.btn} ${styles.quiet}`} onClick={onClose} disabled={stage !== ""}>
+              Cancel
+            </button>
+            <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={!ready}>
+              {stage === "building"
+                ? "Building PDF…"
+                : stage === "uploading"
+                  ? "Saving…"
+                  : busy
+                    ? "Cleaning up…"
+                    : `Save ${pages.length > 1 ? `${pages.length} pages` : "PDF"}`}
+            </button>
+          </div>
+        </form>
+      )}
+    </Modal>
+  );
+}
+
+/* ---------- The picture work ---------- */
+
+type Decoded = { source: CanvasImageSource; width: number; height: number; unappliedTurn: 0 | 90 | 180 | 270 };
+
+/**
+ * Decodes a photo, and works out whether the browser already turned it the
+ * way its EXIF tag says. Modern ones do; if the decoded size still matches
+ * the size stored in the file for a sideways tag, this one didn't, and the
+ * turn is applied while drawing.
+ */
+async function decodePhoto(file: File): Promise<Decoded> {
+  const head = new Uint8Array(await file.slice(0, 256 * 1024).arrayBuffer());
+  const turn = rotationFor(exifOrientation(head));
+  const stored = jpegInfo(head);
+
+  let source: CanvasImageSource;
+  let width: number;
+  let height: number;
+  try {
+    const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+    source = bitmap;
+    width = bitmap.width;
+    height = bitmap.height;
+  } catch {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      const url = URL.createObjectURL(file);
+      el.onload = () => {
+        URL.revokeObjectURL(url);
+        resolve(el);
+      };
+      el.onerror = () => {
+        URL.revokeObjectURL(url);
+        reject(new Error("decode"));
+      };
+      el.src = url;
+    });
+    source = img;
+    width = img.naturalWidth;
+    height = img.naturalHeight;
+  }
+  if (!width || !height) throw new Error("decode");
+
+  let unappliedTurn: Decoded["unappliedTurn"] = 0;
+  if ((turn === 90 || turn === 270) && stored && width === stored.width && height === stored.height) {
+    unappliedTurn = turn;
+  }
+  return { source, width, height, unappliedTurn };
+}
+
+function makeCanvas(width: number, height: number): HTMLCanvasElement {
+  const c = document.createElement("canvas");
+  c.width = width;
+  c.height = height;
+  return c;
+}
+
+function toBlob(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("encode"))), "image/jpeg", quality);
+  });
+}
+
+/**
+ * One photo to one cleaned-up JPEG page: oriented, shrunk to scanning size,
+ * cropped to the sheet, and either contrast-stretched or thresholded.
+ */
+async function renderPage(
+  file: File,
+  turns: number,
+  opts: { look: Look; autoCrop: boolean }
+): Promise<{ jpeg: Blob; width: number; height: number }> {
+  const decoded = await decodePhoto(file);
+  const totalTurn = (decoded.unappliedTurn + turns * 90) % 360;
+  const scale = Math.min(1, SCAN_MAX_EDGE / Math.max(decoded.width, decoded.height));
+  const sw = Math.max(1, Math.round(decoded.width * scale));
+  const sh = Math.max(1, Math.round(decoded.height * scale));
+  const sideways = totalTurn === 90 || totalTurn === 270;
+  const canvas = makeCanvas(sideways ? sh : sw, sideways ? sw : sh);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("canvas");
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.save();
+  ctx.translate(canvas.width / 2, canvas.height / 2);
+  ctx.rotate((totalTurn * Math.PI) / 180);
+  ctx.drawImage(decoded.source, -sw / 2, -sh / 2, sw, sh);
+  ctx.restore();
+  if ("close" in decoded.source && typeof decoded.source.close === "function") decoded.source.close();
+
+  let image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let gray = toGray(image.data, image.width, image.height);
+
+  if (opts.autoCrop) {
+    const box = findPaper(gray, image.width, image.height);
+    if (box) {
+      image = ctx.getImageData(box.x, box.y, box.width, box.height);
+      gray = toGray(image.data, image.width, image.height);
+    }
+  }
+
+  const px = image.data;
+  if (opts.look === "bw") {
+    // A block about a line of text tall: big enough that a letter never
+    // becomes its own background, small enough to follow a shadow.
+    const radius = Math.max(12, Math.round(Math.max(image.width, image.height) / 60));
+    const bw = adaptiveThreshold(gray, image.width, image.height, radius, 12);
+    for (let i = 0, p = 0; i < bw.length; i++, p += 4) {
+      px[p] = px[p + 1] = px[p + 2] = bw[i];
+      px[p + 3] = 255;
+    }
+  } else {
+    const table = contrastTable(gray);
+    for (let p = 0; p < px.length; p += 4) {
+      px[p] = table[px[p]];
+      px[p + 1] = table[px[p + 1]];
+      px[p + 2] = table[px[p + 2]];
+      px[p + 3] = 255;
+    }
+  }
+
+  const out = makeCanvas(image.width, image.height);
+  out.getContext("2d")!.putImageData(image, 0, 0);
+  const jpeg = await toBlob(out, 0.85);
+  return { jpeg, width: image.width, height: image.height };
+}
+
+/**
+ * Re-encodes a page until it's under `budget` bytes: lower quality first,
+ * then a smaller picture. A page that already fits is returned untouched.
+ */
+async function fitToBudget(jpeg: Blob, budget: number): Promise<Blob> {
+  if (jpeg.size <= budget) return jpeg;
+  const bitmap = await createImageBitmap(jpeg);
+  let width = bitmap.width;
+  let height = bitmap.height;
+  let best = jpeg;
+  for (let round = 0; round < 6; round++) {
+    const canvas = makeCanvas(width, height);
+    canvas.getContext("2d")!.drawImage(bitmap, 0, 0, width, height);
+    for (const q of QUALITY_STEPS) {
+      const candidate = await toBlob(canvas, q);
+      if (candidate.size < best.size) best = candidate;
+      if (candidate.size <= budget) {
+        bitmap.close();
+        return candidate;
+      }
+    }
+    width = Math.round(width * 0.8);
+    height = Math.round(height * 0.8);
+  }
+  bitmap.close();
+  return best;
+}

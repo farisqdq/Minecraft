@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { byUrgency, daysUntil, expiryLabel, expiryState, normalizeKind, SOON_DAYS } from "../lib/documents.ts";
+import { byUrgency, daysUntil, expiryLabel, expiryState, formatSize, normalizeKind, scanTitle, SOON_DAYS } from "../lib/documents.ts";
 
 const fmt = (iso: string) => `[${iso}]`;
 
@@ -55,4 +55,17 @@ test("the most urgent comes first", () => {
     { id: "soon1", expiresOn: "2026-09-25" },
   ];
   assert.deepEqual(byUrgency(docs, t).map((d) => d.id), ["gone", "soon1", "soon2", "later", "never"]);
+});
+
+test("file sizes read the way a file manager shows them", () => {
+  assert.equal(formatSize(512), "512 B");
+  assert.equal(formatSize(824 * 1024), "824 KB");
+  assert.equal(formatSize(2.3 * 1024 * 1024), "2.3 MB");
+  assert.equal(formatSize(12 * 1024 * 1024), "12 MB");
+  assert.equal(formatSize(-1), "");
+});
+
+test("a scan is named after what it is, where, and when", () => {
+  assert.equal(scanTitle("Lease", "12 Oak St", "Sep 28, 2026"), "Lease – 12 Oak St – Sep 28, 2026");
+  assert.equal(scanTitle("", "", "Sep 28, 2026"), "Document – Sep 28, 2026");
 });
