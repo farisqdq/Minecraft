@@ -115,3 +115,30 @@ export function shortName(name: string, max = 22): string {
   const tail = Math.min(8, Math.floor(keep / 2));
   return `${name.slice(0, keep - tail)}…${name.slice(-tail)}`;
 }
+
+/**
+ * The name a scan starts with when it's attached as proof (scan-anywhere).
+ * Rent paid on paper is nearly always a check; anything else is a receipt.
+ * `dayLabel` is the entry's date as the page shows it.
+ */
+export function proofScanTitle(type: string | null | undefined, dayLabel: string): string {
+  const what = type === "rent" ? "Rent check" : "Receipt";
+  const day = (dayLabel || "").trim();
+  return day ? `${what} – ${day}` : what;
+}
+
+/**
+ * "<name>.pdf" for a scanned proof: characters a file system or a download
+ * dialog chokes on become dashes, and a long name is cut so the paperclip
+ * strip and the stored filename stay readable.
+ */
+export function scanFileName(title: string, max = 80): string {
+  let base = (title || "")
+    .replace(/[\u0000-\u001f\u007f/\\:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/\.pdf$/i, "")
+    .replace(/^[.\s-]+|[.\s-]+$/g, "");
+  if (base.length > max) base = base.slice(0, max).trimEnd();
+  return `${base || "Scan"}.pdf`;
+}

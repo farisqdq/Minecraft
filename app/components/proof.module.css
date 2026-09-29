@@ -80,6 +80,14 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Inside a form's .field, `.field label` (muted, 12.5px) outranked .pick, so
+   the label buttons looked greyed out next to the Scan <button>. */
+.zone .pick {
+  color: var(--ink);
+  font-size: 13.5px;
+  font-family: inherit;
+}
+
 .pick:hover {
   border-color: var(--ink);
 }

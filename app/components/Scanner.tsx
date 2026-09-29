@@ -18,6 +18,7 @@ import {
   rotationFor,
   toGray,
 } from "@/lib/scan";
+import { scanFileName } from "@/lib/attachments-ui"; // scan-anywhere
 
 /** Enough for a lease; more than this and a phone starts running out of memory. */
 export const MAX_PAGES = 20;
@@ -44,6 +45,9 @@ export type ScanProperty = { id: string; name: string };
 export type ScanTenant = { id: string; name: string; propertyId: string };
 
 let nextKey = 1;
+// scan-anywhere: stable defaults, so the reset-on-open effect doesn't re-run every render.
+const NO_PROPERTIES: ScanProperty[] = [];
+const NO_TENANTS: ScanTenant[] = [];
 
 /**
  * Photos of paper in, one PDF out. Every step runs in the browser: the
@@ -55,23 +59,37 @@ let nextKey = 1;
 export default function Scanner({
   open,
   onClose,
-  properties,
-  tenants,
+  properties = NO_PROPERTIES, // scan-anywhere: optional, attachment mode has no pickers
+  tenants = NO_TENANTS, // scan-anywhere
   defaultPropertyId,
   today,
   storageReady,
   onSaved,
+  mode = "document", // scan-anywhere
+  onPdf, // scan-anywhere
+  defaultTitle: titleOverride, // scan-anywhere
 }: {
   open: boolean;
   onClose: () => void;
-  properties: ScanProperty[];
-  tenants: ScanTenant[];
+  properties?: ScanProperty[];
+  tenants?: ScanTenant[];
   defaultPropertyId?: string;
   /** YYYY-MM-DD, for the default title. */
   today: string;
   storageReady: boolean;
-  onSaved: (doc: DocumentDTO) => void;
+  onSaved?: (doc: DocumentDTO) => void;
+  /**
+   * scan-anywhere: "document" files the PDF in the filing cabinet
+   * (POST /api/documents). "attachment" hides the property/tenant/kind
+   * pickers and hands the PDF to `onPdf` as `<name>.pdf` instead of
+   * uploading it, so it rides along with a rent or expense entry.
+   */
+  mode?: "document" | "attachment";
+  onPdf?: (file: File) => void;
+  /** scan-anywhere: the name to start with, instead of "<kind> – <property> – <day>". */
+  defaultTitle?: string;
 }) {
+  const attachment = mode === "attachment"; // scan-anywhere
   const [pages, setPages] = useState<Page[]>([]);
   const [look, setLook] = useState<Look>("color");
   const [autoCrop, setAutoCrop] = useState(true);
@@ -96,7 +114,7 @@ export default function Scanner({
 
   const propertyName = properties.find((p) => p.id === propertyId)?.name ?? "";
   const propertyTenants = useMemo(() => tenants.filter((t) => t.propertyId === propertyId), [tenants, propertyId]);
-  const defaultTitle = scanTitle(kind, propertyName, formatDay(today));
+  const defaultTitle = titleOverride || scanTitle(kind, propertyName, formatDay(today)); // scan-anywhere
   const busy = pages.some((p) => !p.jpeg && !p.error);
   const ready = pages.length > 0 && !busy && stage === "";
 
@@ -226,7 +244,7 @@ export default function Scanner({
       setError("Add at least one page.");
       return;
     }
-    if (!propertyId) {
+    if (!propertyId && !attachment) { // scan-anywhere: attachments belong to an entry, not a property
       setError("Choose a property.");
       return;
     }
@@ -249,6 +267,13 @@ export default function Scanner({
       if (pdf.length > MAX_DOCUMENT_BYTES + 64 * 1024) {
         throw new Error("Even shrunk, these pages don't fit in one upload. Split them into two scans.");
       }
+      // scan-anywhere: as proof, the PDF goes back to the picker and is
+      // uploaded with the entry, under the attachment rules.
+      if (attachment) {
+        onPdf?.(new File([pdf as BlobPart], scanFileName(finalTitle), { type: "application/pdf" }));
+        onClose();
+        return;
+      }
       setStage("uploading");
       const form = new FormData();
       form.set("file", new File([pdf as BlobPart], "scan.pdf", { type: "application/pdf" }));
@@ -260,7 +285,7 @@ export default function Scanner({
       const res = await fetch("/api/documents", { method: "POST", body: form });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data?.error || "Couldn't upload the scan.");
-      onSaved(data);
+      onSaved?.(data); // scan-anywhere: optional now
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Couldn't build the PDF.");
@@ -272,8 +297,12 @@ export default function Scanner({
   return (
     <Modal
       open={open}
-      title="Scan a document"
-      subtitle="Photograph each page. It's straightened, cropped and cleaned up here on your phone, then saved as one PDF."
+      title={attachment ? "Scan proof" : "Scan a document"} // scan-anywhere
+      subtitle={
+        attachment // scan-anywhere
+          ? "Photograph the check or receipt. It's cleaned up here on your phone and attached as one PDF."
+          : "Photograph each page. It's straightened, cropped and cleaned up here on your phone, then saved as one PDF."
+      }
       onClose={() => stage === "" && onClose()}
     >
       {!storageReady ? (
@@ -392,6 +421,8 @@ export default function Scanner({
           </div>
 
           <div className={`${styles.fieldGrid} ${styles.modalGrid}`} style={{ marginTop: 16 }}>
+            {/* scan-anywhere: an attachment is filed with its entry, so no property/tenant/kind. */}
+            {!attachment && (<>
             <div className={`${styles.field} ${styles.wide}`}>
               <label htmlFor="scan-property">Property</label>
               <select id="scan-property" value={propertyId} onChange={(e) => setPropertyId(e.target.value)} required>
@@ -423,7 +454,8 @@ export default function Scanner({
                 ))}
               </select>
             </div>
-            <div className={`${styles.field} ${styles.wide}`}>
+            </>)}
+            <div className={`${styles.field} ${attachment ? styles.span4 : styles.wide}`}>{/* scan-anywhere */}
               <label htmlFor="scan-title">Name</label>
               <input
                 id="scan-title"
@@ -436,7 +468,7 @@ export default function Scanner({
                 maxLength={120}
               />
             </div>
-            {tenantId && (
+            {tenantId && !attachment && ( // scan-anywhere
               <label className={`${styles.checkboxField} ${styles.span4}`}>
                 <input type="checkbox" checked={shared} onChange={(e) => setShared(e.target.checked)} />
                 Show it on their portal so they can download it

@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from "react";
 import Modal from "./Modal";
 import ConfirmDialog, { type ConfirmRequest } from "./ConfirmDialog";
+import Scanner, { type ScanProperty, type ScanTenant } from "./Scanner";
 import styles from "../dashboard/dashboard.module.css";
 import { formatDay } from "@/lib/lease";
 import {
@@ -31,6 +32,7 @@ export default function DocumentsPanel({
   storageReady,
   onToast,
   emptyText = "Nothing filed yet.",
+  scan,
 }: {
   initial: DocumentDTO[];
   targets: DocTarget[];
@@ -40,6 +42,13 @@ export default function DocumentsPanel({
   storageReady: boolean;
   onToast: (message: string, tone?: "bad") => void;
   emptyText?: string;
+  /**
+   * Offer "Scan document" beside "Upload file", opening the phone scanner
+   * with these to file against (the property page passes just itself and
+   * its current tenants). Left out, the panel keeps its single
+   * "+ Add a document" button (the vendor book).
+   */
+  scan?: { properties: ScanProperty[]; tenants: ScanTenant[]; defaultPropertyId?: string };
 }) {
   const [docs, setDocs] = useState(initial);
   const [adding, setAdding] = useState(false);
@@ -47,6 +56,7 @@ export default function DocumentsPanel({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
+  const [scanning, setScanning] = useState(false);
   const [upload, setUpload] = useState({
     target: targets[0]?.key ?? "",
     title: "",
@@ -204,16 +214,54 @@ export default function DocumentsPanel({
         </ul>
       )}
 
-      <div style={{ marginTop: 12 }}>
-        <button
-          type="button"
-          className={`${styles.btn} ${styles.small}`}
-          onClick={openUpload}
-          disabled={targets.length === 0}
-        >
-          + Add a document
-        </button>
-      </div>
+      {scan ? (
+        <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.small} ${styles.primary}`}
+            onClick={() => setScanning(true)}
+            disabled={scan.properties.length === 0}
+          >
+            Scan document
+          </button>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.small}`}
+            onClick={openUpload}
+            disabled={targets.length === 0}
+          >
+            Upload file
+          </button>
+        </div>
+      ) : (
+        <div style={{ marginTop: 12 }}>
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.small}`}
+            onClick={openUpload}
+            disabled={targets.length === 0}
+          >
+            + Add a document
+          </button>
+        </div>
+      )}
+
+      {scan && (
+        <Scanner
+          open={scanning}
+          onClose={() => setScanning(false)}
+          properties={scan.properties}
+          tenants={scan.tenants}
+          defaultPropertyId={scan.defaultPropertyId}
+          today={today}
+          storageReady={storageReady}
+          onSaved={(doc) => {
+            // Straight into the list: the scan is on screen the moment it's filed.
+            setDocs((prev) => [doc, ...prev.filter((d) => d.id !== doc.id)]);
+            onToast(`${doc.title} filed.`);
+          }}
+        />
+      )}
 
       <Modal
         open={adding}
