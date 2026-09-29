@@ -19,16 +19,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   if (!target) return NextResponse.json({ error: "No such account." }, { status: 404 });
 
   const { token, tokenHash, expiresAt } = newResetToken();
-  await prisma.$transaction(async (tx) => {
+  const reset = await prisma.$transaction(async (tx) => {
     await tx.passwordReset.deleteMany({ where: { userId: id, usedAt: null } });
-    await tx.passwordReset.create({
+    const row = await tx.passwordReset.create({
       data: { userId: id, tokenHash, expiresAt, issuedBy: admin.email, sessionVersion: target.sessionVersion },
     });
     await logAdmin(admin, "account.resetLink", target.email, null, tx);
+    return row;
   });
   return NextResponse.json({
     ...(await adminSnapshot()),
     link: resetLink(siteOrigin(req.url), token),
+    // Lets "Send email" name this reset exactly (./email/route.ts), so what
+    // is emailed is the link on screen and not a fresh one.
+    resetId: reset.id,
     expiresAt: expiresAt.toISOString(),
   });
 }

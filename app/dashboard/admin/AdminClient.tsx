@@ -66,6 +66,9 @@ export default function AdminClient({
   const [createOwner, setCreateOwner] = useState("");
   const [resetLink, setResetLink] = useState("");
   const [copied, setCopied] = useState(false);
+  const [resetId, setResetId] = useState("");
+  const [mailing, setMailing] = useState(false);
+  const [mailNote, setMailNote] = useState<{ ok: boolean; text: string } | null>(null);
   const linkRef = useRef<HTMLInputElement>(null);
   const [editEmail, setEditEmail] = useState("");
   const [editName, setEditName] = useState("");
@@ -130,9 +133,42 @@ export default function AdminClient({
     setNewLlcName("");
     setTypedEmail("");
     setResetLink("");
+    setResetId("");
+    setMailNote(null);
     setCopied(false);
     setEditEmail(a.email);
     setEditName(a.name);
+  }
+
+  /**
+   * Emails the link on screen — the server finds it by its reset id and the
+   * token in it, and looks up the address itself. Its own fetch rather than
+   * send(): the answer belongs next to the button, not in the dialog's error.
+   */
+  async function emailResetLink(a: AdminAccount) {
+    let token = "";
+    try {
+      token = new URL(resetLink).searchParams.get("token") ?? "";
+    } catch {
+      /* the server will say the link isn't live */
+    }
+    setMailing(true);
+    setMailNote(null);
+    try {
+      const res = await fetch(`/api/admin/accounts/${a.id}/reset-link/email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resetId, token }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (json?.accounts && json?.companies) setData(json as AdminSnapshot);
+      if (res.ok && json?.sent) setMailNote({ ok: true, text: json.message || `Sent to ${json.to}` });
+      else setMailNote({ ok: false, text: json?.error || "That didn't send. Copy the link instead." });
+    } catch {
+      setMailNote({ ok: false, text: "Couldn't reach the site. Copy the link instead." });
+    } finally {
+      setMailing(false);
+    }
   }
 
   function openCompany(c: AdminCompany) {
@@ -509,6 +545,8 @@ export default function AdminClient({
                   const json = await send(`/api/admin/accounts/${account.id}/reset-link`, "POST");
                   if (json && typeof json.link === "string") {
                     setResetLink(json.link);
+                    setResetId(typeof json.resetId === "string" ? json.resetId : "");
+                    setMailNote(null);
                     setCopied(false);
                   }
                 }}
@@ -574,12 +612,30 @@ export default function AdminClient({
                     }
                   }}
                 >
-                  {copied ? "Copied" : "Copy"}
+                  {copied ? "Copied" : "Copy link"}
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.small}`}
+                  disabled={mailing || busy || !resetId || !account.email.trim()}
+                  onClick={() => emailResetLink(account)}
+                >
+                  {mailing ? "Sending…" : "Send email"}
                 </button>
               </div>
             )}
+            {resetLink && (!account.email.trim() || mailNote) && (
+              <p
+                className={styles.helpText}
+                role="status"
+                style={{ marginTop: 4, color: mailNote ? (mailNote.ok ? "var(--accent)" : "var(--expense)") : undefined }}
+              >
+                {!account.email.trim() ? "No email on file" : mailNote?.text}
+              </p>
+            )}
             <p className={styles.helpText}>
-              A reset link lets them choose a new password; send it however you talk to them. It works once, for an
+              A reset link lets them choose a new password; copy it and send it however you talk to them, or email it to
+              the address on their account. It works once, for an
               hour, and doesn&apos;t get past two-factor. Signing them out ends every session they have; two-factor off
               lets someone who lost their phone back in with just their password. All of it is written to the log on
               this page.
