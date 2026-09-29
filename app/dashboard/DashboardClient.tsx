@@ -9,6 +9,18 @@ import { STATUS_LABEL, ago, type RequestDTO } from "@/lib/maintenance";
 import { chasedRecently, remindedAgo } from "@/lib/notices";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
+import { DEFAULT_POLICY, policyCharges, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
+import {
+  NO_TENANT_LINE,
+  cardLateFeeLine,
+  isPaidUp,
+  mergedFees,
+  needsStatusCheck,
+  noFeeLine,
+  parseStatuses,
+  shortAmount,
+  type LateFeeStatus,
+} from "@/lib/late-fee-card";
 import { dateFromISO, daysLate, formatDay, isoDay, leaseStatus, smsHref, telHref } from "@/lib/lease";
 import { byUrgency, expiryLabel, expiryState, type DocumentDTO } from "@/lib/documents";
 import { isDue as loanIsDue, missedMonths, suggestPayment } from "@/lib/loans";
@@ -203,6 +215,7 @@ export default function DashboardClient({
   expiringDocs,
   initialChases,
   lateFees = {},
+  lateFeePolicies = {},
   userLabel,
   storageReady,
   serverToday,
@@ -227,6 +240,8 @@ export default function DashboardClient({
   initialChases: Record<string, { at: string; month: string; read: boolean }>;
   /** Late fees on the books, keyed "tenantId|YYYY-MM". */
   lateFees?: Record<string, number>;
+  /** Each company's late-fee policy, by company id. */
+  lateFeePolicies?: Record<string, LateFeePolicyDTO>;
   userLabel: string;
   storageReady: boolean;
   serverToday: string;
@@ -703,6 +718,115 @@ export default function DashboardClient({
       null
     );
   }
+
+  // Why a short month past its grace period has no late fee, per tenant id,
+  // as POST /api/late-fees/status explains it. Filled after mount only, so
+  // the server-rendered HTML and the first client render agree.
+  const [feeStatuses, setFeeStatuses] = useState<Record<string, LateFeeStatus>>({});
+  const statusAsked = useRef(new Set<string>());
+
+  function policyFor(propertyId: string): LateFeePolicyDTO | null {
+    const companyId = properties.find((p) => p.id === propertyId)?.companyId;
+    return (companyId && lateFeePolicies[companyId]) || null;
+  }
+
+  /**
+   * Whether a tenant's month is one a fee could be expected on at all: on
+   * the LLC policy while it charges, or on their own rules. "Off" is a
+   * choice the landlord made, not something to explain on every card.
+   */
+  function feesExpected(tenant: TenantDTO, policy: LateFeePolicyDTO | null) {
+    if (tenant.lateFeeMode === "off") return false;
+    if (tenant.lateFeeMode === "custom") return true;
+    return Boolean(policy && policyCharges(policy));
+  }
+
+  /** What a card says about one rent target's late fees in the bar month. */
+  function cardFees(propertyId: string, unitId: string | null, rent: number, paid: number) {
+    const tenant = tenantFor(propertyId, unitId);
+    const policy = policyFor(propertyId);
+    const known = tenant ? lateFees[`${tenant.id}|${barMonth}`] ?? 0 : 0;
+    const status = tenant ? feeStatuses[tenant.id] : undefined;
+    const fees = mergedFees(known, status, barMonth);
+    const sums = { rent, paid, fees };
+    let note = "";
+    if (!tenant) {
+      // Fees are charged to a tenant, so a short unit with nobody on it can
+      // never get one, however late it is — worth saying rather than leaving
+      // the landlord to wonder why the policy did nothing.
+      if (
+        policy &&
+        policyCharges(policy) &&
+        needsStatusCheck({ ...sums, dueDay: 1, graceDays: policy.graceDays, month: barMonth, today: todayKey })
+      )
+        note = NO_TENANT_LINE;
+    } else if (fees <= 0) {
+      note = noFeeLine(status, barMonth);
+    }
+    return {
+      fees,
+      short: shortAmount(sums),
+      paidUp: isPaidUp(sums),
+      line: cardLateFeeLine({ fees, rent, policy, mode: tenant?.lateFeeMode ?? "default" }),
+      note,
+    };
+  }
+
+  // Tenants on screen whose month is short, past grace and fee-less: the
+  // cards that need the server to say why. Judged on the fees the page
+  // loaded with, not on merged statuses, so an answer can't re-trigger a call.
+  const statusIds: string[] = [];
+  for (const p of visibleProperties) {
+    const propUnits = unitsForProperty(p.id);
+    const targets =
+      propUnits.length === 0
+        ? [{ unitId: null as string | null, monthlyRent: p.monthlyRent, vacant: p.vacant }]
+        : propUnits.map((u) => ({ unitId: u.id as string | null, monthlyRent: u.monthlyRent, vacant: u.vacant }));
+    const policy = policyFor(p.id);
+    for (const t of targets) {
+      if (t.vacant) continue;
+      const tenant = tenantFor(p.id, t.unitId);
+      if (!tenant || !feesExpected(tenant, policy)) continue;
+      const rent = expectedRent({ propertyId: p.id, unitId: t.unitId, monthlyRent: t.monthlyRent }, barMonth);
+      if (
+        needsStatusCheck({
+          rent,
+          paid: rentInMonth(p.id, t.unitId, barMonth),
+          fees: lateFees[`${tenant.id}|${barMonth}`] ?? 0,
+          dueDay: tenant.dueDay,
+          graceDays: (policy ?? DEFAULT_POLICY).graceDays,
+          month: barMonth,
+          today: todayKey,
+        })
+      )
+        statusIds.push(tenant.id);
+    }
+  }
+  const statusKey = statusIds.length ? `${barMonth}:${[...new Set(statusIds)].sort().join(",")}` : "";
+
+  // One request for every such tenant at once, and once per set: re-renders
+  // with the same tenants on screen don't ask again. A missing endpoint or a
+  // failed request leaves the cards as they were.
+  useEffect(() => {
+    if (!statusKey || statusAsked.current.has(statusKey)) return;
+    statusAsked.current.add(statusKey);
+    const tenantIds = statusKey.slice(statusKey.indexOf(":") + 1).split(",");
+    // No cancel on cleanup: an answer that lands after the view moved on is
+    // still true of those tenants, and each status carries its month, so a
+    // stale one is ignored where it doesn't apply.
+    fetch("/api/late-fees/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenantIds }),
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (!body) return;
+        const parsed = parseStatuses(body);
+        if (Object.keys(parsed).length) setFeeStatuses((prev) => ({ ...prev, ...parsed }));
+      })
+      .catch(() => {});
+  }, [statusKey]);
 
   // Leases running out are the other thing worth knowing before the month
   // turns — a lease that ended last week and nobody noticed is a vacancy.
@@ -2117,7 +2241,10 @@ export default function DashboardClient({
                 const target = expectedRent({ propertyId: p.id, unitId: null, monthlyRent: p.monthlyRent }, barMonth);
                 const paidThisMonth = rentInBarMonth(p.id);
                 const pct = target > 0 ? Math.min(100, Math.round((paidThisMonth / target) * 100)) : 0;
-                const paidInFull = target > 0 && paidThisMonth >= target;
+                // The month's late fees count toward what's owed, so rent paid
+                // with a fee still open is short, not paid.
+                const houseFees = propUnits.length === 0 ? cardFees(p.id, null, target, paidThisMonth) : null;
+                const paidInFull = Boolean(houseFees?.paidUp);
                 const owner = companies.find((c) => c.id === p.companyId);
                 // Members can record and correct; only an owner can remove a
                 // house and the ledger under it, so don't offer them a button
@@ -2131,7 +2258,7 @@ export default function DashboardClient({
                   expectedRent({ propertyId: p.id, unitId: u.id, monthlyRent: u.monthlyRent }, barMonth);
                 const rentedUnits = propUnits.filter((u) => !u.vacant && unitRent(u) > 0);
                 const unitsPaid = rentedUnits.filter(
-                  (u) => rentInMonth(p.id, u.id, barMonth) >= unitRent(u)
+                  (u) => cardFees(p.id, u.id, unitRent(u), rentInMonth(p.id, u.id, barMonth)).paidUp
                 ).length;
                 let status: { text: string; tone: string } | null = null;
                 if (propUnits.length === 0) {
@@ -2141,7 +2268,8 @@ export default function DashboardClient({
                       tone: styles.vacant,
                     };
                   else if (paidInFull) status = { text: "Paid", tone: styles.paid };
-                  else if (target > 0) status = { text: `${money(target - paidThisMonth)} short`, tone: styles.owed };
+                  else if (target > 0 && houseFees)
+                    status = { text: `${money(houseFees.short)} short`, tone: styles.owed };
                 } else if (rentedUnits.length > 0) {
                   status =
                     unitsPaid === rentedUnits.length
@@ -2237,7 +2365,8 @@ export default function DashboardClient({
                         {propUnits.map((u) => {
                           const uPaid = rentInMonth(p.id, u.id, barMonth);
                           const uTarget = unitRent(u);
-                          const uFull = uTarget > 0 && uPaid >= uTarget;
+                          const uFees = cardFees(p.id, u.id, uTarget, uPaid);
+                          const uFull = uFees.paidUp;
                           const uTenant = tenantFor(p.id, u.id);
                           return (
                             <div key={u.id} className={styles.unitRow}>
@@ -2251,10 +2380,20 @@ export default function DashboardClient({
                                 </span>
                               ) : uTarget > 0 ? (
                                 <span className={`num ${uFull ? styles.pos : styles.unitDue}`}>
-                                  {uFull ? "Paid in full" : `${money(uPaid)} of ${money(uTarget)}`}
+                                  {uFull
+                                    ? "Paid in full"
+                                    : uFees.fees > 0
+                                      ? `${money(uFees.short)} short`
+                                      : `${money(uPaid)} of ${money(uTarget)}`}
                                 </span>
                               ) : (
                                 <span className={styles.note}>No rent set</span>
+                              )}
+                              {!u.vacant && uTarget > 0 && uFees.line && (
+                                <span className={styles.feeLine}>{uFees.line}</span>
+                              )}
+                              {!u.vacant && uTarget > 0 && uFees.note && (
+                                <span className={styles.feeNote}>{uFees.note}</span>
                               )}
                             </div>
                           );
@@ -2282,6 +2421,8 @@ export default function DashboardClient({
                                   : `${money(paidThisMonth)} of ${money(target)}`}
                               </span>
                             </div>
+                            {houseFees?.line && <div className={styles.feeLine}>{houseFees.line}</div>}
+                            {houseFees?.note && <div className={styles.feeNote}>{houseFees.note}</div>}
                           </div>
                         )}
                       </>

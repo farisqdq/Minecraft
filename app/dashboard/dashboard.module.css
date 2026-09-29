@@ -202,6 +202,7 @@
 
 .unitRow {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
   gap: 8px;
@@ -3722,4 +3723,24 @@ tr:hover .rowDel {
   .ownerActions .btn {
     margin: 4px 6px 0 0;
   }
+}
+
+/* Late fees under a card's rent bar, or under a unit row. In a unit row
+   (a wrapping flex row) they take a line of their own. */
+.feeLine,
+.feeNote {
+  flex-basis: 100%;
+  font-size: 11.5px;
+  margin-top: 4px;
+  overflow-wrap: anywhere;
+}
+
+.feeLine {
+  color: var(--gold);
+  font-weight: 600;
+}
+
+.feeNote {
+  color: var(--muted);
+  font-style: italic;
 }
