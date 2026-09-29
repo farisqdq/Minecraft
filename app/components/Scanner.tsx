@@ -11,20 +11,30 @@ import {
   QUALITY_STEPS,
   SCAN_MAX_EDGE,
   adaptiveThreshold,
+  bwParams,
   contrastTable,
   exifOrientation,
   findPaper,
   pageBudget,
   rotationFor,
+  softenEdges,
   toGray,
 } from "@/lib/scan";
+import {
+  DEFAULT_LOOK,
+  firstQuality,
+  lookLabel,
+  otherLook,
+  qualitySteps,
+  sharedLook,
+  withEveryLook,
+  type Look,
+} from "@/lib/scanLook";
 
 /** Enough for a lease; more than this and a phone starts running out of memory. */
 export const MAX_PAGES = 20;
 /** A phone photo is 3–12 MB; anything past this isn't a photo of a page. */
 const MAX_PHOTO_BYTES = 30 * 1024 * 1024;
-
-type Look = "color" | "bw";
 
 type Page = {
   key: number;
@@ -32,6 +42,8 @@ type Page = {
   original: File;
   /** Quarter turns the person added on top of the photo's own orientation. */
   turns: number;
+  /** This page's own look; kept through rotating and reordering. */
+  look: Look;
   /** The cleaned-up page as a JPEG, or null while it's being made. */
   jpeg: Blob | null;
   width: number;
@@ -73,7 +85,8 @@ export default function Scanner({
   onSaved: (doc: DocumentDTO) => void;
 }) {
   const [pages, setPages] = useState<Page[]>([]);
-  const [look, setLook] = useState<Look>("color");
+  // The look new pages arrive in; each page then keeps its own.
+  const [look, setLook] = useState<Look>(DEFAULT_LOOK);
   const [autoCrop, setAutoCrop] = useState(true);
   const [propertyId, setPropertyId] = useState(defaultPropertyId ?? properties[0]?.id ?? "");
   const [tenantId, setTenantId] = useState("");
@@ -86,11 +99,12 @@ export default function Scanner({
   const cameraRef = useRef<HTMLInputElement>(null);
   const filesRef = useRef<HTMLInputElement>(null);
   // Work is done one page at a time, so a burst of photos doesn't decode all
-  // at once; the settings are read through refs so a queued page uses the
-  // look chosen by the time its turn comes.
+  // at once; the crop setting is read through a ref so a queued page uses
+  // the one chosen by the time its turn comes. The look travels with the
+  // page itself.
   const queue = useRef(Promise.resolve());
-  const settings = useRef({ look, autoCrop });
-  settings.current = { look, autoCrop };
+  const settings = useRef({ autoCrop });
+  settings.current = { autoCrop };
   const pagesRef = useRef<Page[]>([]);
   pagesRef.current = pages;
 
@@ -98,6 +112,7 @@ export default function Scanner({
   const propertyTenants = useMemo(() => tenants.filter((t) => t.propertyId === propertyId), [tenants, propertyId]);
   const defaultTitle = scanTitle(kind, propertyName, formatDay(today));
   const busy = pages.some((p) => !p.jpeg && !p.error);
+  const allLook = sharedLook(pages, look);
   const ready = pages.length > 0 && !busy && stage === "";
 
   // Start over each time the sheet opens, and drop the preview URLs.
@@ -138,7 +153,7 @@ export default function Scanner({
   function process(page: Page) {
     queue.current = queue.current
       .then(async () => {
-        const result = await renderPage(page.original, page.turns, settings.current);
+        const result = await renderPage(page.original, page.turns, { look: page.look, autoCrop: settings.current.autoCrop });
         replacePage(page.key, {
           jpeg: result.jpeg,
           width: result.width,
@@ -168,6 +183,7 @@ export default function Scanner({
       key: nextKey++,
       original: file,
       turns: 0,
+      look,
       jpeg: null,
       width: 0,
       height: 0,
@@ -178,11 +194,21 @@ export default function Scanner({
     added.filter((p) => !p.error).forEach(process);
   }
 
-  function changeLook(next: Look) {
-    if (next === look) return;
+  /** "All B&W" / "All color": every page, and the pages added next. */
+  function changeAllLooks(next: Look) {
     setLook(next);
-    settings.current = { ...settings.current, look: next };
-    reprocessAll();
+    const changed = new Set(pagesRef.current.filter((p) => !p.error && p.look !== next).map((p) => p.key));
+    if (changed.size === 0) return;
+    const updated = withEveryLook(pagesRef.current, next);
+    setPages((prev) => withEveryLook(prev, next).map((p) => (changed.has(p.key) ? { ...p, jpeg: null } : p)));
+    updated.filter((p) => changed.has(p.key)).forEach((p) => process(p));
+  }
+
+  /** One page's own toggle, e.g. a photo of damage in colour among B&W pages. */
+  function toggleLook(page: Page) {
+    const next = otherLook(page.look);
+    replacePage(page.key, { look: next, jpeg: null });
+    process({ ...page, look: next });
   }
 
   function changeAutoCrop(next: boolean) {
@@ -318,6 +344,20 @@ export default function Scanner({
                       <span className={styles.scanThumbText}>{p.error ? "✕" : "…"}</span>
                     )}
                     <span className={styles.scanNumber}>{i + 1}</span>
+                    {!p.error && (
+                      <button
+                        type="button"
+                        className={`${styles.scanLook} ${p.look === "color" ? styles.scanLookColor : ""}`}
+                        onClick={() => toggleLook(p)}
+                        disabled={!p.jpeg}
+                        aria-label={`Page ${i + 1} is ${p.look === "bw" ? "black and white" : "in color"}; switch to ${
+                          p.look === "bw" ? "color" : "black and white"
+                        }`}
+                        title={p.look === "bw" ? "Switch this page to color" : "Switch this page to black & white"}
+                      >
+                        {lookLabel(p.look)}
+                      </button>
+                    )}
                   </div>
                   {p.error ? (
                     <p className={styles.scanError}>{p.error}</p>
@@ -371,19 +411,19 @@ export default function Scanner({
             <span className={styles.scanOptionLabel}>Look</span>
             <button
               type="button"
-              className={`${styles.chip} ${look === "color" ? styles.active : ""}`}
-              onClick={() => changeLook("color")}
-              aria-pressed={look === "color"}
+              className={`${styles.chip} ${allLook === "bw" ? styles.active : ""}`}
+              onClick={() => changeAllLooks("bw")}
+              aria-pressed={allLook === "bw"}
             >
-              Color
+              All B&amp;W
             </button>
             <button
               type="button"
-              className={`${styles.chip} ${look === "bw" ? styles.active : ""}`}
-              onClick={() => changeLook("bw")}
-              aria-pressed={look === "bw"}
+              className={`${styles.chip} ${allLook === "color" ? styles.active : ""}`}
+              onClick={() => changeAllLooks("color")}
+              aria-pressed={allLook === "color"}
             >
-              Black &amp; white
+              All color
             </button>
             <label className={styles.checkboxField} style={{ marginLeft: "auto" }}>
               <input type="checkbox" checked={autoCrop} onChange={(e) => changeAutoCrop(e.target.checked)} />
@@ -567,10 +607,10 @@ async function renderPage(
 
   const px = image.data;
   if (opts.look === "bw") {
-    // A block about a line of text tall: big enough that a letter never
-    // becomes its own background, small enough to follow a shadow.
-    const radius = Math.max(12, Math.round(Math.max(image.width, image.height) / 60));
-    const bw = adaptiveThreshold(gray, image.width, image.height, radius, 12);
+    // Each pixel against its neighbourhood, not one global cut, so a shadow
+    // across the page doesn't blacken it. See bwParams for the sizes.
+    const { radius, offset } = bwParams(image.width, image.height);
+    const bw = softenEdges(adaptiveThreshold(gray, image.width, image.height, radius, offset), image.width, image.height);
     for (let i = 0, p = 0; i < bw.length; i++, p += 4) {
       px[p] = px[p + 1] = px[p + 2] = bw[i];
       px[p + 3] = 255;
@@ -587,15 +627,23 @@ async function renderPage(
 
   const out = makeCanvas(image.width, image.height);
   out.getContext("2d")!.putImageData(image, 0, 0);
-  const jpeg = await toBlob(out, 0.85);
+  const jpeg = await toBlob(out, firstQuality(opts.look));
+  encodedLook.set(jpeg, opts.look);
   return { jpeg, width: image.width, height: image.height };
 }
+
+/**
+ * The look each rendered page was made in, so shrinking it later starts
+ * from the right quality without every caller having to pass it along.
+ */
+const encodedLook = new WeakMap<Blob, Look>();
 
 /**
  * Re-encodes a page until it's under `budget` bytes: lower quality first,
  * then a smaller picture. A page that already fits is returned untouched.
  */
 async function fitToBudget(jpeg: Blob, budget: number): Promise<Blob> {
+  const steps = qualitySteps(encodedLook.get(jpeg) ?? "color", QUALITY_STEPS);
   if (jpeg.size <= budget) return jpeg;
   const bitmap = await createImageBitmap(jpeg);
   let width = bitmap.width;
@@ -604,7 +652,7 @@ async function fitToBudget(jpeg: Blob, budget: number): Promise<Blob> {
   for (let round = 0; round < 6; round++) {
     const canvas = makeCanvas(width, height);
     canvas.getContext("2d")!.drawImage(bitmap, 0, 0, width, height);
-    for (const q of QUALITY_STEPS) {
+    for (const q of steps) {
       const candidate = await toBlob(canvas, q);
       if (candidate.size < best.size) best = candidate;
       if (candidate.size <= budget) {

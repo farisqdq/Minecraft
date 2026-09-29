@@ -3551,6 +3551,37 @@ tr:hover .rowDel {
   text-align: center;
 }
 
+/* The page's own look, bottom right of its preview (clear of the heading
+   and the page number): tap to switch this page. */
+.scanLook {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  min-height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--bg);
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+}
+
+.scanLook.scanLookColor {
+  border-color: transparent;
+  background: linear-gradient(90deg, #d9480f, #e8a317, #2f9e44, #1c7ed6);
+  color: #fff;
+  text-shadow: 0 1px 1px rgba(0, 0, 0, 0.35);
+}
+
+.scanLook[disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
 .scanTools {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
