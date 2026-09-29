@@ -115,8 +115,8 @@ test("the rent reminder says how much, where, and when — and what else is owed
 });
 
 test("the late notice names the amount and how far back it goes", () => {
-  const n = rentLateNotification({ tenantName: "Dana", place: "12 Oak St", company: "C", owed: 1750, behindSince: "2026-08", url: "u" });
-  assert.match(n.subject, /\$1,750 is past due/);
+  const n = rentLateNotification({ tenantName: "Dana", place: "12 Oak St", company: "C", rentOwed: 1750, behindSince: "2026-08", url: "u" });
+  assert.match(n.subject, /\$1,750 of rent is past due/);
   assert.match(n.text, /going back to August 2026/);
   assert.match(n.text, /already sent it, please ignore/);
   assert.doesNotMatch(n.text, /late fee/);
@@ -127,13 +127,30 @@ test("the late notice carries the late-fee clause when one applies", () => {
     tenantName: "Dana",
     place: "12 Oak St",
     company: "C",
-    owed: 1070,
+    rentOwed: 1000,
     behindSince: "2026-09",
     lateFee: "a $70 late fee was added; $5/day more until paid, up to $120",
     url: "u",
   });
-  assert.match(n.text, /\$1,070 is outstanding \(going back to September 2026\)\. A \$70 late fee was added; \$5\/day more until paid, up to \$120\. If you've already sent it/);
-  assert.match(n.short, /up to \$120\. If you've already paid/);
+  // The headline is rent only; the fee is its own sentence, never folded in.
+  assert.equal(n.subject, "$1,000 of rent is past due — 12 Oak St");
+  assert.equal(
+    n.text,
+    [
+      "Hi Dana —",
+      "",
+      "$1,000 of rent is past due on 12 Oak St (going back to September 2026). Separately, a $70 late fee was added; $5/day more until paid, up to $120. If you've already sent it, please ignore this.",
+      "",
+      "Your account: u",
+      "",
+      "Thanks — C",
+    ].join("\n")
+  );
+  assert.equal(
+    n.short,
+    "$1,000 of rent is past due on 12 Oak St (going back to September 2026). Separately, a $70 late fee was added; $5/day more until paid, up to $120. If you've already paid, ignore this."
+  );
+  assert.doesNotMatch(n.text, /1,070/);
 });
 
 test("lease and document reminders read differently for the tenant and the landlord", () => {

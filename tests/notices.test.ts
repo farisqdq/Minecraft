@@ -26,7 +26,7 @@ test("nothing paid: the message names the whole amount", () => {
     place: "Woodchuck Ln",
   });
   assert.match(body, /^Hi J\. —/, "opens with a first name, not a full one");
-  assert.match(body, /\$1,550 for September 2026 is outstanding on Woodchuck Ln\./);
+  assert.match(body, /\$1,550 of rent for September 2026 is outstanding on Woodchuck Ln\./);
   assert.match(body, /Nejad Eqal Rental$/, "signed by the LLC, never a person");
   assert.doesNotMatch(body, /1550\b/, "amounts are formatted, not raw");
 });
@@ -42,8 +42,8 @@ test("part paid: it credits what came in before asking for the rest", () => {
   });
   // Telling someone who part-paid that they owe the full amount is how you
   // lose a tenant's goodwill, so this wording is load-bearing.
-  assert.match(body, /received \$3,279\.41 of the \$3,379\.41 due/);
-  assert.match(body, /\$100 is still outstanding/);
+  assert.match(body, /received \$3,279\.41 of the \$3,379\.41 rent due/);
+  assert.match(body, /\$100 of rent is still outstanding/);
   assert.match(body, /DayCare — Suite 1816/);
 });
 
@@ -108,4 +108,24 @@ test("how long ago you asked, in words", () => {
   // 45 days is nearer a month and a half, and rounds up rather than down.
   assert.equal(remindedAgo(at(60 * 24 * 45), now), "2 months ago");
   assert.equal(remindedAgo("rubbish", now), "");
+});
+
+test("the Remind text is rent only: $1,000 of rent, and no late fee in it", () => {
+  // The dashboard row shows $1,070 (rent plus a $70 late fee), but the notice
+  // is sent the month's rent and the rent received — never the fee. In
+  // Kentucky a 7-day pay-or-quit amount must not include late fees, and this
+  // text is what a landlord would copy into one.
+  const body = rentNoticeBody({
+    tenantName: "Sam Rivers",
+    month: "2026-09",
+    expected: 1000,
+    paid: 0,
+    company: "Bluegrass Homes LLC",
+    place: "12 Oak St",
+  });
+  assert.equal(
+    body,
+    "Hi Sam — $1,000 of rent for September 2026 is outstanding on 12 Oak St. If you've already sent it, ignore this. Thanks — Bluegrass Homes LLC"
+  );
+  assert.doesNotMatch(body, /1,070|late fee/i);
 });

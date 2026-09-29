@@ -44,6 +44,11 @@ export function monthName(month: string) {
  * `paid` being above zero changes the wording: "you still owe $100 of $1,550"
  * reads very differently from "you owe $1,550", and getting that wrong when
  * someone has part-paid is how you lose a tenant's goodwill.
+ *
+ * The figure is rent only: `expected` is the month's scheduled rent and
+ * `paid` the rent received, never late fees. The text says "of rent" so it
+ * can't be read otherwise — in Kentucky a 7-day pay-or-quit notice must not
+ * include late fees, and this is the number a landlord would copy into one.
  */
 export function rentNoticeBody(opts: {
   tenantName: string;
@@ -60,8 +65,8 @@ export function rentNoticeBody(opts: {
 
   const line =
     paid > 0
-      ? `We've received ${money(paid)} of the ${money(expected)} due for ${when}, so ${money(owed)} is still outstanding on ${place}.`
-      : `${money(owed)} for ${when} is outstanding on ${place}.`;
+      ? `We've received ${money(paid)} of the ${money(expected)} rent due for ${when}, so ${money(owed)} of rent is still outstanding on ${place}.`
+      : `${money(owed)} of rent for ${when} is outstanding on ${place}.`;
 
   return `Hi ${first} — ${line} If you've already sent it, ignore this. Thanks — ${company}`;
 }

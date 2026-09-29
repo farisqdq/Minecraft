@@ -328,28 +328,36 @@ export function rentLateNotification(opts: {
   tenantName: string;
   place: string;
   company: string;
-  owed: number;
+  /**
+   * Rent owed, late fees excluded (lib/rent-owed.ts). This is the headline
+   * figure and the one a landlord may copy into a 7-day pay-or-quit notice,
+   * which in Kentucky must not include late fees.
+   */
+  rentOwed: number;
   behindSince: string;
   /** The late-fee clause from lib/late-fee-text.ts, or "" when none applies. */
   lateFee?: string;
   url: string;
 }): Notification {
-  const { tenantName, place, company, owed, behindSince, url } = opts;
+  const { tenantName, place, company, rentOwed, behindSince, url } = opts;
   const since = behindSince ? ` (going back to ${monthName(behindSince)})` : "";
-  // "…$1,070 is outstanding; a $70 late fee was added; $5/day more until paid, up to $120."
-  const fee = opts.lateFee ? ` ${opts.lateFee.charAt(0).toUpperCase()}${opts.lateFee.slice(1)}.` : "";
+  // "$1,000 of rent is past due on 12 Oak St. Separately, a $70 late fee was
+  // added; $5/day more until paid, up to $120." The fee is its own sentence so
+  // it never reads as part of the rent figure.
+  const fee = opts.lateFee ? ` Separately, ${opts.lateFee}.` : "";
+  const headline = `${money(rentOwed)} of rent is past due on ${place}${since}.`;
   return {
-    subject: `${money(owed)} is past due — ${place}`,
+    subject: `${money(rentOwed)} of rent is past due — ${place}`,
     text: [
       `Hi ${firstName(tenantName)} —`,
       "",
-      `Rent on ${place} is past due: ${money(owed)} is outstanding${since}.${fee} If you've already sent it, please ignore this.`,
+      `${headline}${fee} If you've already sent it, please ignore this.`,
       "",
       `Your account: ${url}`,
       "",
       `Thanks — ${company}`,
     ].join("\n"),
-    short: `${money(owed)} is past due on ${place}${since}.${fee} If you've already paid, ignore this.`,
+    short: `${headline}${fee} If you've already paid, ignore this.`,
     url,
     tag: "rent-late",
   };
