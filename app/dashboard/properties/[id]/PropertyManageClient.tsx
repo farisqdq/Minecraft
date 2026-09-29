@@ -30,6 +30,17 @@ import { STATUS_LABEL, ago, isOpen, type RequestDTO } from "@/lib/maintenance";
 import { monthName } from "@/lib/notices";
 import { messagesLabel } from "@/lib/messages";
 import { dateFromISO, formatDay, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
+// Attach proof (photos/PDFs) to rent and expense entries on this page.
+import ProofPicker, {
+  PaperclipIcon,
+  ProofStrip,
+  releasePending,
+  uploadProof,
+  type PendingProof,
+  type ProofDTO,
+} from "../../../components/ProofPicker";
+import proofStyles from "../../../components/proof.module.css";
+import { MAX_PROOFS, proofCountLabel } from "@/lib/attachments-ui";
 
 type Property = {
   id: string;
@@ -49,7 +60,8 @@ type LedgerEntry = {
   detail: string;
   note: string;
   category: string;
-  proofCount: number;
+  /** Proof on this entry, served through /api/files/attachment/<id>. */
+  attachments: ProofDTO[];
   /** Set when a mortgage payment wrote this entry; see LoansPanel. */
   loanPaymentId: string | null;
 };
@@ -81,6 +93,11 @@ const MONTHS = [
 ];
 
 /** An amount box starts empty rather than at "0", which you'd have to clear. */
+/** Entries written elsewhere (loan payments, move-outs) arrive with no proof yet. */
+function withNoProof(e: Omit<LedgerEntry, "attachments">): LedgerEntry {
+  return { ...e, attachments: [] };
+}
+
 function amountField(n: number) {
   return n > 0 ? String(n) : "";
 }
@@ -197,6 +214,15 @@ export default function PropertyManageClient({
     category: "",
   });
   const [error, setError] = useState("");
+  // ---- Attach proof: files queued in the entry form, the row whose
+  // paperclip is open, and the "+ Attach proof" dialog for a saved entry.
+  const [pendingProof, setPendingProof] = useState<PendingProof[]>([]);
+  const [proofError, setProofError] = useState("");
+  const [proofUploading, setProofUploading] = useState(false);
+  const [openClip, setOpenClip] = useState("");
+  const [attachFor, setAttachFor] = useState("");
+  const [attachPending, setAttachPending] = useState<PendingProof[]>([]);
+  const [removingProof, setRemovingProof] = useState("");
   const [confirming, setConfirming] = useState<ConfirmRequest | null>(null);
   const { toasts, push, dismiss } = useToasts();
 
@@ -683,6 +709,7 @@ export default function PropertyManageClient({
       note: t.note,
       category: t.category,
     });
+    resetProofQueue();
     setEntryOpen(true);
   }
 
@@ -732,6 +759,7 @@ export default function PropertyManageClient({
       note: "",
       category: "",
     });
+    resetProofQueue();
     setEntryOpen(true);
   }
 
@@ -785,38 +813,146 @@ export default function PropertyManageClient({
       }),
     });
     const data = await res.json().catch(() => ({}));
-    setEntrySaving(false);
     if (!res.ok) {
+      setEntrySaving(false);
       setError(data?.error || (isNew ? "Couldn't record that." : "Couldn't save that entry."));
       return;
     }
 
     if (isNew) {
       setTransactions((prev) =>
-        [{ ...data, proofCount: 0 } as LedgerEntry, ...prev].sort((a, b) => b.date.localeCompare(a.date))
+        [{ ...data, attachments: [] } as LedgerEntry, ...prev].sort((a, b) => b.date.localeCompare(a.date))
       );
-      setEntryOpen(false);
-      push(entry.type === "rent" ? `Rent of ${money(amount)} recorded.` : `Expense of ${money(amount)} recorded.`);
+    } else {
+      // Proof already on the entry is untouched by an edit, so keep it.
+      setTransactions((prev) =>
+        prev
+          .map((t) => (t.id === entry.id ? { ...t, ...data, attachments: t.attachments } : t))
+          .sort((a, b) => b.date.localeCompare(a.date))
+      );
+    }
+
+    // Proof picked in the form goes up once the entry exists. If a file
+    // fails, the entry is still saved: the dialog stays open as an edit of
+    // it, holding the files that didn't make it so they can be retried.
+    const txnId: string = isNew ? data.id : entry.id;
+    const sent = await uploadQueued(txnId, pendingProof, setPendingProof, setProofError);
+    setEntrySaving(false);
+    if (!sent.ok) {
+      if (isNew) setEntry((f) => ({ ...f, id: txnId }));
       router.refresh();
       return;
     }
 
-    // Proof already on the entry is untouched by an edit, so keep the count.
-    setTransactions((prev) =>
-      prev
-        .map((t) => (t.id === entry.id ? { ...t, ...data, proofCount: t.proofCount } : t))
-        .sort((a, b) => b.date.localeCompare(a.date))
-    );
     setEntryOpen(false);
-    push("Entry updated.");
+    const withProof = sent.count > 0 ? ` with ${proofCountLabel(sent.count)}` : "";
+    push(
+      isNew
+        ? `${entry.type === "rent" ? "Rent" : "Expense"} of ${money(amount)} recorded${withProof}.`
+        : `Entry updated${withProof}.`
+    );
     router.refresh();
+  }
+
+  // ---------- Attach proof ----------
+
+  function resetProofQueue() {
+    releasePending(pendingProof);
+    setPendingProof([]);
+    setProofError("");
+  }
+
+  /**
+   * Uploads queued files one at a time (phones on a weak signal do better
+   * than with four at once), filing each onto its row as it lands. Stops at
+   * the first failure and leaves that file and the rest in the queue.
+   */
+  async function uploadQueued(
+    txnId: string,
+    queue: PendingProof[],
+    setQueue: (q: PendingProof[]) => void,
+    setErr: (m: string) => void
+  ): Promise<{ ok: boolean; count: number }> {
+    setErr("");
+    if (queue.length === 0) return { ok: true, count: 0 };
+    setProofUploading(true);
+    let count = 0;
+    for (let i = 0; i < queue.length; i++) {
+      const result = await uploadProof(txnId, queue[i].file);
+      if (!result.ok) {
+        setQueue(queue.slice(i));
+        setErr(`${count > 0 ? `${proofCountLabel(count)} attached, but ` : ""}${result.error}`);
+        setProofUploading(false);
+        return { ok: false, count };
+      }
+      count += 1;
+      releasePending([queue[i]]);
+      setTransactions((prev) =>
+        prev.map((t) => (t.id === txnId ? { ...t, attachments: [...t.attachments, result.attachment] } : t))
+      );
+    }
+    setQueue([]);
+    setProofUploading(false);
+    return { ok: true, count };
+  }
+
+  function openAttach(t: LedgerEntry) {
+    releasePending(attachPending);
+    setAttachPending([]);
+    setProofError("");
+    setAttachFor(t.id);
+  }
+
+  function closeAttach() {
+    releasePending(attachPending);
+    setAttachPending([]);
+    setProofError("");
+    setAttachFor("");
+  }
+
+  async function sendAttach(e: React.FormEvent) {
+    e.preventDefault();
+    const id = attachFor;
+    const sent = await uploadQueued(id, attachPending, setAttachPending, setProofError);
+    if (!sent.ok) return;
+    setAttachFor("");
+    setOpenClip(id);
+    if (sent.count > 0) push(`${proofCountLabel(sent.count)} attached.`);
+    router.refresh();
+  }
+
+  function removeProof(a: ProofDTO) {
+    setConfirming({
+      title: "Remove this proof?",
+      body: `${a.filename} is deleted from this entry. The entry itself stays.`,
+      confirmLabel: "Remove",
+      danger: true,
+      onConfirm: async () => {
+        setRemovingProof(a.id);
+        const res = await fetch(`/api/attachments/${a.id}`, { method: "DELETE" });
+        setRemovingProof("");
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          push(data?.error || "Couldn't remove that file.", "bad");
+          return;
+        }
+        setTransactions((prev) =>
+          prev.map((t) =>
+            t.id === a.transactionId ? { ...t, attachments: t.attachments.filter((x) => x.id !== a.id) } : t
+          )
+        );
+        push("Proof removed.");
+      },
+    });
   }
 
   function removeEntry(t: LedgerEntry) {
     setConfirming({
       title: "Delete this entry?",
       body: `${t.type === "rent" ? "Rent" : "Expense"} of ${money(t.amount)} on ${formatDay(t.date)}${
-        t.proofCount > 0 ? `. Its ${t.proofCount === 1 ? "proof file goes" : "proof files go"} too` : ""
+        t.attachments.length > 0
+          ? `. Its ${t.attachments.length === 1 ? "proof file goes" : "proof files go"} too`
+          : ""
       }. To fix a wrong figure, edit it instead — that keeps the proof.`,
       confirmLabel: "Delete entry",
       danger: true,
@@ -1586,7 +1722,7 @@ export default function PropertyManageClient({
             if (r && r.active) await toggleRecurringActive(r);
           }}
           onEntriesAdded={(entries) => {
-            setTransactions((prev) => [...entries, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+            setTransactions((prev) => [...entries.map(withNoProof), ...prev].sort((a, b) => b.date.localeCompare(a.date)));
             router.refresh();
           }}
           onEntriesRemoved={(ids) => {
@@ -1848,9 +1984,25 @@ export default function PropertyManageClient({
                       {t.category && <div className={styles.categoryTag}>{t.category}</div>}
                       {t.detail}
                       {t.note && <div className={styles.note}>{t.note}</div>}
-                      {t.proofCount > 0 && (
-                        <div className={styles.note}>
-                          {t.proofCount} {t.proofCount === 1 ? "proof" : "proofs"} attached
+                      {/* Paperclip with the count; tap to show the thumbnails. */}
+                      {t.attachments.length > 0 && (
+                        <div>
+                          <button
+                            type="button"
+                            className={proofStyles.clip}
+                            aria-expanded={openClip === t.id}
+                            aria-label={`${proofCountLabel(t.attachments.length)} attached — ${
+                              openClip === t.id ? "hide" : "show"
+                            }`}
+                            data-proof-clip={t.id}
+                            onClick={() => setOpenClip((c) => (c === t.id ? "" : t.id))}
+                          >
+                            <PaperclipIcon />
+                            {t.attachments.length}
+                          </button>
+                          {openClip === t.id && (
+                            <ProofStrip items={t.attachments} onRemove={removeProof} busyId={removingProof} />
+                          )}
                         </div>
                       )}
                     </td>
@@ -1860,6 +2012,15 @@ export default function PropertyManageClient({
                     </td>
                     <td>
                       <div className={styles.rowActions}>
+                        {storageReady && t.attachments.length < MAX_PROOFS && (
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                            onClick={() => openAttach(t)}
+                          >
+                            + Attach proof
+                          </button>
+                        )}
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.small} ${styles.quiet}`}
@@ -1884,8 +2045,8 @@ export default function PropertyManageClient({
         )}
         {transactions.length > recentEntries.length && (
           <p className={styles.helpText}>
-            Showing the {recentEntries.length} most recent. The full ledger, with filters and proof uploads,
-            is on the dashboard.
+            Showing the {recentEntries.length} most recent. The full ledger, with filters, is on the
+            dashboard.
           </p>
         )}
       </section>
@@ -1996,6 +2157,33 @@ export default function PropertyManageClient({
               />
             </div>
           </div>
+          {/* Attach proof: queued here, uploaded once the entry is saved. */}
+          <div className={styles.field} style={{ marginTop: 14 }}>
+            {storageReady ? (
+              <>
+                {entry.id && (
+                  <ProofStrip
+                    heading="Already attached"
+                    items={transactions.find((t) => t.id === entry.id)?.attachments ?? []}
+                    onRemove={removeProof}
+                    busyId={removingProof}
+                  />
+                )}
+                <ProofPicker
+                  value={pendingProof}
+                  onChange={setPendingProof}
+                  existing={entry.id ? (transactions.find((t) => t.id === entry.id)?.attachments.length ?? 0) : 0}
+                  disabled={entrySaving}
+                  label={entry.type === "rent" ? "Attach proof of payment (optional)" : "Attach receipt or photo (optional)"}
+                />
+              </>
+            ) : (
+              <span className={styles.proofWarn}>
+                File storage isn&apos;t set up yet, so proof can&apos;t be attached.
+              </span>
+            )}
+            {proofError && <div className={styles.errorBar}>{proofError}</div>}
+          </div>
           {error && <div className={styles.errorBar}>{error}</div>}
           <div className={styles.formFoot}>
             <button type="button" className={styles.btn} onClick={() => setEntryOpen(false)}>
@@ -2003,7 +2191,9 @@ export default function PropertyManageClient({
             </button>
             <button type="submit" className={`${styles.btn} ${styles.accent}`} disabled={entrySaving}>
               {entrySaving
-                ? "Saving\u2026"
+                ? proofUploading
+                  ? "Uploading proof\u2026"
+                  : "Saving\u2026"
                 : entry.id
                   ? "Save changes"
                   : entry.type === "rent"
@@ -2013,6 +2203,56 @@ export default function PropertyManageClient({
           </div>
         </form>
       </Modal>
+
+      {/* "+ Attach proof" on a saved entry. */}
+      {(() => {
+        const t = transactions.find((x) => x.id === attachFor);
+        return (
+          <Modal
+            open={Boolean(t)}
+            title="Attach proof"
+            subtitle={
+              t
+                ? `${t.type === "rent" ? "Rent" : "Expense"} of ${money(t.amount)} on ${formatDay(t.date)}${
+                    t.detail ? ` — ${t.detail}` : ""
+                  }`
+                : ""
+            }
+            onClose={closeAttach}
+          >
+            {t && (
+              <form onSubmit={sendAttach}>
+                <ProofStrip heading="Already attached" items={t.attachments} onRemove={removeProof} busyId={removingProof} />
+                <div style={{ marginTop: t.attachments.length ? 14 : 0 }}>
+                  <ProofPicker
+                    value={attachPending}
+                    onChange={setAttachPending}
+                    existing={t.attachments.length}
+                    disabled={proofUploading}
+                  />
+                </div>
+                {proofError && <div className={styles.errorBar}>{proofError}</div>}
+                <div className={styles.formFoot}>
+                  <button type="button" className={styles.btn} onClick={closeAttach}>
+                    {attachPending.length ? "Cancel" : "Close"}
+                  </button>
+                  <button
+                    type="submit"
+                    className={`${styles.btn} ${styles.accent}`}
+                    disabled={proofUploading || attachPending.length === 0}
+                  >
+                    {proofUploading
+                      ? "Uploading…"
+                      : attachPending.length
+                        ? `Attach ${proofCountLabel(attachPending.length)}`
+                        : "Attach"}
+                  </button>
+                </div>
+              </form>
+            )}
+          </Modal>
+        );
+      })()}
 
       <Modal
         open={tenantOpen}
@@ -2153,7 +2393,7 @@ export default function PropertyManageClient({
           setMoveOuts((prev) => ({ ...prev, [r.tenant.id]: r.moveOut }));
           if (r.vacantSince) setVacancy(r.tenant.unitId ?? null, r.vacantSince);
           if (r.transactions.length) {
-            setTransactions((prev) => [...r.transactions, ...prev].sort((a, b) => b.date.localeCompare(a.date)));
+            setTransactions((prev) => [...r.transactions.map(withNoProof), ...prev].sort((a, b) => b.date.localeCompare(a.date)));
           }
           await refreshBalance(r.tenant.id);
           push(
