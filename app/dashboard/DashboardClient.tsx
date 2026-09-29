@@ -3,6 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
+// Attach-proof hardening for iOS: visually-hidden (not display:none) inputs, HEIC in accept.
+import { PROOF_ACCEPT } from "@/lib/attachments-ui";
+import proofStyles from "../components/proof.module.css";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money, moneyRound } from "@/lib/money";
 import { STATUS_LABEL, ago, type RequestDTO } from "@/lib/maintenance";
@@ -2552,11 +2555,14 @@ export default function DashboardClient({
                                 : t.attachments.length > 0
                                   ? "+ Add another"
                                   : "+ Attach proof"}
+                              {/* iOS: a display:none (hidden) file input inside a label is not a
+                                  reliable picker target, esp. in the home-screen app — keep it in
+                                  the layout, clipped. accept names HEIC/PDF explicitly. */}
                               <input
                                 type="file"
                                 multiple
-                                accept="image/*,application/pdf"
-                                hidden
+                                accept={PROOF_ACCEPT}
+                                className={proofStyles.srOnly}
                                 disabled={uploadingFor === t.id}
                                 onChange={(e) => {
                                   addProofToRow(t.id, e.target.files);
@@ -2725,7 +2731,7 @@ export default function DashboardClient({
                   ref={proofInput}
                   type="file"
                   multiple
-                  accept="image/*,application/pdf"
+                  accept={PROOF_ACCEPT /* names HEIC/HEIF so iPhone photos stay selectable */}
                   className={styles.fileInput}
                   disabled={!storageReady}
                   onChange={(e) => setPendingProof(Array.from(e.target.files ?? []))}
