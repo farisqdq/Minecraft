@@ -6,6 +6,7 @@ import styles from "../dashboard/dashboard.module.css";
 import { formatDay } from "@/lib/lease";
 import { KINDS, scanTitle, type DocumentDTO } from "@/lib/documents";
 import { buildPdf, jpegInfo, type JpegPage } from "@/lib/pdf";
+import { DEFAULT_LOOK, firstQuality, lookLabel, otherLook, qualitySteps, sharedLook, withEveryLook, type Look } from "@/lib/scanLook";
 import {
   MAX_DOCUMENT_BYTES,
   QUALITY_STEPS,
@@ -20,16 +21,6 @@ import {
   softenEdges,
   toGray,
 } from "@/lib/scan";
-import {
-  DEFAULT_LOOK,
-  firstQuality,
-  lookLabel,
-  otherLook,
-  qualitySteps,
-  sharedLook,
-  withEveryLook,
-  type Look,
-} from "@/lib/scanLook";
 
 /** Enough for a lease; more than this and a phone starts running out of memory. */
 export const MAX_PAGES = 20;
