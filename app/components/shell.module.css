@@ -400,8 +400,22 @@
 }
 
 /* ---------- Mobile tab bar ---------- */
-.tabBar {
+.tabBar,
+.tabHandle {
   display: none;
+}
+
+/* Registered so the edge fades ease in and out instead of popping. */
+@property --fade-start {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
+}
+
+@property --fade-end {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
 /* A laptop screen: seven sections, the search box and the account controls
@@ -505,21 +519,32 @@
     display: contents;
   }
 
+  /* One row of tabs that swipes sideways when they don't all fit, on a
+     bar that slides down out of the way while the page is read downward
+     (TabBar decides when). Only transform moves, so hiding it never
+     reflows the page. */
   .tabBar {
     position: fixed;
     left: 0;
     right: 0;
     bottom: 0;
     z-index: 45;
-    display: grid;
-    grid-auto-flow: column;
-    grid-auto-columns: 1fr;
-    gap: 2px;
-    padding: 6px 6px calc(6px + env(safe-area-inset-bottom));
+    display: block;
+    padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
     background: color-mix(in srgb, var(--bg) 92%, transparent);
     backdrop-filter: saturate(1.6) blur(14px);
     -webkit-backdrop-filter: saturate(1.6) blur(14px);
     border-top: 1px solid var(--line);
+    transform: translateY(0);
+    /* Coming back: a short ease-out, so it arrives quickly and settles. */
+    transition: transform 220ms cubic-bezier(0, 0, 0.2, 1);
+    will-change: transform;
+  }
+
+  /* Going away: ease-in, and far enough that the top border leaves too. */
+  .tabBarHidden {
+    transform: translateY(calc(100% + 2px));
+    transition: transform 200ms cubic-bezier(0.4, 0, 1, 1);
   }
 
   @supports not (background: color-mix(in srgb, red 50%, transparent)) {
@@ -528,24 +553,142 @@
     }
   }
 
+  .tabRow {
+    position: relative;
+    display: flex;
+    gap: 2px;
+    padding: 0 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    scroll-padding-inline: 6px;
+    scrollbar-width: none;
+    --fade-start: 0px;
+    --fade-end: 0px;
+    transition: --fade-start 160ms ease-out, --fade-end 160ms ease-out;
+  }
+
+  .tabRow::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* An edge fades only while there are more tabs past it, as the hint that
+     the row swipes. A mask fades the tabs themselves, not the bar behind. */
+  .fadeStart {
+    --fade-start: 28px;
+  }
+
+  .fadeEnd {
+    --fade-end: 28px;
+  }
+
+  .fadeStart,
+  .fadeEnd {
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--fade-start),
+      #000 calc(100% - var(--fade-end)),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      #000 var(--fade-start),
+      #000 calc(100% - var(--fade-end)),
+      transparent 100%
+    );
+  }
+
   .tab {
+    flex: 1 0 68px;
+    min-width: 68px;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: center;
     gap: 3px;
-    padding: 6px 2px;
+    padding: 6px 4px;
     border-radius: 12px;
     text-decoration: none;
     color: var(--muted);
     font-size: 10.5px;
     font-weight: 600;
-    min-height: 46px;
+    white-space: nowrap;
+    min-height: 48px;
+    scroll-snap-align: start;
+  }
+
+  /* The row clips vertically, which would cut an outside focus ring. */
+  .tab:focus-visible {
+    outline-offset: -2px;
   }
 
   .tab.on {
     color: var(--accent);
     background: var(--accent-soft);
+  }
+
+  /* While the bar is away, a pill at the bottom edge brings it back. The
+     button is a full 44px tall to hit; only the pill inside is drawn. */
+  .tabHandle {
+    position: fixed;
+    left: 50%;
+    bottom: env(safe-area-inset-bottom);
+    z-index: 44;
+    display: grid;
+    place-items: center;
+    width: 96px;
+    height: 44px;
+    margin-left: -48px;
+    padding: 0;
+    border: 0;
+    background: none;
+    cursor: pointer;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 160ms ease-out, visibility 0s linear 160ms;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tabHandleOn {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 160ms ease-out 60ms, visibility 0s;
+  }
+
+  .tabHandlePill {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 18px;
+    border-radius: 999px;
+    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    border: 1px solid var(--line-strong);
+    box-shadow: var(--shadow-sm);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  .tabHandlePill::after {
+    content: "";
+    width: 24px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--muted);
+  }
+
+  .tabHandle:focus-visible {
+    outline: none;
+  }
+
+  .tabHandle:focus-visible .tabHandlePill {
+    outline: 2px solid var(--gold);
+    outline-offset: 2px;
   }
 
   .tabIcon {
@@ -565,16 +708,17 @@
   .brandShort {
     display: inline;
   }
-  /* Seven tabs (eight for an admin) on a small phone: a touch smaller so
-     "Calendar" still fits on one line. */
-  .tab {
-    font-size: 9.5px;
-    padding: 6px 0;
-  }
-  .tabBar {
-    gap: 0;
-    padding-left: 2px;
-    padding-right: 2px;
+}
+
+/* No sliding for people who asked for less motion: the bar and the pill
+   just appear and disappear. */
+@media (prefers-reduced-motion: reduce) {
+  .tabBar,
+  .tabBarHidden,
+  .tabHandle,
+  .tabHandleOn,
+  .tabRow {
+    transition: none;
   }
 }
 
@@ -642,4 +786,20 @@
 a.who:hover {
   color: var(--ink);
   text-decoration: underline;
+}
+
+/* Nine sections (an admin's Admin tab on top of the rest) don't fit a
+   laptop or small-desktop bar with labels; they go to icons earlier, the name
+   still a tooltip. */
+@media (max-width: 1760px) and (min-width: 721px) {
+  .navCrowded .navLabel {
+    display: none;
+  }
+  .navCrowded .navLink {
+    padding: 8px;
+  }
+  .navCrowded .navIcon {
+    width: 19px;
+    height: 19px;
+  }
 }
