@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
+import { rentTargetOf, unitIdsCountingToward } from "@/lib/rent-target";
 import {
   buildStatement,
   resolveStartMonth,
@@ -81,13 +82,38 @@ export type StatementResult = {
    * reminder needs to say "a $70 late fee was added".
    */
   lateFeesByMonth: Record<string, number>;
+  /**
+   * The place these books are for, after a single-unit property's whole
+   * property has been read as its unit (lib/rent-target.ts) — what a report
+   * needs to say why a month expects no rent.
+   */
+  place: {
+    unitId: string | null;
+    /** "#A", or "the whole property". */
+    label: string;
+    wholeProperty: boolean;
+    vacant: boolean;
+    /** YYYY-MM-DD, or null when not vacant or not recorded. */
+    vacantSince: string | null;
+    /** Its monthly rent as it stands today. */
+    rentSet: number;
+  };
+  /** Tenant on the whole property of a multi-unit one: the units that carry rent. */
+  unitsWithRent: string[];
+  /** Other active tenants on the same place, by name. */
+  sharedWith: string[];
 };
 
 export const monthOf = (d: Date) =>
   `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 
-export const currentMonthOf = (now = new Date()) =>
-  `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+/**
+ * The month `now` falls in, by the same UTC calendar as monthOf and the
+ * late-fee days (dayOf). Reading it from the server's local clock put the
+ * statement's last month and "today" in different months for the hours
+ * either side of midnight on the 1st wherever the server isn't on UTC.
+ */
+export const currentMonthOf = (now = new Date()) => monthOf(now);
 
 type RuleRow = {
   id: string;
@@ -160,31 +186,56 @@ const RULE_INCLUDE = {
  * earlier month's still unpaid — gets the one-time fee straight away, and
  * daily fees count from tomorrow; the days before the policy existed are
  * never billed. Changing the numbers while it's on keeps the start.
+ *
+ * "Exactly one" has to hold when two requests work out the same tenant at
+ * once — the dashboard asking for late-fee statuses while the policy save
+ * runs, say. Each used to see no rule and create its own, and every copy
+ * then billed the month: $959.70 of late fees on $4,570 instead of $319.90.
+ * So the rule is created under a per-tenant lock with a second look inside
+ * it, and any copies an earlier race left behind are switched off here
+ * (kept, not deleted, for the runs they hold), leaving one in charge.
  */
 async function syncPolicyRule(opts: {
   tenantId: string;
   mode: LateFeeMode;
   policy: LateFeePolicyDTO;
-  existing: RuleRow | undefined;
+  /** Every `fromPolicy` rule the tenant has, oldest first. Normally one. */
+  policyRules: RuleRow[];
   /** YYYY-MM-DD, UTC: the day a rule switched on today starts charging. */
   today: string;
 }): Promise<boolean> {
-  const { tenantId, mode, policy, existing, today } = opts;
+  const { tenantId, mode, policy, policyRules, today } = opts;
   const wanted = mode === "default" && policyCharges(policy);
   const fields = policyRuleFields(policy);
+  // The one in charge: an active one if any (its runs hold this month's
+  // billing), else the oldest.
+  const [existing, ...copies] = [...policyRules.filter((r) => r.active), ...policyRules.filter((r) => !r.active)];
+
+  const strayCopies = copies.filter((r) => r.active).map((r) => r.id);
+  if (strayCopies.length) {
+    await prisma.tenantChargeRule.updateMany({ where: { id: { in: strayCopies } }, data: { active: false } });
+  }
+  const healed = strayCopies.length > 0;
 
   if (!wanted) {
     if (existing && existing.active) {
       await prisma.tenantChargeRule.update({ where: { id: existing.id }, data: { active: false } });
       return true;
     }
-    return false;
+    return healed;
   }
   if (!existing) {
     // From today, not from the start of the month: overdue rent gets the
     // one-time fee now, and daily fees count from tomorrow (lateFeesFor).
-    await prisma.tenantChargeRule.create({
-      data: { ...fields, tenantId, fromPolicy: true, active: true, startMonth: null, endMonth: null, accrueFrom: today },
+    await prisma.$transaction(async (tx) => {
+      // Held until this transaction ends; a request racing this one waits
+      // here, then finds the rule this one made and leaves it be.
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`policy-rule:${tenantId}`}))`;
+      const made = await tx.tenantChargeRule.findFirst({ where: { tenantId, fromPolicy: true }, select: { id: true } });
+      if (made) return;
+      await tx.tenantChargeRule.create({
+        data: { ...fields, tenantId, fromPolicy: true, active: true, startMonth: null, endMonth: null, accrueFrom: today },
+      });
     });
     return true;
   }
@@ -198,7 +249,7 @@ async function syncPolicyRule(opts: {
     existing.dailyAmount !== fields.dailyAmount ||
     existing.capPercent !== fields.capPercent ||
     existing.endMonth !== null;
-  if (!stale) return false;
+  if (!stale) return healed;
   await prisma.tenantChargeRule.update({
     where: { id: existing.id },
     data: {
@@ -228,9 +279,18 @@ export async function statementForTenant(
     where: { id: tenantId },
     include: {
       property: {
-        select: { id: true, companyId: true, monthlyRent: true, vacant: true, vacantSince: true },
+        select: {
+          id: true,
+          companyId: true,
+          monthlyRent: true,
+          vacant: true,
+          vacantSince: true,
+          units: {
+            select: { id: true, name: true, monthlyRent: true, vacant: true, vacantSince: true },
+            orderBy: { name: "asc" },
+          },
+        },
       },
-      unit: { select: { id: true, monthlyRent: true, vacant: true, vacantSince: true } },
       moveOut: { select: { lastRentMonth: true } },
       charges: { orderBy: { createdAt: "asc" } },
       rules: RULE_INCLUDE,
@@ -253,7 +313,7 @@ export async function statementForTenant(
       tenantId: tenant.id,
       mode: lateFeeMode,
       policy,
-      existing: tenant.rules.find((r) => r.fromPolicy),
+      policyRules: tenant.rules.filter((r) => r.fromPolicy),
       today: dayOf(now),
     });
     if (changed) {
@@ -264,21 +324,35 @@ export async function statementForTenant(
     }
   }
 
+  // Where this tenancy's rent lives. On a single-unit property the whole
+  // property is that unit (lib/rent-target.ts): a tenant or a payment on
+  // either is the same place, and the unit's rent is what's expected — the
+  // figure the dashboard card shows. Anywhere else it's exactly the target
+  // the tenant is on.
+  const units = tenant.property.units;
+  const targetUnitId = rentTargetOf(tenant.unitId, units);
+  const unit = units.find((u) => u.id === targetUnitId) ?? null;
+  const counted = unitIdsCountingToward(tenant.unitId, units);
+  const onTarget = { OR: counted.map((unitId) => ({ unitId })) };
+
   // Rent lands against a property and optionally a unit, not against a
   // person. If two tenants share exactly the same target, there is no way to
   // say whose money arrived, so say that rather than attribute it twice.
-  const sharing = await prisma.tenant.count({
-    where: { propertyId: tenant.propertyId, unitId: tenant.unitId, active: true },
+  const others = await prisma.tenant.findMany({
+    where: { propertyId: tenant.propertyId, active: true, id: { not: tenant.id }, ...onTarget },
+    select: { name: true },
+    orderBy: { name: "asc" },
   });
+  const sharedWith = tenant.active ? others.map((o) => o.name) : [];
 
   const [payments, rentChanges] = await Promise.all([
     prisma.transaction.findMany({
-      where: { propertyId: tenant.propertyId, unitId: tenant.unitId, type: "rent" },
+      where: { propertyId: tenant.propertyId, type: "rent", ...onTarget },
       select: { date: true, amount: true },
       orderBy: { date: "asc" },
     }),
     prisma.rentChange.findMany({
-      where: { propertyId: tenant.propertyId, unitId: tenant.unitId },
+      where: { propertyId: tenant.propertyId, unitId: targetUnitId },
       orderBy: { effectiveFrom: "asc" },
     }),
   ]);
@@ -291,8 +365,9 @@ export async function statementForTenant(
     amount: c.amount,
   }));
 
-  const currentRent = tenant.unit ? tenant.unit.monthlyRent : tenant.property.monthlyRent;
-  const place = tenant.unit ?? tenant.property;
+  const currentRent = unit ? unit.monthlyRent : tenant.property.monthlyRent;
+  const placeLabel = unit ? unit.name : "the whole property";
+  const place = unit ?? tenant.property;
   // A vacant place expects no rent — but only from when it went vacant, and
   // never for a tenancy that has a recorded end. A move-out marks the place
   // vacant itself; zeroing rent across the whole tenancy because of that
@@ -304,7 +379,7 @@ export async function statementForTenant(
   const rentFor = (month: string) =>
     vacantFrom !== null && month >= vacantFrom
       ? 0
-      : rentForMonth(changeDTOs, tenant.propertyId, tenant.unitId, month, currentRent);
+      : rentForMonth(changeDTOs, tenant.propertyId, targetUnitId, month, currentRent);
 
   const startMonth = resolveStartMonth({
     explicit: tenant.balanceFrom,
@@ -339,7 +414,15 @@ export async function statementForTenant(
       : lateFeeMode === "custom"
         ? !r.fromPolicy
         : false);
-  const rules = tenant.rules.map(ruleDTO).filter(inForce);
+  // Two active tenants on one place can't both be late with the same rent:
+  // there's no telling whose it was, and billing each of them a late fee on
+  // it charges the one rent twice. Late fees wait until the books are split
+  // (the report says so); monthly charges are each tenant's own and go on.
+  const shared = sharedWith.length > 0;
+  const rules = tenant.rules
+    .map(ruleDTO)
+    .filter(inForce)
+    .filter((r) => !(shared && r.kind === "late"));
   const paymentInputs = payments.map((p) => ({ month: monthOf(p.date), amount: p.amount }));
   const datedPayments: DatedPayment[] = payments.map((p) => ({ day: dayOf(p.date), amount: p.amount }));
 
@@ -358,6 +441,11 @@ export async function statementForTenant(
       today: now,
       rentFor,
       charges: liveCharges(charges),
+      ruleCharges: charges.filter((c) => c.ruleId && c.kind !== "credit").map((c) => ({
+        ruleId: c.ruleId as string,
+        month: c.month,
+        amount: c.amount,
+      })),
       payments: paymentInputs,
       datedPayments,
       // A month (or, for a daily fee, a day) a rule has already run for is
@@ -422,10 +510,9 @@ export async function statementForTenant(
 
   return {
     statement,
-    problem:
-      sharing > 1
-        ? "Two tenants share this property without units, so there's no way to tell whose rent arrived. Give each one a unit to split the books."
-        : "",
+    problem: shared
+      ? `${[tenant.name, ...sharedWith].join(" and ")} are ${sharedWith.length === 1 ? "both" : "all"} on ${placeLabel}, so there's no way to tell whose rent arrived. Give each one their own unit, or mark whoever left as moved out.`
+      : "",
     startMonth,
     openingBalance: tenant.openingBalance,
     startPinned: Boolean(tenant.balanceFrom),
@@ -446,6 +533,16 @@ export async function statementForTenant(
     lateFeeMode,
     policy,
     lateFeesByMonth,
+    place: {
+      unitId: targetUnitId,
+      label: placeLabel,
+      wholeProperty: !unit,
+      vacant: place.vacant,
+      vacantSince: place.vacant && place.vacantSince ? dayOf(place.vacantSince) : null,
+      rentSet: currentRent,
+    },
+    unitsWithRent: unit ? [] : units.filter((u) => u.monthlyRent > 0).map((u) => u.name),
+    sharedWith,
   };
 }
 
@@ -478,6 +575,8 @@ function plannedRuleCharges(opts: {
   today: Date;
   rentFor: (month: string) => number;
   charges: ChargeInput[];
+  /** The charges on the books that a rule made, for what each rule has put on a month. */
+  ruleCharges: { ruleId: string; month: string; amount: number }[];
   payments: { month: string; amount: number }[];
   /** The same payments by the day they landed, for what was owed on each day. */
   datedPayments: DatedPayment[];
@@ -516,6 +615,7 @@ function plannedRuleCharges(opts: {
         today: opts.today,
         payments: opts.datedPayments,
         applied: opts.applied.filter((a) => a.month === month),
+        booked: bookedFor(opts.ruleCharges, month),
       }).filter((f) => !done(f.ruleId, month, f.day ?? ""));
 
       const fresh = [...monthly, ...late];
@@ -530,6 +630,16 @@ function plannedRuleCharges(opts: {
   });
 
   return planned;
+}
+
+/** What each rule has on the books for one month, by rule id. */
+function bookedFor(rows: { ruleId: string; month: string; amount: number }[], month: string) {
+  const out: Record<string, number> = {};
+  for (const r of rows) {
+    if (r.month !== month) continue;
+    out[r.ruleId] = Math.round(((out[r.ruleId] ?? 0) + Math.max(0, r.amount || 0)) * 100) / 100;
+  }
+  return out;
 }
 
 /** Just the number, for a list of cards. One query per tenant is fine at this size. */

@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
+import { rentTargetOf, unitIdsCountingToward } from "@/lib/rent-target";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money, moneyRound } from "@/lib/money";
 import { STATUS_LABEL, ago, type RequestDTO } from "@/lib/maintenance";
@@ -623,7 +624,13 @@ export default function DashboardClient({
   }
 
   function rentInMonth(propertyId: string, unitId: string | null, month: string) {
-    return ledgerIndex.rent.get(`${propertyId}|${unitId ?? ""}|${month}`) ?? 0;
+    // On a property with one unit, rent logged against the whole property
+    // is that unit's rent (lib/rent-target.ts) — the same rule the tenant's
+    // statement and late fees use, so the card and the fee agree.
+    return unitIdsCountingToward(unitId, unitsForProperty(propertyId)).reduce(
+      (sum, u) => sum + (ledgerIndex.rent.get(`${propertyId}|${u ?? ""}|${month}`) ?? 0),
+      0
+    );
   }
 
   function rentInBarMonth(propertyId: string) {
@@ -713,9 +720,13 @@ export default function DashboardClient({
 
   /** The current tenant of a target, if one is on file. */
   function tenantFor(propertyId: string, unitId: string | null) {
+    // A tenant on the whole property of a one-unit property rents that unit.
+    const propUnits = unitsForProperty(propertyId);
+    const target = rentTargetOf(unitId, propUnits);
     return (
-      tenants.find((t) => t.active && t.propertyId === propertyId && (t.unitId ?? null) === unitId) ??
-      null
+      tenants.find(
+        (t) => t.active && t.propertyId === propertyId && rentTargetOf(t.unitId ?? null, propUnits) === target
+      ) ?? null
     );
   }
 

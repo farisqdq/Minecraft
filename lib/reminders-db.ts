@@ -27,6 +27,7 @@ import {
 import { statementForTenant, type StatementResult } from "@/lib/statements";
 import { lateFeeSummary } from "@/lib/late-fee-text";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
+import { rentTargetOf } from "@/lib/rent-target";
 import { STATUS_LABEL, type RequestStatus } from "@/lib/maintenance";
 
 /**
@@ -265,7 +266,9 @@ export type RunReport = {
 };
 
 const tenantInclude = {
-  property: { select: { id: true, name: true, monthlyRent: true } },
+  property: {
+    select: { id: true, name: true, monthlyRent: true, units: { select: { id: true, name: true, monthlyRent: true } } },
+  },
   unit: { select: { id: true, name: true, monthlyRent: true } },
   account: { select: { id: true, email: true } },
   rules: { where: { active: true, kind: "late" }, select: { graceDays: true } },
@@ -315,7 +318,11 @@ export async function runReminders(now: Date, origin: string): Promise<RunReport
       if (s.rentDue.on) {
         const plan = rentDueSoon(today, t.dueDay, s.rentDue.days);
         if (plan) {
-          const changes = await prisma.rentChange.findMany({ where: { propertyId: t.propertyId, unitId: t.unitId } });
+          // The rent the statement expects: on a single-unit property the
+          // whole property is its unit (lib/rent-target.ts).
+          const targetUnitId = rentTargetOf(t.unitId, t.property.units);
+          const targetUnit = t.property.units.find((u) => u.id === targetUnitId) ?? null;
+          const changes = await prisma.rentChange.findMany({ where: { propertyId: t.propertyId, unitId: targetUnitId } });
           const dtos: RentChangeDTO[] = changes.map((c) => ({
             id: c.id,
             propertyId: c.propertyId,
@@ -323,7 +330,7 @@ export async function runReminders(now: Date, origin: string): Promise<RunReport
             effectiveFrom: isoDate(c.effectiveFrom).slice(0, 7),
             amount: c.amount,
           }));
-          const amount = rentForMonth(dtos, t.propertyId, t.unitId, plan.month, t.unit?.monthlyRent ?? t.property.monthlyRent);
+          const amount = rentForMonth(dtos, t.propertyId, targetUnitId, plan.month, targetUnit?.monthlyRent ?? t.property.monthlyRent);
           // Nothing to remind about when there's no rent, or it's already covered by credit.
           const prepaid = trusted && balance <= -amount + 0.005;
           if (amount > 0 && !prepaid) {
