@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { signOutTo } from "./sign-out";
 import PropertySearch from "./PropertySearch";
 import InstallBanner from "./InstallBanner";
+import TabBar from "./TabBar";
 import { useShellInfo } from "./ShellContext";
 import { useLivePulse } from "./useLivePulse";
 import { MESSAGES_READ_EVENT } from "./messages-client";
@@ -159,7 +160,8 @@ const NAV: {
 /**
  * Every signed-in page shares this frame so navigation never moves: a sticky
  * bar on desktop, and on a phone a bottom tab bar within thumb reach instead
- * of links buried in a header you have to scroll back up to.
+ * of links buried in a header you have to scroll back up to. The phone bar
+ * swipes sideways and steps aside while reading; see TabBar.
  */
 export default function AppShell({
   title,
@@ -281,7 +283,7 @@ export default function AppShell({
         {children}
       </main>
 
-      <nav className={styles.tabBar} aria-label="Sections">
+      <TabBar label="Sections">
         {nav.map(({ href, short, Icon, badge }) => (
           <Link
             key={href}
@@ -296,7 +298,7 @@ export default function AppShell({
             {short}
           </Link>
         ))}
-      </nav>
+      </TabBar>
     </div>
   );
 }
