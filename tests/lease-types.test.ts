@@ -114,6 +114,17 @@ test("Alan's card: commercial and residential", () => {
   assert.equal(card(RESIDENTIAL), "Late fees $319.90 (7% + $5/day, cap $457) · 70% of cap");
 });
 
+test("a card whose fees sit above a lowered cap says so, not 'cap reached'", () => {
+  assert.equal(
+    cardLateFeeLine({ fees: 120, rent: 1000, policy: RESIDENTIAL, mode: "default" }),
+    "Late fees $120 (7% + $5/day, cap $100) · above cap"
+  );
+  assert.equal(
+    cardLateFeeLine({ fees: 100, rent: 1000, policy: RESIDENTIAL, mode: "default" }),
+    "Late fees $100 (7% + $5/day, cap $100) · cap reached"
+  );
+});
+
 test("the rent-late reminder names the LLC's cap", () => {
   assert.equal(
     lateFeeSummary({ rent: 1000, policy: RESIDENTIAL, feesSoFar: 70 }),
