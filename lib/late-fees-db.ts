@@ -105,6 +105,7 @@ export async function lateFeeStatuses(
         today,
         problem: result.problem,
         capped: cap !== null && feesThisMonth >= cap - 0.005,
+        waived: result.lateFeeWaivers.some((w) => w.waived && w.month === month), // a21
         active: tenant.active,
         companyName: tenant.property.company.name,
         policyOnFor,

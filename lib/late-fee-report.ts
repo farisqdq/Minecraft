@@ -38,6 +38,8 @@ export type LateFeeFacts = {
   problem: string;
   /** Late fees for the month would exceed nothing more: the cap is reached. */
   capped: boolean;
+  /** Late fee waivers (a21): the month being chased had its late fee waived. */
+  waived?: boolean;
 
   /** Marked moved out (or otherwise not current). Absent means current. */
   active?: boolean;
@@ -81,6 +83,8 @@ export function lateFeeLine(f: LateFeeFacts): LateFeeLine {
   if (f.active === false) {
     return line("none", "Marked moved out, so their books are closed and no late fees are added. If they still rent here, mark them current on their card.");
   }
+  // Late fee waivers (a21)
+  if (f.waived) return line("none", `Late fee waived for ${month} — none is charged for it.`);
   if (f.mode === "off") return line("none", "Set to no late fees on their account.");
   if (f.mode === "custom" && !f.ownLateRule) {
     return line("check", "Set to their own late-fee rules, but none is active — so nothing is charged. Switch them to the LLC's policy on their statement.");

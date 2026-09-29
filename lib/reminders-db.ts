@@ -462,6 +462,8 @@ function lateFeeClause(stmt: StatementResult, month: string): string {
   const rent = stmt.statement.rows.find((r) => r.month === month)?.rent ?? 0;
   const feesSoFar = stmt.lateFeesByMonth[month] ?? 0;
   if (!(rent > 0) || stmt.lateFeeMode === "off") return "";
+  // Late fee waivers (a21): a waived month has no late fee to warn about.
+  if (stmt.lateFeeWaivers?.some((w) => w.waived && w.month === month)) return "";
   if (stmt.lateFeeMode === "default") return lateFeeSummary({ rent, policy: stmt.policy, feesSoFar });
   const rule = stmt.rules.find((r) => r.kind === "late" && r.active && !r.fromPolicy);
   if (!rule) return "";

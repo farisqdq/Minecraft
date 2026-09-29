@@ -24,6 +24,9 @@ import {
   type LateFeeMode,
   type LateFeePolicyDTO,
 } from "@/lib/late-fee-policy";
+// Late fee waivers (a21): a waived month gets no late fees; see lib/late-fee-waiver.ts.
+import { lateRulesAfterWaiver, waiversByMonth, type WaiverState } from "@/lib/late-fee-waiver";
+import { waiverDTO, type WaiverDTO } from "@/lib/late-fee-waivers-db";
 
 /**
  * Turning a tenant row into a statement: the database half of lib/balance.ts.
@@ -82,6 +85,8 @@ export type StatementResult = {
    * reminder needs to say "a $70 late fee was added".
    */
   lateFeesByMonth: Record<string, number>;
+  /** Late fee waivers (a21): every month waived or un-waived for this tenant. */
+  lateFeeWaivers: WaiverDTO[];
   /**
    * The place these books are for, after a single-unit property's whole
    * property has been read as its unit (lib/rent-target.ts) — what a report
@@ -294,6 +299,7 @@ export async function statementForTenant(
       moveOut: { select: { lastRentMonth: true } },
       charges: { orderBy: { createdAt: "asc" } },
       rules: RULE_INCLUDE,
+      lateFeeWaivers: { orderBy: { month: "asc" } }, // a21
     },
   });
   if (!tenant) return null;
@@ -448,6 +454,8 @@ export async function statementForTenant(
       })),
       payments: paymentInputs,
       datedPayments,
+      // Late fee waivers (a21): a waived month plans no late fee at all.
+      waivers: waiversByMonth(tenant.lateFeeWaivers),
       // A month (or, for a daily fee, a day) a rule has already run for is
       // never revisited — including one whose charge was since deleted.
       // Deleting has to stick, and the run record is what remembers, so the
@@ -533,6 +541,7 @@ export async function statementForTenant(
     lateFeeMode,
     policy,
     lateFeesByMonth,
+    lateFeeWaivers: tenant.lateFeeWaivers.map(waiverDTO), // a21
     place: {
       unitId: targetUnitId,
       label: placeLabel,
@@ -582,6 +591,8 @@ function plannedRuleCharges(opts: {
   datedPayments: DatedPayment[];
   /** Every run on record: which months and days each rule has already billed. */
   applied: (AppliedFee & { month: string })[];
+  /** Late fee waivers (a21) by YYYY-MM. */
+  waivers?: Record<string, WaiverState>;
 }): (AssessedFee & { month: string })[] {
   const planned: (AssessedFee & { month: string })[] = [];
   // Keyed exactly as the unique index is, so what the planner skips and what
@@ -607,7 +618,9 @@ function plannedRuleCharges(opts: {
       // The late rule does its own skipping by day from `applied`, and needs
       // the amounts already charged to honour the month's cap.
       const late = lateFeesFor({
-        rules: opts.rules,
+        // Late fee waivers (a21): no late rules for a waived month; after an
+        // un-waive they start again from that day (lib/late-fee-waiver.ts).
+        rules: lateRulesAfterWaiver(opts.rules, opts.waivers?.[month]),
         month,
         owed: owedWithMonthly,
         rentThisMonth: rent,

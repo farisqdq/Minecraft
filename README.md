@@ -204,8 +204,33 @@ shows the month's late fees in what a tenant owes, and **Mark paid** records
 the full amount. Rent-late reminders say what was added ("A $70 late fee was
 added; $5/day more until paid, up to $120.").
 
-Backups carry the policy, each tenant's choice, and every day already
-charged, so a restore neither forgets a fee nor bills it twice.
+**Waiving a month's late fee.** When you record rent (**+ Rent** on the
+property page, or **+ Record** on the overview) or edit a rent entry, tick
+**Waive late fee for this month**. The box only shows when the entry belongs
+to one current tenant, and the month is the entry's date's. Saving deletes
+every late fee already on that tenant's month (the one-time fee and each
+daily one, from the policy or their own late rule) and no late fee is ever
+added to it again — not by the daily job, **Run late fees now**, opening the
+statement or portal, or the late-fee status check. It covers that one
+tenant and that one month only: the LLC's policy and the tenant's late-fee
+setting don't change, their other unpaid months keep their fees, next
+month's rent is charged as normal, and other tenants are untouched. Anyone
+on the LLC's team can do it; who and when is recorded. The statement shows
+"Late fee waived by …" on that month's row, the tenant's portal shows "Late
+fee waived", and the overview shows it on the property card and in Needs
+attention. Rent-late reminders stop mentioning a fee for that month.
+
+To take it back, untick the box on the rent entry or press **Remove waiver**
+on the statement. Late fees then start again **from that day**, as if the
+policy had been switched on that day: the one-time fee comes back that day
+only if rent for the month is still owed (and never more than what's owed);
+$5 a day runs from the next day; the waived days are never billed; and the
+month's 12% cap counts only fees charged since. Waiving again removes those
+too.
+
+Backups carry the policy, each tenant's choice, every day already charged,
+and every waiver (with the day it was taken back, if it was), so a restore
+neither forgets a fee, bills it twice, nor revives a waived one.
 
 ### Moving out, and the deposit
 

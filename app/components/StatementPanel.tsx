@@ -6,6 +6,7 @@ import { monthName } from "@/lib/notices";
 import type { Statement } from "@/lib/balance";
 import { ruleSummary, type ChargeRule } from "@/lib/charge-rules";
 import { policySentence, type LateFeeMode, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
+import type { WaiverDTO } from "@/lib/late-fee-waivers-db";
 import styles from "../dashboard/dashboard.module.css";
 
 type Charge = {
@@ -28,6 +29,8 @@ type Result = {
   /** Which late rules bill them: the LLC's policy, their own, or none. */
   lateFeeMode: LateFeeMode;
   policy: LateFeePolicyDTO;
+  /** Late fee waivers (a21), waived or taken back, by month. */
+  lateFeeWaivers?: WaiverDTO[];
 };
 
 const EMPTY_CHARGE = { kind: "fee" as "fee" | "credit", label: "", amount: "", month: "" };
@@ -141,6 +144,8 @@ export default function StatementPanel({
 
   const { statement } = data;
   const owed = statement.balance;
+  // Late fee waivers (a21): the months waived right now.
+  const waived = new Map((data.lateFeeWaivers ?? []).filter((w) => w.waived).map((w) => [w.month, w]));
 
   return (
     <div className={styles.statement}>
@@ -236,7 +241,30 @@ export default function StatementPanel({
           <tbody>
             {statement.rows.map((r) => (
               <tr key={r.month}>
-                <td>{monthName(r.month)}</td>
+                <td>
+                  {monthName(r.month)}
+                  {/* Late fee waivers (a21) */}
+                  {waived.has(r.month) && (
+                    <span className={styles.chargeWhen} style={{ display: "block" }}>
+                      Late fee waived
+                      {waived.get(r.month)!.waivedByName ? ` by ${waived.get(r.month)!.waivedByName}` : ""}
+                      {" \u00b7 "}
+                      <button
+                        type="button"
+                        className={styles.portalLink}
+                        disabled={busy}
+                        title="Late fees for this month apply again from today; the waived days aren't billed."
+                        onClick={() =>
+                          send(`/api/tenants/${tenantId}/late-fee-waivers?month=${encodeURIComponent(r.month)}`, {
+                            method: "DELETE",
+                          })
+                        }
+                      >
+                        Remove waiver
+                      </button>
+                    </span>
+                  )}
+                </td>
                 <td className="num" style={{ textAlign: "right" }}>
                   {r.rent ? money(r.rent) : "—"}
                 </td>

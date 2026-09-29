@@ -11,6 +11,7 @@ import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
 import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
+import { waivedLateFeesFor } from "@/lib/late-fee-waivers-db"; // a21
 import { policyDTO } from "@/lib/statements";
 import DashboardClient from "./DashboardClient";
 
@@ -101,6 +102,8 @@ export default async function DashboardPage() {
       initialRepairs={openRequests.map(serializeRequestForLandlord)}
       expiringDocs={await expiringDocuments(companyIds, new Date(Date.now() + (SOON_DAYS + 1) * 86_400_000))}
       lateFees={lateFees}
+      // Late fee waivers (a21): "tenantId|YYYY-MM" → true for months waived.
+      waivedLateFees={await waivedLateFeesFor(companyIds)}
       // Each company's late-fee policy, so a card can say what the fee is
       // made of and how close it is to the cap.
       lateFeePolicies={Object.fromEntries(

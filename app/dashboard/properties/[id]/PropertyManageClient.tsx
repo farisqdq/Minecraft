@@ -8,6 +8,7 @@ import CashFlowChart from "../../../components/CashFlowChart";
 import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
 import Modal from "../../../components/Modal";
 import StatementPanel from "../../../components/StatementPanel";
+import WaiveLateFeeField from "../../../components/WaiveLateFeeField"; // late fee waivers (a21)
 import DocumentsPanel from "../../../components/DocumentsPanel";
 import LoansPanel from "../../../components/LoansPanel";
 import DepreciationPanel from "../../../components/DepreciationPanel";
@@ -202,6 +203,8 @@ export default function PropertyManageClient({
   const [tenantOpen, setTenantOpen] = useState(false);
   const [tenantSaving, setTenantSaving] = useState(false);
   const [entryOpen, setEntryOpen] = useState(false);
+  // Late fee waivers (a21): null until the "Waive late fee" box is touched.
+  const [waiveLateFee, setWaiveLateFee] = useState<boolean | null>(null);
   const [entrySaving, setEntrySaving] = useState(false);
   const [entry, setEntry] = useState({
     id: "",
@@ -699,6 +702,7 @@ export default function PropertyManageClient({
 
   function openEntry(t: LedgerEntry) {
     setError("");
+    setWaiveLateFee(null); // a21
     setEntry({
       id: t.id,
       type: t.type,
@@ -749,6 +753,7 @@ export default function PropertyManageClient({
     const type = prefill?.type ?? "rent";
     const unitId = prefill?.unitId ?? "";
     setError("");
+    setWaiveLateFee(null); // a21
     setEntry({
       id: "",
       type,
@@ -810,6 +815,8 @@ export default function PropertyManageClient({
         detail: entry.detail,
         note: entry.note,
         category: entry.type === "expense" ? entry.category : undefined,
+        // a21: only sent once the box was touched, so an edit can't un-waive by accident.
+        waiveLateFee: entry.type === "rent" && waiveLateFee !== null ? waiveLateFee : undefined,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -818,6 +825,14 @@ export default function PropertyManageClient({
       setError(data?.error || (isNew ? "Couldn't record that." : "Couldn't save that entry."));
       return;
     }
+    // Late fee waivers (a21): applied with the save; say so in the toast.
+    const waiverNote =
+      entry.type !== "rent" || waiveLateFee === null
+        ? ""
+        : waiveLateFee
+          ? " Late fee waived for the month."
+          : " Late fees apply again from today.";
+    setWaiveLateFee(null);
 
     if (isNew) {
       setTransactions((prev) =>
@@ -848,8 +863,8 @@ export default function PropertyManageClient({
     const withProof = sent.count > 0 ? ` with ${proofCountLabel(sent.count)}` : "";
     push(
       isNew
-        ? `${entry.type === "rent" ? "Rent" : "Expense"} of ${money(amount)} recorded${withProof}.`
-        : `Entry updated${withProof}.`
+        ? `${entry.type === "rent" ? "Rent" : "Expense"} of ${money(amount)} recorded${withProof}.${waiverNote}`
+        : `Entry updated${withProof}.${waiverNote}`
     );
     router.refresh();
   }
@@ -2156,6 +2171,17 @@ export default function PropertyManageClient({
                 onChange={(e) => setEntry((f) => ({ ...f, note: e.target.value }))}
               />
             </div>
+            {/* Late fee waivers (a21) */}
+            {entry.type === "rent" && (
+              <WaiveLateFeeField
+                className={styles.span4}
+                propertyId={property.id}
+                unitId={entry.unitId || null}
+                date={entry.date}
+                value={waiveLateFee}
+                onChange={setWaiveLateFee}
+              />
+            )}
           </div>
           {/* Attach proof: queued here, uploaded once the entry is saved. */}
           <div className={styles.field} style={{ marginTop: 14 }}>
