@@ -245,6 +245,7 @@ export default function LateFeePanel({
           ))}
         </ul>
       )}
+      <p className={styles.helpText} style={{ margin: 0 }} data-testid="late-fee-ky-note">Kentucky: don&apos;t include late fees in a 7-day pay-or-quit notice amount; late fees must be written in the lease.</p>
     </form>
   );
 }

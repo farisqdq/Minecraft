@@ -26,6 +26,7 @@ import {
 } from "@/lib/reminders";
 import { statementForTenant, type StatementResult } from "@/lib/statements";
 import { lateFeeSummary } from "@/lib/late-fee-text";
+import { rentOwed } from "@/lib/rent-owed";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import { rentTargetOf } from "@/lib/rent-target";
 import { STATUS_LABEL, type RequestStatus } from "@/lib/maintenance";
@@ -352,18 +353,24 @@ export async function runReminders(now: Date, origin: string): Promise<RunReport
         }
       }
 
-      if (s.rentLate.on && trusted && balance > 0.005) {
+      // The rent-late reminder states rent only (lib/rent-owed.ts): late fees
+      // come off the headline figure, because it's the one a landlord would
+      // copy into a 7-day pay-or-quit notice and in Kentucky that amount must
+      // not include them. The fee still gets its own sentence. Owing nothing
+      // but late fees isn't "rent late", so that sends nothing.
+      const rentLate = trusted ? rentOwed(stmt!) : null;
+      if (s.rentLate.on && rentLate && rentLate.rent > 0.005) {
         const month = monthOfDate(today);
         // A late-fee rule's grace period is the tenant's own; the company
         // figure is for tenants without one.
         const grace = t.rules.length > 0 ? Math.min(...t.rules.map((r) => r.graceDays)) : s.rentLate.graceDays;
-        const behindSince = stmt!.statement.behindSince || month;
+        const behindSince = rentLate.behindSince || month;
         if (rentIsLate(today, behindSince, t.dueDay, grace)) {
           const n = rentLateNotification({
             tenantName: t.name,
             place,
             company: companyName,
-            owed: balance,
+            rentOwed: rentLate.rent,
             behindSince,
             lateFee: lateFeeClause(stmt!, month),
             url: portalUrl,
@@ -374,7 +381,7 @@ export async function runReminders(now: Date, origin: string): Promise<RunReport
           // the tenant card says "reminded", and there's a date if it ever
           // goes further.
           if (result.sent > 0) {
-            await prisma.tenantNotice.create({ data: { tenantId: t.id, kind: "rent", month, amount: balance, body: n.short } });
+            await prisma.tenantNotice.create({ data: { tenantId: t.id, kind: "rent", month, amount: rentLate.rent, body: n.short } });
           }
         }
       }

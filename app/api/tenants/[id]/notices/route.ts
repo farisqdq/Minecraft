@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { requireTenant } from "@/lib/access";
 import { rentNoticeBody, smsWithBody, type NoticeDTO } from "@/lib/notices";
+import { rentForMonth } from "@/lib/rent";
+import { rentTargetOf } from "@/lib/rent-target";
 
 const iso = (d: Date | null | undefined) => (d ? d.toISOString() : "");
 
@@ -94,14 +96,42 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       return NextResponse.json({ error: "Which month?" }, { status: 400 });
     }
     month = raw;
-    const expected = Math.max(0, Number(body?.expected) || 0);
+    // Rent only, never more: the notice states a rent figure a landlord may
+    // copy into a 7-day pay-or-quit notice, and in Kentucky that must not
+    // include late fees. The dashboard sends the month's rent, but the
+    // server doesn't take its word for it — `expected` is capped at the rent
+    // scheduled for that month, so a caller that folded fees in can't put
+    // them in the text.
+    const units = await prisma.unit.findMany({
+      where: { propertyId: tenant.propertyId },
+      select: { id: true, monthlyRent: true },
+    });
+    const targetUnitId = rentTargetOf(tenant.unitId, units);
+    const changes = await prisma.rentChange.findMany({
+      where: { propertyId: tenant.propertyId, unitId: targetUnitId },
+    });
+    const scheduled = rentForMonth(
+      changes.map((c) => ({
+        id: c.id,
+        propertyId: c.propertyId,
+        unitId: c.unitId,
+        effectiveFrom: c.effectiveFrom.toISOString().slice(0, 7),
+        amount: c.amount,
+      })),
+      tenant.propertyId,
+      targetUnitId,
+      raw,
+      units.find((u) => u.id === targetUnitId)?.monthlyRent ?? tenant.property.monthlyRent
+    );
+    const expected = Math.min(Math.max(0, scheduled), Math.max(0, Number(body?.expected) || 0));
     const paid = Math.max(0, Math.min(expected, Number(body?.paid) || 0));
     if (expected <= 0) {
       return NextResponse.json({ error: "There's nothing outstanding." }, { status: 400 });
     }
     amount = expected - paid;
     if (amount <= 0) {
-      return NextResponse.json({ error: "That month is paid up." }, { status: 400 });
+      // Only late fees (or other charges) can be left: nothing of rent to chase.
+      return NextResponse.json({ error: "That month's rent is paid up." }, { status: 400 });
     }
     text =
       custom ||
