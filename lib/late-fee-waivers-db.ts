@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { requireTenant } from "@/lib/access";
 import { chargesToRemove, runsToClear, waivedKeys } from "@/lib/late-fee-waiver";
+import { unitIdsCountingToward } from "@/lib/rent-target";
 
 /**
  * The writes behind "Waive late fee for this month". What each one means is
@@ -138,8 +139,11 @@ export async function unwaiveLateFee(opts: {
  * without units, means there is no one tenant to waive for.
  */
 export async function tenantForRentTarget(propertyId: string, unitId: string | null) {
+  // On a one-unit property the whole property is that unit (lib/rent-target),
+  // so rent logged on either finds the tenant on either.
+  const units = await prisma.unit.findMany({ where: { propertyId }, select: { id: true } });
   const tenants = await prisma.tenant.findMany({
-    where: { propertyId, unitId, active: true },
+    where: { propertyId, active: true, OR: unitIdsCountingToward(unitId, units).map((u) => ({ unitId: u })) },
     select: { id: true, name: true },
     take: 2,
   });

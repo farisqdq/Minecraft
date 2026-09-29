@@ -443,3 +443,82 @@ test("switched on: a vacant month carries no fee", () => {
     []
   );
 });
+
+/* ---- the Furniture Store case: $867.22 of $4,570 paid on Sep 9 ---- */
+
+test("a partial payment leaves the month overdue: $3,702.78 still owed carries the full 7% ($319.90)", () => {
+  const payments: DatedPayment[] = [{ day: "2026-09-09", amount: 867.22 }];
+  const owed = cents(4570 - 867.22);
+  assert.equal(owed, 3702.78);
+  // The policy switched on today (Sep 29): the one-time fee now, nothing backfilled.
+  const on = rule({ accrueFrom: "2026-09-29" });
+  assert.deepEqual(
+    lateFeesFor({ rules: [on], month: "2026-09", owed, rentThisMonth: 4570, dueDay: 1, today: utc("2026-09-29"), payments }),
+    [{ ruleId: "p", label: "Late fee", amount: 319.9 }]
+  );
+  // On since before the month: $319.90 on the 6th, $5 a day from the 7th,
+  // the partial payment on the 9th changing nothing but the remainder.
+  const fees = simulate({ rent: 4570, month: "2026-09", payments, from: "2026-09-01", to: "2026-09-29" });
+  assert.deepEqual(fees[0], { ruleId: "p", label: "Late fee", amount: 319.9, day: "", on: "2026-09-06" });
+  assert.equal(daily(fees).length, 23, "Sep 7 to Sep 29");
+  assert.equal(total(fees), 434.9, "under the $548.40 cap");
+});
+
+test("the statement: $4,570 due, $867.22 paid, $319.90 fee — $4,022.68 owed", () => {
+  const s = buildStatement({
+    startMonth: "2026-09",
+    currentMonth: "2026-09",
+    rentFor: () => 4570,
+    payments: [{ month: "2026-09", amount: 867.22 }],
+    assess: (month, owed, rent) =>
+      lateFeesFor({
+        rules: [rule({ accrueFrom: "2026-09-29" })],
+        month,
+        owed,
+        rentThisMonth: rent,
+        dueDay: 1,
+        today: utc("2026-09-29"),
+        payments: [{ day: "2026-09-09", amount: 867.22 }],
+      }).map((f) => ({ month, kind: "fee" as const, amount: f.amount, label: f.label })),
+  });
+  assert.deepEqual(s.rows[0], { month: "2026-09", rent: 4570, fees: 319.9, credits: 0, paid: 867.22, balance: 4022.68 });
+  assert.equal(s.behindSince, "2026-09");
+});
+
+test("the fee never exceeds what's owed: $100 left of $4,570 is a $100 fee", () => {
+  const fees = lateFeesFor({
+    rules: [rule({ accrueFrom: "2026-09-29" })],
+    month: "2026-09",
+    owed: 100,
+    rentThisMonth: 4570,
+    dueDay: 1,
+    today: utc("2026-09-29"),
+    payments: [{ day: "2026-09-09", amount: 4470 }],
+  });
+  assert.deepEqual(fees, [{ ruleId: "p", label: "Late fee", amount: 100 }]);
+});
+
+test("a deleted fee isn't taken off what's owed twice: daily fees go on while rent is unpaid", () => {
+  // $1,000 rent, $950 paid on the 3rd: the one-time fee was $50 (all that
+  // was owed) and the landlord deleted it. $50 of rent is still unpaid.
+  const applied: AppliedFee[] = [{ ruleId: "p", day: "", amount: 50 }];
+  const base = {
+    rules: [rule()],
+    month: "2026-09",
+    owed: 50, // rent less payment; the deleted fee isn't in it
+    rentThisMonth: 1000,
+    dueDay: 1,
+    today: utc("2026-09-08"),
+    payments: [{ day: "2026-09-03", amount: 950 }],
+    applied,
+  };
+  // Assuming every applied fee is still on the books reads $0 owed and stops.
+  assert.deepEqual(lateFeesFor(base), []);
+  // Told what's on the books (nothing), the $50 of rent keeps accruing.
+  assert.deepEqual(
+    daily(lateFeesFor({ ...base, booked: {} })).map((f) => [f.day, f.amount]),
+    [["2026-09-07", 5], ["2026-09-08", 5]]
+  );
+  // Still on the books: the same as without `booked`.
+  assert.deepEqual(lateFeesFor({ ...base, owed: 100, booked: { p: 50 } }), lateFeesFor({ ...base, owed: 100 }));
+});
