@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser, requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
 import { validAmount } from "@/lib/money";
+import { tenantForRentTarget, waiverFromRentEntry } from "@/lib/late-fee-waivers-db";
 
 function serialize<T extends { date: Date; detail: string | null; note: string | null; category: string | null }>(
   t: T
@@ -60,6 +61,13 @@ export async function POST(req: Request) {
     }
   }
 
+  // "Waive late fee for this month" (a21): only on rent, and only when the
+  // place has one current tenant — checked before anything is written.
+  const waive = type === "rent" && typeof body?.waiveLateFee === "boolean" ? (body.waiveLateFee as boolean) : null;
+  if (waive === true && !(await tenantForRentTarget(propertyId, unitId))) {
+    return NextResponse.json({ error: "There's no one current tenant here to waive a late fee for." }, { status: 400 });
+  }
+
   const transaction = await prisma.transaction.create({
     data: {
       propertyId,
@@ -73,5 +81,10 @@ export async function POST(req: Request) {
       category,
     },
   });
-  return NextResponse.json(serialize(transaction), { status: 201 });
+  const waiver =
+    waive === null ? undefined : await waiverFromRentEntry({ userId, propertyId, unitId, date, waive });
+  return NextResponse.json(
+    { ...serialize(transaction), ...(waiver && "waiver" in waiver ? { lateFeeWaiver: waiver.waiver } : {}) },
+    { status: 201 }
+  );
 }

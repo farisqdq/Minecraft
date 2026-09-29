@@ -126,6 +126,14 @@ type CleanRule = {
   fromPolicy: boolean;
   runs: { month: string; day: string; amount: number; ranAt: Date }[];
 };
+type CleanWaiver = {
+  month: string;
+  waivedByName: string;
+  waivedAt: Date;
+  note: string | null;
+  unwaivedAt: Date | null;
+  unwaivedByName: string;
+};
 type CleanTenant = {
   /** Where it sat in the file's list, which is what the ledger points at. */
   at: number;
@@ -136,6 +144,8 @@ type CleanTenant = {
   messagesReadAt: { tenant: Date | null; landlord: Date | null } | null;
   charges: CleanCharge[];
   rules: CleanRule[];
+  /** Late fee waivers (a21). */
+  lateFeeWaivers: CleanWaiver[];
   openingBalance: number;
   balanceFrom: string | null;
   name: string;
@@ -531,6 +541,24 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         });
       }
 
+      // Late fee waivers (a21): one per month; older backups have none.
+      const lateFeeWaivers: CleanWaiver[] = [];
+      const waivedMonths = new Set<string>();
+      for (const rawW of (Array.isArray(t.lateFeeWaivers) ? t.lateFeeWaivers : []).slice(0, 600)) {
+        const w = (rawW ?? {}) as Record<string, unknown>;
+        const month = str(w.month, 7);
+        if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month) || waivedMonths.has(month)) continue;
+        waivedMonths.add(month);
+        lateFeeWaivers.push({
+          month,
+          waivedByName: str(w.waivedByName, 120),
+          waivedAt: stamp(w.waivedAt) ?? new Date(),
+          note: str(w.note, 200) || null,
+          unwaivedAt: stamp(w.unwaivedAt),
+          unwaivedByName: str(w.unwaivedByName, 120),
+        });
+      }
+
       let moveOut: CleanMoveOut | null = null;
       const mo = (t.moveOut ?? null) as Record<string, unknown> | null;
       const movedOutOn = mo ? day(mo.movedOutOn) : null;
@@ -569,6 +597,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         messagesReadAt,
         charges,
         rules,
+        lateFeeWaivers, // a21
         openingBalance: num(t.openingBalance),
         balanceFrom: /^\d{4}-\d{2}$/.test(str(t.balanceFrom, 7)) ? str(t.balanceFrom, 7) : null,
         name,
@@ -1003,7 +1032,7 @@ export async function POST(req: Request) {
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
-      const { notices, messages, messagesReadAt, charges, rules, moveOut, at, ...fields } = t;
+      const { notices, messages, messagesReadAt, charges, rules, moveOut, at, lateFeeWaivers, ...fields } = t;
       const row = await tx.tenant.create({
         data: { ...fields, propertyId, unitId, createdById: userId },
       });
@@ -1035,6 +1064,12 @@ export async function POST(req: Request) {
           });
         }
         created.rules += 1;
+      }
+      // Late fee waivers (a21), before anything can work out a statement.
+      if (lateFeeWaivers.length > 0) {
+        await tx.lateFeeWaiver.createMany({
+          data: lateFeeWaivers.map((w) => ({ ...w, tenantId: row.id })),
+        });
       }
       if (notices.length > 0) {
         await tx.tenantNotice.createMany({

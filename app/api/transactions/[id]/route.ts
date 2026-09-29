@@ -6,6 +6,7 @@ import { normalizeCategory } from "@/lib/categories";
 import { validAmount } from "@/lib/money";
 import { fileLink } from "@/lib/file-links";
 import { shortMonth } from "@/lib/loans-db";
+import { tenantForRentTarget, waiverFromRentEntry } from "@/lib/late-fee-waivers-db";
 
 /** Deposit money kept at a move-out: undone with the move-out, never alone. */
 const MOVE_OUT_MESSAGE =
@@ -104,6 +105,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     }
   }
 
+  // "Waive late fee for this month" (a21): ticked or unticked on the edit
+  // form; absent leaves the month's waiver alone.
+  const waive = type === "rent" && typeof body.waiveLateFee === "boolean" ? (body.waiveLateFee as boolean) : null;
+  if (waive === true && !(await tenantForRentTarget(propertyId, unitId))) {
+    return NextResponse.json({ error: "There's no one current tenant here to waive a late fee for." }, { status: 400 });
+  }
+
   const transaction = await prisma.transaction.update({
     where: { id },
     data: {
@@ -119,8 +127,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     include: { attachments: { orderBy: { createdAt: "asc" } } },
   });
 
+  const waiver =
+    waive === null ? undefined : await waiverFromRentEntry({ userId, propertyId, unitId, date, waive });
+
   return NextResponse.json({
     ...serialize(transaction),
+    ...(waiver && "waiver" in waiver ? { lateFeeWaiver: waiver.waiver } : {}),
     // Links through /api/files, never the storage URL.
     attachments: transaction.attachments.map((a) => ({
       id: a.id,

@@ -183,6 +183,15 @@ type TenantRow = {
     fromPolicy: boolean;
     runs: { month: string; day: string; amount: number; ranAt: Date }[];
   }[];
+  /** Late fee waivers (a21). */
+  lateFeeWaivers?: {
+    month: string;
+    waivedByName: string;
+    waivedAt: Date;
+    note: string | null;
+    unwaivedAt: Date | null;
+    unwaivedByName: string;
+  }[];
   openingBalance: number;
   balanceFrom: string | null;
   name: string;
@@ -279,6 +288,17 @@ function serializeTenants(rows: TenantRow[], key: FileKey) {
         amount: run.amount,
         ranAt: run.ranAt.toISOString(),
       })),
+    })),
+    // Late fee waivers (a21): months whose late fee was let go, and any
+    // taken back with the day — that day is what stops a restore billing
+    // the waived days. Who did it goes by name; ids don't survive a restore.
+    lateFeeWaivers: (t.lateFeeWaivers ?? []).map((w) => ({
+      month: w.month,
+      waivedByName: w.waivedByName,
+      waivedAt: w.waivedAt.toISOString(),
+      note: w.note ?? "",
+      unwaivedAt: w.unwaivedAt ? w.unwaivedAt.toISOString() : "",
+      unwaivedByName: w.unwaivedByName,
     })),
     // When you chased them and whether they read it. Kept because that is
     // the part a backup is for — the record, not the conversation.
@@ -492,6 +512,7 @@ export async function GET() {
               thread: { include: { messages: { orderBy: { createdAt: "asc" }, include: { attachments: { orderBy: { createdAt: "asc" } } } } } },
               moveOut: { include: { deductions: { orderBy: { id: "asc" } } } },
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
+              lateFeeWaivers: { orderBy: { month: "asc" } }, // a21
             },
           },
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
@@ -519,6 +540,7 @@ export async function GET() {
                   thread: { include: { messages: { orderBy: { createdAt: "asc" }, include: { attachments: { orderBy: { createdAt: "asc" } } } } } },
                   moveOut: { include: { deductions: { orderBy: { id: "asc" } } } },
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
+              lateFeeWaivers: { orderBy: { month: "asc" } }, // a21
                 },
               },
               rentChanges: { orderBy: { effectiveFrom: "asc" } },

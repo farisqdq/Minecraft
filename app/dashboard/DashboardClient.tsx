@@ -28,6 +28,7 @@ import styles from "./dashboard.module.css";
 import { useNow } from "../components/useNow";
 import { useLivePulse } from "../components/useLivePulse";
 import { useRouter } from "next/navigation";
+import WaiveLateFeeField from "../components/WaiveLateFeeField"; // late fee waivers (a21)
 
 type Company = { id: string; name: string; role: "owner" | "member" };
 
@@ -203,6 +204,7 @@ export default function DashboardClient({
   expiringDocs,
   initialChases,
   lateFees = {},
+  waivedLateFees = {}, // a21
   userLabel,
   storageReady,
   serverToday,
@@ -227,6 +229,8 @@ export default function DashboardClient({
   initialChases: Record<string, { at: string; month: string; read: boolean }>;
   /** Late fees on the books, keyed "tenantId|YYYY-MM". */
   lateFees?: Record<string, number>;
+  /** Late fee waivers (a21): months whose late fee was waived, keyed "tenantId|YYYY-MM". */
+  waivedLateFees?: Record<string, true>;
   userLabel: string;
   storageReady: boolean;
   serverToday: string;
@@ -344,6 +348,8 @@ export default function DashboardClient({
   const [editSaving, setEditSaving] = useState(false);
 
   const [recording, setRecording] = useState(false);
+  // Late fee waivers (a21): null until the "Waive late fee" box is touched.
+  const [waiveLateFee, setWaiveLateFee] = useState<boolean | null>(null);
   const [editingTxnId, setEditingTxnId] = useState("");
   const [markingKey, setMarkingKey] = useState("");
   const [bulkBusy, setBulkBusy] = useState<"" | "rent" | "bills">("");
@@ -827,6 +833,7 @@ export default function DashboardClient({
     setProofError(null);
     setError("");
     setEditingTxnId("");
+    setWaiveLateFee(null); // a21
     setDate(defaultDateFor(barMonth, todayKey));
     if (prefill) {
       setType(prefill.type);
@@ -915,6 +922,7 @@ export default function DashboardClient({
     setPendingProof([]);
     if (proofInput.current) proofInput.current.value = "";
     setEditingTxnId(t.id);
+    setWaiveLateFee(null); // a21
     setType(t.type);
     // Match the select: a unit-level entry points at its unit, a
     // property-level one at the property (or its "whole building" option).
@@ -1284,6 +1292,8 @@ export default function DashboardClient({
         detail,
         note,
         category: type === "expense" ? category : undefined,
+        // a21: only sent once the box was touched, so an edit can't un-waive by accident.
+        waiveLateFee: type === "rent" && waiveLateFee !== null ? waiveLateFee : undefined,
       }),
     });
     setSubmitting(false);
@@ -1291,6 +1301,11 @@ export default function DashboardClient({
     if (!res.ok) {
       setError(data?.error || "Couldn't save that transaction.");
       return;
+    }
+    // a21: the late fees and waived months on screen come from the server.
+    if (type === "rent" && waiveLateFee !== null) {
+      setWaiveLateFee(null);
+      router.refresh();
     }
 
     // Editing keeps whatever proof is already attached — that's the whole
@@ -1774,6 +1789,8 @@ export default function DashboardClient({
                             ? `${money(paid)} of ${money(expected)} paid so far`
                             : `Nothing received of ${money(expected)}`}
                           {fees > 0.005 ? ` · includes ${money(fees)} in late fees` : ""}
+                          {/* a21 */}
+                          {tenant && waivedLateFees[`${tenant.id}|${barMonth}`] ? " · Late fee waived" : ""}
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} ${late > 0 ? styles.neg : styles.due} num`}>
@@ -2282,6 +2299,13 @@ export default function DashboardClient({
                                   : `${money(paidThisMonth)} of ${money(target)}`}
                               </span>
                             </div>
+                            {/* Late fee waivers (a21) */}
+                            {(() => {
+                              const wt = tenantFor(p.id, null);
+                              return wt && waivedLateFees[`${wt.id}|${barMonth}`] ? (
+                                <div className={styles.note}>Late fee waived</div>
+                              ) : null;
+                            })()}
                           </div>
                         )}
                       </>
@@ -2717,6 +2741,17 @@ export default function DashboardClient({
                   onChange={(e) => setNote(e.target.value)}
                 />
               </div>
+              {/* Late fee waivers (a21) */}
+              {isRent && formTarget && (
+                <WaiveLateFeeField
+                  className={styles.span4}
+                  propertyId={formTarget.propertyId}
+                  unitId={formTarget.unitId}
+                  date={date}
+                  value={waiveLateFee}
+                  onChange={setWaiveLateFee}
+                />
+              )}
               {!editingTxnId && (
               <div className={`${styles.field} ${styles.span4}`}>
                 <label htmlFor="f-proof">{isRent ? "Proof of payment (optional)" : "Receipt or photo (optional)"}</label>

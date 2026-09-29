@@ -11,6 +11,7 @@ import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
 import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
+import { waivedLateFeesFor } from "@/lib/late-fee-waivers-db"; // a21
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
@@ -100,6 +101,8 @@ export default async function DashboardPage() {
       initialRepairs={openRequests.map(serializeRequestForLandlord)}
       expiringDocs={await expiringDocuments(companyIds, new Date(Date.now() + (SOON_DAYS + 1) * 86_400_000))}
       lateFees={lateFees}
+      // Late fee waivers (a21): "tenantId|YYYY-MM" → true for months waived.
+      waivedLateFees={await waivedLateFeesFor(companyIds)}
       initialChases={Object.fromEntries(
         // findMany came back newest first, so the first entry per tenant wins.
         allNotices.reduce((seen, n) => {

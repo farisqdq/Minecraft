@@ -202,6 +202,10 @@ export default async function PortalHome() {
                       {labelsFor(r.month) && (
                         <span className={styles.monthWhy}>{labelsFor(r.month)}</span>
                       )}
+                      {/* Late fee waivers (a21): said plainly, so they know it's settled. */}
+                      {account.lateFeeWaivers.some((w) => w.waived && w.month === r.month) && (
+                        <span className={styles.monthWhy}>Late fee waived</span>
+                      )}
                     </td>
                     <td>{money(r.rent + r.fees - r.credits)}</td>
                     <td>{r.paid ? money(r.paid) : "\u2014"}</td>
