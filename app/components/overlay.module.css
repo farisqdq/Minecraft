@@ -87,6 +87,34 @@
   border-color: var(--line-strong);
 }
 
+.confirmLines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border-top: 1px solid var(--line);
+  max-height: 40dvh;
+  overflow-y: auto;
+}
+
+.confirmLines li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 14px;
+}
+
+.confirmLines li span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.confirmLines li span:last-child {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .confirmActions {
   display: flex;
   justify-content: flex-end;
@@ -112,6 +140,8 @@
   .scrim {
     align-items: flex-end;
     padding: 0;
+    /* --kb: how much of the screen the on-screen keyboard covers (Modal.tsx). */
+    padding-bottom: var(--kb, 0px);
   }
 
   .panel,
@@ -119,7 +149,7 @@
     max-width: none;
     border-radius: var(--radius-lg) var(--radius-lg) 0 0;
     border-bottom: none;
-    max-height: 92dvh;
+    max-height: calc(92dvh - var(--kb, 0px));
     padding: 20px 18px calc(20px + env(safe-area-inset-bottom));
     animation: sheet var(--med) both;
   }

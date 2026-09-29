@@ -2,6 +2,9 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import RecordEntrySheet, { type EntryDraft, type SavedEntry } from "../../components/RecordEntrySheet";
+import { amountOwed, owedLine, rentPrefill } from "@/lib/quick-record";
 import AppShell from "../../components/AppShell";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
@@ -50,7 +53,12 @@ export default function CalendarClient({
   tenants,
   payments: initialPayments,
   rules,
+  lateFees = {},
+  storageReady = false,
 }: {
+  /** Late fees on the books, keyed "tenantId|YYYY-MM". */
+  lateFees?: Record<string, number>;
+  storageReady?: boolean;
   openRepairs: number;
   serverToday: string;
   companies: { id: string; name: string }[];
@@ -76,7 +84,11 @@ export default function CalendarClient({
   const [selected, setSelected] = useState(serverToday);
   const [company, setCompany] = useState("all");
   const [payments, setPayments] = useState(initialPayments);
-  const [marking, setMarking] = useState("");
+  const router = useRouter();
+  // "Mark paid" opens the rent form; a counter remounts it per opening.
+  const [draft, setDraft] = useState<EntryDraft | null>(null);
+  const [draftSeq, setDraftSeq] = useState(0);
+  const [recording, setRecording] = useState(false);
 
   // If the browser's date turned out to be a different month from the
   // server's, follow it — but only until someone has navigated themselves.
@@ -144,34 +156,56 @@ export default function CalendarClient({
     setSelected(today);
   }
 
-  async function markPaid(item: DueItem) {
-    const owed = Math.round((item.expected - item.paid) * 100) / 100;
-    if (!(owed > 0)) return;
+  const feesFor = (item: DueItem) => (item.tenantId ? lateFees[`${item.tenantId}|${month}`] ?? 0 : 0);
+
+  /**
+   * "Mark paid" used to record what's owed straight away. It opens the same
+   * rent form as the overview's instead — tenant, place, what's owed
+   * (charges and late fees included), dated today in this month or on the
+   * due date of another — with the amount selected, so Enter records what
+   * the button did and anything else (a part payment, proof, a waived fee)
+   * goes in first. The overview's sheet is reused rather than navigating
+   * there, so you stay on the calendar.
+   */
+  function markPaid(item: DueItem) {
     const target = targets.find((t) => t.key === item.key);
     if (!target) return;
-    setMarking(item.key);
-    const date = today.startsWith(month) ? today : item.dueDate;
-    const res = await fetch("/api/transactions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        propertyId: target.propertyId,
-        unitId: target.unitId,
-        type: "rent",
-        date,
-        amount: owed,
-        detail: item.tenantName,
-        note: `${monthName(month)} rent`,
+    const fees = feesFor(item);
+    setDraft({
+      mode: "quick",
+      targetKey: target.key,
+      prefill: rentPrefill({
+        month,
+        today,
+        expected: item.expected,
+        paid: item.paid,
+        fees,
+        tenantName: item.tenantName,
+        fallbackDate: item.dueDate,
       }),
+      context: `${item.tenantName ? `${item.tenantName} · ` : ""}${monthName(month)} · ${owedLine(
+        { expected: item.expected, paid: item.paid, fees },
+        item.extras.length ? "due" : "rent"
+      )}`,
     });
-    const data = await res.json().catch(() => ({}));
-    setMarking("");
-    if (!res.ok) {
-      push(data?.error || "Couldn't record that payment.", "bad");
-      return;
+    setDraftSeq((n) => n + 1);
+    setRecording(true);
+  }
+
+  function entrySaved({ entry, waive }: { entry: SavedEntry; created: boolean; waive: boolean | null }) {
+    if (entry.type === "rent") {
+      setPayments((prev) => [
+        ...prev,
+        { propertyId: entry.propertyId, unitId: entry.unitId, date: entry.date, amount: entry.amount },
+      ]);
     }
-    setPayments((prev) => [...prev, { propertyId: target.propertyId, unitId: target.unitId, date, amount: owed }]);
-    push(`${money(owed)} recorded for ${item.tenantName || item.label}.`);
+    push(
+      `${money(entry.amount)} recorded${entry.detail ? ` for ${entry.detail}` : ""}.${
+        waive === null ? "" : waive ? " Late fee waived for the month." : " Late fees apply again from today."
+      }`
+    );
+    // The late fees come from the server; a waiver changes them.
+    if (waive !== null) router.refresh();
   }
 
   function worst(items: DueItem[]): DueStatus | "" {
@@ -186,7 +220,7 @@ export default function CalendarClient({
   // be a new type every render and React would remount each row, dropping
   // focus from a button someone had just pressed.
   function itemRow(item: DueItem) {
-    const owed = item.expected - item.paid;
+    const owed = amountOwed({ expected: item.expected, paid: item.paid, fees: feesFor(item) });
     return (
       <div key={item.key} className={styles.calItem}>
         <div className={styles.calItemMain}>
@@ -222,10 +256,9 @@ export default function CalendarClient({
             <button
               type="button"
               className={`${styles.btn} ${styles.small} ${styles.primary}`}
-              disabled={marking === item.key}
               onClick={() => markPaid(item)}
             >
-              {marking === item.key ? "Saving…" : `Mark ${money(owed)} paid`}
+              {`Mark ${money(owed)} paid`}
             </button>
           )}
         </div>
@@ -240,6 +273,19 @@ export default function CalendarClient({
       tagline="What's due to you on each day of the month, and what's come in."
     >
       <Toasts toasts={toasts} onDismiss={dismiss} />
+
+      {draft && (
+        <RecordEntrySheet
+          key={draftSeq}
+          open={recording}
+          draft={draft}
+          targets={targets}
+          storageReady={storageReady}
+          onClose={() => setRecording(false)}
+          onSaved={entrySaved}
+          onProof={() => {}}
+        />
+      )}
 
       <div className={styles.contextBar}>
         {companies.length > 1 ? (

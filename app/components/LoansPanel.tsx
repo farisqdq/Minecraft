@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Modal from "./Modal";
 import ConfirmDialog, { type ConfirmRequest } from "./ConfirmDialog";
+import LoanPaymentDialog from "./LoanPaymentDialog";
 import styles from "../dashboard/dashboard.module.css";
 import { money, moneyRound } from "@/lib/money";
 import { monthName } from "@/lib/notices";
 import { formatDay, ordinal } from "@/lib/lease";
 import {
   currentBalance,
-  dueDateOf,
   missedMonths,
   monthlyEscrow,
   nextUnpaidMonth,
@@ -50,18 +50,9 @@ const EMPTY_LOAN = {
   note: "",
 };
 
-const EMPTY_PAYMENT = {
-  loanId: "",
-  month: "",
-  date: "",
-  principal: "",
-  interest: "",
-  escrowTax: "",
-  escrowInsurance: "",
-};
+const EMPTY_PAYMENT = { loanId: "", month: "" };
 
 const field = (n: number) => (n ? String(n) : "");
-const num = (s: string) => (s.trim() === "" ? 0 : Number(s));
 
 /** "29 yrs 3 mo" — how far off a payoff date is. */
 function span(months: number) {
@@ -216,45 +207,13 @@ export default function LoansPanel({
     });
   }
 
-  /** Prefills the payment form with the split worked out for `month`. */
-  function fillPayment(l: LoanDTO, month: string, keepDate = false) {
-    const s = suggestPayment(l, l.payments, month);
-    setPayForm((f) => ({
-      loanId: l.id,
-      month,
-      date: keepDate && f.date ? f.date : dueDateOf(month, l.dueDay),
-      principal: field(s.principal),
-      interest: field(s.interest),
-      escrowTax: field(s.escrowTax),
-      escrowInsurance: field(s.escrowInsurance),
-    }));
-  }
-
   function openPayment(l: LoanDTO) {
-    setError("");
     // The oldest gap first: a forgotten August is the one to fill in.
     const missed = missedMonths(l, l.payments, thisMonth, l.active);
-    fillPayment(l, missed[0] ?? nextUnpaidMonth(l, l.payments));
+    setPayForm({ loanId: l.id, month: missed[0] ?? nextUnpaidMonth(l, l.payments) });
   }
 
-  async function savePayment(e: React.FormEvent) {
-    e.preventDefault();
-    if (!payingLoan) return;
-    setBusy(true);
-    setError("");
-    const { loanId, ...fields } = payForm;
-    const res = await fetch(`/api/loans/${loanId}/payments`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(fields),
-    });
-    const data = await res.json().catch(() => ({}));
-    setBusy(false);
-    if (!res.ok) {
-      setError(data?.error || "Couldn't record that payment.");
-      return;
-    }
-    const payment = data.payment as LoanPaymentDTO;
+  function paymentRecorded(loanId: string, payment: LoanPaymentDTO, transactions: unknown[]) {
     setLoans((prev) =>
       prev.map((l) =>
         l.id === loanId
@@ -262,7 +221,7 @@ export default function LoansPanel({
           : l
       )
     );
-    onEntriesAdded(data.transactions);
+    onEntriesAdded(transactions as LoanLedgerEntry[]);
     setPayForm(EMPTY_PAYMENT);
     onToast(
       `${monthName(payment.month)} recorded: ${money(payment.interest)} interest, ${money(payment.principal)} off the balance.`
@@ -293,25 +252,6 @@ export default function LoansPanel({
       },
     });
   }
-
-  const payTotal =
-    num(payForm.principal) + num(payForm.interest) + num(payForm.escrowTax) + num(payForm.escrowInsurance);
-  const payMonths = useMemo(() => {
-    if (!payingLoan) return [];
-    // Every month from the start of the books to a year ahead that hasn't
-    // been recorded — enough to catch up or pay ahead, nothing to scroll.
-    const recorded = new Set(payingLoan.payments.map((p) => p.month));
-    const out: string[] = [];
-    let m = payingLoan.balanceAsOf;
-    const [ty, tm] = thisMonth.split("-").map(Number);
-    const limit = `${ty + 1}-${String(tm).padStart(2, "0")}`;
-    for (let i = 0; i < 600 && m <= limit; i++) {
-      if (!recorded.has(m)) out.push(m);
-      const [y, mo] = m.split("-").map(Number);
-      m = mo === 12 ? `${y + 1}-01` : `${y}-${String(mo + 1).padStart(2, "0")}`;
-    }
-    return out;
-  }, [payingLoan, thisMonth]);
 
   return (
     <>
@@ -671,105 +611,16 @@ export default function LoansPanel({
         </form>
       </Modal>
 
-      <Modal
-        open={Boolean(payingLoan)}
-        title={payingLoan ? `Record a payment · ${payingLoan.lender}` : "Record a payment"}
-        subtitle="Worked out from the balance. If your statement splits it differently, type its figures — the lender's are exact to the day."
-        onClose={() => setPayForm(EMPTY_PAYMENT)}
-      >
-        {payingLoan && (
-          <form onSubmit={savePayment}>
-            {error && <div className={styles.errorBar} style={{ marginTop: 0, marginBottom: 14 }}>{error}</div>}
-            <div className={`${styles.fieldGrid} ${styles.modalGrid}`}>
-              <div className={`${styles.field} ${styles.wide}`}>
-                <label htmlFor="pay-month">Payment for</label>
-                <select
-                  id="pay-month"
-                  value={payForm.month}
-                  onChange={(e) => fillPayment(payingLoan, e.target.value)}
-                >
-                  {payMonths.map((m) => (
-                    <option key={m} value={m}>
-                      {monthName(m)}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className={`${styles.field} ${styles.wide}`}>
-                <label htmlFor="pay-date">Paid on</label>
-                <input
-                  id="pay-date"
-                  type="date"
-                  required
-                  value={payForm.date}
-                  onChange={(e) => setPayForm((f) => ({ ...f, date: e.target.value }))}
-                />
-              </div>
-              <div className={`${styles.field} ${styles.wide}`}>
-                <label htmlFor="pay-interest">Interest ($)</label>
-                <input
-                  id="pay-interest"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  value={payForm.interest}
-                  onChange={(e) => setPayForm((f) => ({ ...f, interest: e.target.value }))}
-                />
-              </div>
-              <div className={`${styles.field} ${styles.wide}`}>
-                <label htmlFor="pay-principal">Principal ($)</label>
-                <input
-                  id="pay-principal"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  value={payForm.principal}
-                  onChange={(e) => setPayForm((f) => ({ ...f, principal: e.target.value }))}
-                />
-              </div>
-              <div className={`${styles.field} ${styles.wide}`}>
-                <label htmlFor="pay-etax">Escrow, property tax ($)</label>
-                <input
-                  id="pay-etax"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  value={payForm.escrowTax}
-                  onChange={(e) => setPayForm((f) => ({ ...f, escrowTax: e.target.value }))}
-                />
-              </div>
-              <div className={`${styles.field} ${styles.wide}`}>
-                <label htmlFor="pay-eins">Escrow, insurance ($)</label>
-                <input
-                  id="pay-eins"
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="0.01"
-                  value={payForm.escrowInsurance}
-                  onChange={(e) => setPayForm((f) => ({ ...f, escrowInsurance: e.target.value }))}
-                />
-              </div>
-            </div>
-            <p className={styles.helpText}>
-              <b className="num">{money(Math.round(payTotal * 100) / 100)}</b> in all. Interest and escrow go into the
-              ledger as expenses; the {money(num(payForm.principal))} of principal comes off the balance and isn&apos;t
-              an expense. Paying extra principal? Add it to the principal figure.
-            </p>
-            <div className={styles.formFoot}>
-              <button type="button" className={`${styles.btn} ${styles.quiet}`} onClick={() => setPayForm(EMPTY_PAYMENT)}>
-                Cancel
-              </button>
-              <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={busy}>
-                {busy ? "Recording…" : "Record payment"}
-              </button>
-            </div>
-          </form>
-        )}
-      </Modal>
+      {payingLoan && (
+        <LoanPaymentDialog
+          key={`${payingLoan.id}:${payForm.month}`}
+          loan={payingLoan}
+          month={payForm.month}
+          today={today}
+          onClose={() => setPayForm(EMPTY_PAYMENT)}
+          onRecorded={(payment, transactions) => paymentRecorded(payingLoan.id, payment, transactions)}
+        />
+      )}
 
       <Modal
         open={Boolean(historyLoan)}

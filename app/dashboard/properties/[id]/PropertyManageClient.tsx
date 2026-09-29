@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell, { TitleEditButton } from "../../../components/AppShell";
@@ -205,6 +205,9 @@ export default function PropertyManageClient({
   const [entryOpen, setEntryOpen] = useState(false);
   // Late fee waivers (a21): null until the "Waive late fee" box is touched.
   const [waiveLateFee, setWaiveLateFee] = useState<boolean | null>(null);
+  // "Record rent" opens with the lease's rent filled in; landing in it with
+  // the figure selected makes Enter record it and typing replace it.
+  const entryAmount = useRef<HTMLInputElement>(null);
   const [entrySaving, setEntrySaving] = useState(false);
   const [entry, setEntry] = useState({
     id: "",
@@ -2080,6 +2083,7 @@ export default function PropertyManageClient({
             : `Goes straight onto ${property.name}. Rent or a repair — the toggle decides which.`
         }
         onClose={() => setEntryOpen(false)}
+        initialFocus={!entry.id && entry.type === "rent" && entry.amount ? entryAmount : undefined}
       >
         <form onSubmit={saveEntry}>
           <div className={styles.typeToggle}>
@@ -2130,7 +2134,9 @@ export default function PropertyManageClient({
               <label htmlFor="e-amount">Amount ($)</label>
               <input
                 id="e-amount"
+                ref={entryAmount}
                 type="number"
+                inputMode="decimal"
                 min="0"
                 step="0.01"
                 required
@@ -2217,7 +2223,7 @@ export default function PropertyManageClient({
             {proofError && <div className={styles.errorBar}>{proofError}</div>}
           </div>
           {error && <div className={styles.errorBar}>{error}</div>}
-          <div className={styles.formFoot}>
+          <div className={`${styles.formFoot} ${styles.stickyFoot}`}>
             <button type="button" className={styles.btn} onClick={() => setEntryOpen(false)}>
               Cancel
             </button>

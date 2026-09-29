@@ -7,7 +7,6 @@ import { rentTargetOf, unitIdsCountingToward } from "@/lib/rent-target";
 // Attach-proof hardening for iOS: visually-hidden (not display:none) inputs, HEIC in accept.
 import { PROOF_ACCEPT } from "@/lib/attachments-ui";
 import proofStyles from "../components/proof.module.css";
-import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money, moneyRound } from "@/lib/money";
 import { STATUS_LABEL, ago, type RequestDTO } from "@/lib/maintenance";
 import { chasedRecently, remindedAgo } from "@/lib/notices";
@@ -44,7 +43,10 @@ import styles from "./dashboard.module.css";
 import { useNow } from "../components/useNow";
 import { useLivePulse } from "../components/useLivePulse";
 import { useRouter } from "next/navigation";
-import WaiveLateFeeField from "../components/WaiveLateFeeField"; // late fee waivers (a21)
+import RecordEntrySheet, { type EntryDraft, type SavedEntry } from "../components/RecordEntrySheet";
+import LoanPaymentDialog from "../components/LoanPaymentDialog";
+import type { ProofDTO } from "../components/ProofPicker";
+import { bulkSummary, owedLine, recurringPrefill, rentPrefill } from "@/lib/quick-record";
 
 type Company = { id: string; name: string; role: "owner" | "member" };
 
@@ -184,9 +186,6 @@ const compareText = (a: string, b: string) => COLLATOR.compare(a, b);
 /** The words the Details column actually shows, which is what it sorts on. */
 const detailsText = (t: Transaction) =>
   [t.category, t.detail, t.note].filter(Boolean).join(" ");
-
-const STORAGE_HINT =
-  "Proof uploads need file storage. In Vercel, open this project's Storage tab, add Blob, then redeploy.";
 
 const MONTH_YEAR = new Intl.DateTimeFormat("en-US", { month: "long", year: "numeric" });
 const MONTH_ONLY = new Intl.DateTimeFormat("en-US", { month: "long" });
@@ -366,23 +365,16 @@ export default function DashboardClient({
   const [editVacant, setEditVacant] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
 
+  // The record sheet: what it opens with, and a counter that remounts it so
+  // each opening starts from its own prefill rather than the last one's.
   const [recording, setRecording] = useState(false);
-  // Late fee waivers (a21): null until the "Waive late fee" box is touched.
-  const [waiveLateFee, setWaiveLateFee] = useState<boolean | null>(null);
-  const [editingTxnId, setEditingTxnId] = useState("");
-  const [markingKey, setMarkingKey] = useState("");
+  const [draft, setDraft] = useState<EntryDraft | null>(null);
+  const [draftSeq, setDraftSeq] = useState(0);
+  // A mortgage's "Log it": the loan whose payment form is open.
+  const [payingLoanId, setPayingLoanId] = useState("");
   const [bulkBusy, setBulkBusy] = useState<"" | "rent" | "bills">("");
-  const [type, setType] = useState<"rent" | "expense">("rent");
-  const [targetKey, setTargetKey] = useState("");
-  const [date, setDate] = useState(serverToday);
-  const [amount, setAmount] = useState("");
-  const [detail, setDetail] = useState("");
-  const [note, setNote] = useState("");
-  const [category, setCategory] = useState("");
-  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
 
-  const [recurringBusyId, setRecurringBusyId] = useState("");
   const [deposits, setDeposits] = useState(initialDeposits);
   const [returningId, setReturningId] = useState("");
 
@@ -395,8 +387,6 @@ export default function DashboardClient({
   const [sortKey, setSortKey] = useState<SortKey>("date");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
-  const [pendingProof, setPendingProof] = useState<File[]>([]);
-  const proofInput = useRef<HTMLInputElement>(null);
   const [uploadingFor, setUploadingFor] = useState("");
   // Upload problems belong next to the control that was used, not in the page
   // banner — the attach controls sit far below it.
@@ -964,32 +954,77 @@ export default function DashboardClient({
 
   const activeCompany = companies.find((c) => c.id === selectedCompany) ?? null;
 
-  const isRent = type === "rent";
-  const formTarget =
-    visibleTargets.find((t) => t.key === targetKey) ?? visibleTargets[0] ?? null;
+  /** The record sheet's key for a ledger place: a unit, a whole building, or a house. */
+  function targetKeyOf(propertyId: string, unitId: string | null) {
+    if (unitId) return `${propertyId}:${unitId}`;
+    return unitsForProperty(propertyId).length > 0 ? `${propertyId}:whole` : propertyId;
+  }
 
-  /** Opens the record sheet, optionally pre-filled from a row that needs action. */
-  function openRecord(prefill?: { type: "rent" | "expense"; targetKey: string; amount?: number }) {
+  function showSheet(next: EntryDraft) {
     setProofError(null);
     setError("");
-    setEditingTxnId("");
-    setWaiveLateFee(null); // a21
-    setDate(defaultDateFor(barMonth, todayKey));
-    if (prefill) {
-      setType(prefill.type);
-      setTargetKey(prefill.targetKey);
-      setAmount(prefill.amount ? String(prefill.amount) : "");
-      if (prefill.type === "rent") setCategory("");
-    }
+    setDraft(next);
+    setDraftSeq((n) => n + 1);
     setRecording(true);
   }
 
+  /** "+ Record": a blank entry, dated in the month on screen. */
+  function openRecord() {
+    showSheet({
+      mode: "new",
+      targetKey: visibleTargets[0]?.key ?? "",
+      prefill: {
+        type: "rent",
+        amount: "",
+        date: defaultDateFor(barMonth, todayKey),
+        detail: "",
+        note: "",
+        category: "",
+      },
+    });
+  }
+
+  type OwedRow = (typeof unpaidThisMonth)[number];
+
   /**
-   * Logs the whole outstanding rent for a target in one tap. This is the
-   * action of the month — every tenant, every month — and routing it through
-   * the form meant opening a sheet to confirm numbers the app already knows.
-   * A mistake is fixable from the ledger, where the entry can be edited or
-   * deleted.
+   * "Mark paid" and "Part paid" on a Needs attention row. They used to write
+   * the whole amount straight to the ledger; now they open the rent form
+   * with it filled in — tenant, place, what's owed including late fees,
+   * dated today in the month on screen, noted as that month's rent — with
+   * the amount selected. Enter records exactly what the old button did;
+   * typing first records a part payment. Proof and a late fee waiver can go
+   * on in the same step instead of after.
+   */
+  function quickRent(row: OwedRow) {
+    const { target, expected, paid, fees, tenant } = row;
+    showSheet({
+      mode: "quick",
+      targetKey: target.key,
+      prefill: rentPrefill({ month: barMonth, today: todayKey, expected, paid, fees, tenantName: tenant?.name }),
+      context: `${tenant ? `${tenant.name} · ` : ""}${monthName(barMonth)} · ${owedLine({ expected, paid, fees })}`,
+    });
+  }
+
+  /**
+   * "Log it" on a recurring bill: the expense form, filled from the template
+   * and dated on the bill's day in the month on screen. It still saves
+   * through the template, so it's linked to it and counts for that month.
+   */
+  function quickRecurring(r: RecurringExpense) {
+    showSheet({
+      mode: "quick",
+      targetKey: targetKeyOf(r.propertyId, r.unitId),
+      prefill: recurringPrefill(r, barMonth),
+      recurring: { id: r.id, month: barMonth },
+      context: `${r.category}${r.detail ? ` · ${r.detail}` : ""} · ${monthName(barMonth)} ${
+        r.frequency === "monthly" ? "monthly" : "yearly"
+      } bill`,
+    });
+  }
+
+  /**
+   * Only the bulk "Mark all paid" writes rent without the form, and only
+   * after a confirmation that lists every amount.
    */
   async function postRent(target: Target, owed: number, tenantName?: string) {
     const res = await fetch("/api/transactions", {
@@ -1011,33 +1046,24 @@ export default function DashboardClient({
     return { ok: true as const };
   }
 
-  async function markPaid(target: Target, owed: number, tenantName?: string) {
-    setMarkingKey(target.key);
-    const result = await postRent(target, owed, tenantName);
-    setMarkingKey("");
-    if (!result.ok) {
-      push(result.error || "Couldn't record that payment.", "bad");
-      return;
-    }
-    push(`${money(owed)} recorded for ${tenantName ?? target.label}.`);
-  }
-
   /**
    * The same thing for every tenant who owes, because on the 3rd of the month
    * most of them have paid and clearing them one row at a time is the bulk of
-   * the work. Confirmed first — it writes real money into the books — and it
-   * posts one entry per tenant, so any single one can still be edited or
-   * removed afterwards.
+   * the work. Kept as one action rather than a form per tenant — that would
+   * be the row buttons again — but it never writes silently: the
+   * confirmation lists each tenant and amount, and it posts one entry per
+   * tenant, so any single one can still be edited or removed afterwards.
    */
   function markAllPaid() {
     const rows = unpaidThisMonth;
     if (rows.length === 0) return;
-    const total = rows.reduce((sum, r) => sum + (r.expected + r.fees - r.paid), 0);
+    const summary = bulkSummary(
+      rows.map((r) => ({ name: r.tenant?.name ?? r.target.label, owed: r.expected + r.fees - r.paid }))
+    );
     setConfirming({
-      title: `Record ${money(total)} of rent?`,
-      body: `One entry per tenant, dated in ${monthName(barMonth)}, for the full amount each still owes: ${rows
-        .map((r) => `${r.tenant?.name ?? r.target.label} ${money(r.expected + r.fees - r.paid)}`)
-        .join(", ")}.`,
+      title: `Record ${money(summary.total)} of rent?`,
+      body: `One entry per tenant, dated in ${monthName(barMonth)}, for the full amount each still owes. To change an amount, add proof or waive a fee, use that row's Mark paid instead.`,
+      lines: summary.lines.map((l) => ({ label: l.name, amount: money(l.owed) })),
       confirmLabel: `Record ${rows.length} payments`,
       onConfirm: async () => {
         setBulkBusy("rent");
@@ -1050,36 +1076,55 @@ export default function DashboardClient({
         }
         setBulkBusy("");
         if (failed > 0) push(`Recorded ${done}; ${failed} didn't save. Check the ledger.`, "bad");
-        else push(`${money(total)} recorded across ${done} ${done === 1 ? "tenant" : "tenants"}.`);
+        else push(`${money(summary.total)} recorded across ${done} ${done === 1 ? "tenant" : "tenants"}.`);
       },
     });
   }
 
   /** Opens the same sheet over an existing entry, to correct it in place. */
   function openEdit(t: Transaction) {
-    setProofError(null);
-    setError("");
-    setPendingProof([]);
-    if (proofInput.current) proofInput.current.value = "";
-    setEditingTxnId(t.id);
-    setWaiveLateFee(null); // a21
-    setType(t.type);
-    // Match the select: a unit-level entry points at its unit, a
-    // property-level one at the property (or its "whole building" option).
-    const propUnits = unitsForProperty(t.propertyId);
-    setTargetKey(
-      t.unitId
-        ? `${t.propertyId}:${t.unitId}`
-        : propUnits.length > 0
-          ? `${t.propertyId}:whole`
-          : t.propertyId
+    showSheet({
+      mode: "edit",
+      editingId: t.id,
+      existingProof: t.attachments.length,
+      targetKey: targetKeyOf(t.propertyId, t.unitId),
+      prefill: {
+        type: t.type,
+        amount: String(t.amount),
+        date: t.date,
+        detail: t.detail,
+        note: t.note,
+        category: t.category,
+      },
+    });
+  }
+
+  /** The sheet saved an entry: put it in the ledger and say so. */
+  function entrySaved({ entry, created, waive }: { entry: SavedEntry; created: boolean; waive: boolean | null }) {
+    setTransactions((prev) =>
+      prev.some((t) => t.id === entry.id)
+        ? prev.map((t) => (t.id === entry.id ? { ...t, ...entry, attachments: t.attachments } : t))
+        : [...prev, { ...entry, attachments: [] }]
     );
-    setDate(t.date);
-    setAmount(String(t.amount));
-    setDetail(t.detail);
-    setNote(t.note);
-    setCategory(t.category);
-    setRecording(true);
+    const where = targetLabel(entry);
+    const waived = waive === null ? "" : waive ? " Late fee waived for the month." : " Late fees apply again from today.";
+    push(
+      created
+        ? entry.recurringExpenseId
+          ? `${money(entry.amount)} ${entry.category || "bill"} logged for ${where}.`
+          : `${entry.type === "rent" ? "Rent" : "Expense"} of ${money(entry.amount)} recorded for ${
+              entry.type === "rent" && entry.detail ? entry.detail : where
+            }.${waived}`
+        : `Entry updated — ${money(entry.amount)} for ${where}.${waived}`
+    );
+    // The late fees and waived months on screen come from the server.
+    if (waive !== null) router.refresh();
+  }
+
+  function proofLanded(entryId: string, proof: ProofDTO) {
+    setTransactions((prev) =>
+      prev.map((t) => (t.id === entryId ? { ...t, attachments: [...(t.attachments ?? []), proof] } : t))
+    );
   }
 
   async function addCompany(e: React.FormEvent) {
@@ -1154,7 +1199,6 @@ export default function DashboardClient({
       return;
     }
     setProperties((prev) => [...prev, data]);
-    if (!targetKey) setTargetKey(data.id);
     setPropName("");
     setPropAddress("");
     setPropRent("");
@@ -1312,24 +1356,6 @@ export default function DashboardClient({
     );
   }
 
-  async function logRecurring(templateId: string) {
-    setRecurringBusyId(templateId);
-    setError("");
-    const res = await fetch(`/api/recurring/${templateId}/log`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ month: barMonth }),
-    });
-    const data = await res.json().catch(() => ({}));
-    setRecurringBusyId("");
-    if (!res.ok) {
-      setError(data?.error || "Couldn't log that expense.");
-      return;
-    }
-    setTransactions((prev) => [...prev, { ...data, attachments: [] }]);
-    push("Logged to the ledger.");
-  }
-
   /**
    * Records a mortgage payment for the month on screen at the split shown,
    * which writes interest and escrow into the ledger and takes the principal
@@ -1358,17 +1384,20 @@ export default function DashboardClient({
     return { ok: true as const, payment };
   }
 
-  async function logLoan(loanId: string) {
-    setRecurringBusyId(loanId);
-    setError("");
-    const result = await postLoanPayment(loanId);
-    setRecurringBusyId("");
-    if (!result.ok) {
-      setError(result.error);
-      return;
-    }
-    const p = result.payment;
-    push(`Logged: ${money(p.interest)} interest${p.escrow > 0 ? `, ${money(p.escrow)} escrow` : ""}, ${money(p.principal)} off the loan.`);
+  /** A mortgage's form saved a payment: file it and its ledger entries. */
+  function loanRecorded(loanId: string, payment: LoanPaymentDTO, entries: unknown[]) {
+    setLoans((prev) =>
+      prev.map((l) =>
+        l.id === loanId
+          ? { ...l, payments: [...l.payments, payment].sort((a, b) => a.month.localeCompare(b.month)) }
+          : l
+      )
+    );
+    setTransactions((prev) => [...prev, ...(entries as Transaction[]).map((t) => ({ ...t, attachments: [] }))]);
+    setPayingLoanId("");
+    push(
+      `Logged: ${money(payment.interest)} interest${payment.escrow > 0 ? `, ${money(payment.escrow)} escrow` : ""}, ${money(payment.principal)} off the loan.`
+    );
   }
 
   /** Every recurring bill and mortgage payment due this period, logged in one go. */
@@ -1380,10 +1409,13 @@ export default function DashboardClient({
     const total = rows.reduce((sum, r) => sum + r.amount, 0) + loanRows.reduce((sum, l) => sum + l.total, 0);
     setConfirming({
       title: `Log ${money(total)} of bills?`,
-      body: `Adds ${count} ${count === 1 ? "bill" : "bills"} for ${monthName(barMonth)}: ${[
-        ...rows.map((r) => `${r.category} ${money(r.amount)}`),
-        ...loanRows.map((l) => `${l.loan.lender} ${money(l.total)}`),
-      ].join(", ")}.${loanRows.length ? " Mortgage principal comes off the loan rather than going in as an expense." : ""}`,
+      body: `Adds ${count} ${count === 1 ? "bill" : "bills"} for ${monthName(barMonth)} at the amounts below.${
+        loanRows.length ? " Mortgage principal comes off the loan rather than going in as an expense." : ""
+      }`,
+      lines: [
+        ...rows.map((r) => ({ label: `${r.category}${r.detail ? ` · ${r.detail}` : ""}`, amount: money(r.amount) })),
+        ...loanRows.map((l) => ({ label: l.loan.lender, amount: money(l.total) })),
+      ],
       confirmLabel: `Log ${count} bills`,
       onConfirm: async () => {
         setBulkBusy("bills");
@@ -1406,93 +1438,6 @@ export default function DashboardClient({
         else push(`${money(total)} of bills logged for ${monthName(barMonth, false)}.`);
       },
     });
-  }
-
-  async function onSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const amt = parseFloat(amount);
-    // Must match what the select shows: a stale selection from another LLC
-    // (or from a property that has since grown units) would otherwise book
-    // the money against the wrong house.
-    if (!formTarget || !date || !(amt > 0)) return;
-    if (type === "expense" && !category) return;
-    setError("");
-
-    setSubmitting(true);
-    const editing = Boolean(editingTxnId);
-    const res = await fetch(editing ? `/api/transactions/${editingTxnId}` : "/api/transactions", {
-      method: editing ? "PATCH" : "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        propertyId: formTarget.propertyId,
-        unitId: formTarget.unitId,
-        type,
-        date,
-        amount: amt,
-        detail,
-        note,
-        category: type === "expense" ? category : undefined,
-        // a21: only sent once the box was touched, so an edit can't un-waive by accident.
-        waiveLateFee: type === "rent" && waiveLateFee !== null ? waiveLateFee : undefined,
-      }),
-    });
-    setSubmitting(false);
-    const data = await res.json().catch(() => ({}));
-    if (!res.ok) {
-      setError(data?.error || "Couldn't save that transaction.");
-      return;
-    }
-    // a21: the late fees and waived months on screen come from the server.
-    if (type === "rent" && waiveLateFee !== null) {
-      setWaiveLateFee(null);
-      router.refresh();
-    }
-
-    // Editing keeps whatever proof is already attached — that's the whole
-    // reason to correct an entry rather than delete and retype it.
-    if (editing) {
-      setTransactions((prev) =>
-        prev.map((t) => (t.id === editingTxnId ? { ...t, ...data, attachments: t.attachments } : t))
-      );
-      setRecording(false);
-      setEditingTxnId("");
-      push(`Entry updated — ${money(amt)} for ${formTarget.label}.`);
-      return;
-    }
-
-    const created: Transaction = { ...data, attachments: [] };
-    setTransactions((prev) => [...prev, created]);
-    setAmount("");
-    setDetail("");
-    setNote("");
-    setCategory("");
-    setDate(defaultDateFor(barMonth, todayKey));
-
-    let uploadFailed = false;
-    if (pendingProof.length > 0) {
-      setProofError(null);
-      setUploadingFor(created.id);
-      for (const file of pendingProof) {
-        if (!(await uploadProof(created.id, file, "form"))) {
-          uploadFailed = true;
-          break;
-        }
-      }
-      setUploadingFor("");
-      // Keep the selection on failure so it can be retried from the new row
-      // rather than vanishing with no explanation.
-      if (!uploadFailed) {
-        setPendingProof([]);
-        if (proofInput.current) proofInput.current.value = "";
-      }
-    }
-
-    if (!uploadFailed) {
-      setRecording(false);
-      push(
-        `${type === "rent" ? "Rent" : "Expense"} of ${money(amt)} recorded for ${formTarget.label}.`
-      );
-    }
   }
 
   const deltaFor = (current: number, prior: number | undefined, upIsGood: boolean) => {
@@ -1900,7 +1845,9 @@ export default function DashboardClient({
                       </div>
                     </div>
                   ))}
-                  {unpaidThisMonth.map(({ target, expected, paid, fees, tenant, late }) => (
+                  {unpaidThisMonth.map((row) => {
+                    const { target, expected, paid, fees, tenant, late } = row;
+                    return (
                     <div key={`u-${target.key}`} className={styles.attnRow}>
                       <div className={styles.attnMain}>
                         <div className={styles.attnLabel}>
@@ -1988,30 +1935,26 @@ export default function DashboardClient({
                             </a>
                           </>
                         )}
+                        {/* Both open the rent form with what's owed in it and
+                            selected: Enter records it all, typing records part. */}
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.small} ${styles.quiet}`}
-                          onClick={() =>
-                            openRecord({
-                              type: "rent",
-                              targetKey: target.key,
-                              amount: expected - paid,
-                            })
-                          }
+                          onClick={() => quickRent(row)}
                         >
                           Part paid
                         </button>
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.small} ${styles.primary}`}
-                          disabled={markingKey === target.key}
-                          onClick={() => markPaid(target, expected + fees - paid, tenant?.name)}
+                          onClick={() => quickRent(row)}
                         >
-                          {markingKey === target.key ? "Saving…" : "Mark paid"}
+                          Mark paid
                         </button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
 
                   {leaseAlerts.map(({ tenant, status }) => (
                     <div key={`l-${tenant.id}`} className={styles.attnRow}>
@@ -2110,10 +2053,9 @@ export default function DashboardClient({
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.small}`}
-                          disabled={recurringBusyId === r.id}
-                          onClick={() => logRecurring(r.id)}
+                          onClick={() => quickRecurring(r)}
                         >
-                          {recurringBusyId === r.id ? "Logging…" : "Log it"}
+                          Log it
                         </button>
                       </div>
                     </div>
@@ -2203,10 +2145,9 @@ export default function DashboardClient({
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.small}`}
-                          disabled={recurringBusyId === loan.id}
-                          onClick={() => logLoan(loan.id)}
+                          onClick={() => setPayingLoanId(loan.id)}
                         >
-                          {recurringBusyId === loan.id ? "Logging…" : "Log it"}
+                          Log it
                         </button>
                       </div>
                     </div>
@@ -2797,159 +2738,32 @@ export default function DashboardClient({
         </>
       )}
 
-      <Modal
-        open={recording}
-        title={editingTxnId ? "Edit this entry" : "Record a transaction"}
-        subtitle={
-          editingTxnId
-            ? "Correct any of it. Proof already attached to this entry stays put."
-            : "Rent that came in, or money that went out on a repair or bill."
-        }
-        onClose={() => setRecording(false)}
-      >
-        <div className={`${styles.formCard} ${styles.formBare}`}>
-          <div className={styles.typeToggle}>
-            <button
-              type="button"
-              className={type === "rent" ? `${styles.active} ${styles.rent}` : ""}
-              onClick={() => setType("rent")}
-            >
-              Rent payment
-            </button>
-            <button
-              type="button"
-              className={type === "expense" ? `${styles.active} ${styles.expense}` : ""}
-              onClick={() => setType("expense")}
-            >
-              Repair / expense
-            </button>
-          </div>
-          <form onSubmit={onSubmit}>
-            <div className={`${styles.fieldGrid} ${styles.modalGrid}`}>
-              <div className={`${styles.field} ${styles.wide}`}>
-                <label htmlFor="f-property">Property</label>
-                <select
-                  id="f-property"
-                  required
-                  value={formTarget?.key ?? ""}
-                  onChange={(e) => setTargetKey(e.target.value)}
-                >
-                  {visibleTargets.length === 0 && <option value="">Add a property first</option>}
-                  {visibleTargets.map((t) => (
-                    <option key={t.key} value={t.key}>
-                      {t.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className={styles.field}>
-                <label htmlFor="f-date">Date</label>
-                <input id="f-date" type="date" required value={date} onChange={(e) => setDate(e.target.value)} />
-              </div>
-              <div className={styles.field}>
-                <label htmlFor="f-amount">Amount ($)</label>
-                <input
-                  id="f-amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="0.00"
-                  required
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </div>
-              {!isRent && (
-                <div className={`${styles.field} ${styles.wide}`}>
-                  <label htmlFor="f-category">Category</label>
-                  <select id="f-category" required value={category} onChange={(e) => setCategory(e.target.value)}>
-                    <option value="">Choose one</option>
-                    {EXPENSE_CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className={`${styles.field} ${styles.wide}`}>
-                <label htmlFor="f-detail">{isRent ? "Paid by (tenant)" : "Description (optional)"}</label>
-                <input
-                  id="f-detail"
-                  type="text"
-                  placeholder={isRent ? "e.g. J. Alvarez" : "e.g. Fixed leaking kitchen faucet"}
-                  value={detail}
-                  onChange={(e) => setDetail(e.target.value)}
-                />
-              </div>
-              <div className={`${styles.field} ${styles.span3}`}>
-                <label htmlFor="f-note">Note (optional)</label>
-                <input
-                  id="f-note"
-                  type="text"
-                  placeholder={
-                    isRent ? "e.g. September rent, paid via check" : "e.g. Paid to Smith Plumbing, invoice #123"
-                  }
-                  value={note}
-                  onChange={(e) => setNote(e.target.value)}
-                />
-              </div>
-              {/* Late fee waivers (a21) */}
-              {isRent && formTarget && (
-                <WaiveLateFeeField
-                  className={styles.span4}
-                  propertyId={formTarget.propertyId}
-                  unitId={formTarget.unitId}
-                  date={date}
-                  value={waiveLateFee}
-                  onChange={setWaiveLateFee}
-                />
-              )}
-              {!editingTxnId && (
-              <div className={`${styles.field} ${styles.span4}`}>
-                <label htmlFor="f-proof">{isRent ? "Proof of payment (optional)" : "Receipt or photo (optional)"}</label>
-                <input
-                  id="f-proof"
-                  ref={proofInput}
-                  type="file"
-                  multiple
-                  accept={PROOF_ACCEPT /* names HEIC/HEIF so iPhone photos stay selectable */}
-                  className={styles.fileInput}
-                  disabled={!storageReady}
-                  onChange={(e) => setPendingProof(Array.from(e.target.files ?? []))}
-                />
-                {!storageReady && <span className={styles.proofWarn}>{STORAGE_HINT}</span>}
-                {storageReady && pendingProof.length > 0 && (
-                  <span className={styles.note}>
-                    {pendingProof.length} file{pendingProof.length === 1 ? "" : "s"} will be attached
-                  </span>
-                )}
-                {proofError?.scope === "form" && <span className={styles.proofWarn}>{proofError.message}</span>}
-              </div>
-              )}
-            </div>
-            {error && <div className={styles.errorBar}>{error}</div>}
-            <div className={styles.formFoot}>
-              <button type="button" className={styles.btn} onClick={() => setRecording(false)}>
-                Cancel
-              </button>
-              <button
-                type="submit"
-                className={`${styles.btn} ${styles.accent}`}
-                disabled={submitting || visibleTargets.length === 0}
-              >
-                {submitting
-                  ? "Saving…"
-                  : editingTxnId
-                    ? "Save changes"
-                    : isRent
-                      ? "Add rent payment"
-                      : "Add expense"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </Modal>
+      {draft && (
+        <RecordEntrySheet
+          key={draftSeq}
+          open={recording}
+          draft={draft}
+          targets={visibleTargets}
+          storageReady={storageReady}
+          onClose={() => setRecording(false)}
+          onSaved={entrySaved}
+          onProof={proofLanded}
+        />
+      )}
+
+      {(() => {
+        const loan = loans.find((l) => l.id === payingLoanId);
+        return loan ? (
+          <LoanPaymentDialog
+            loan={loan}
+            month={barMonth}
+            today={todayKey}
+            focusAmount
+            onClose={() => setPayingLoanId("")}
+            onRecorded={(payment, entries) => loanRecorded(loan.id, payment, entries)}
+          />
+        ) : null;
+      })()}
 
       <MarkReturnedDialog
         moveOut={deposits.find((d) => d.id === returningId) ?? null}
