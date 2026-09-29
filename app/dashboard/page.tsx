@@ -11,6 +11,7 @@ import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
 import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
+import { policyDTO } from "@/lib/statements";
 import DashboardClient from "./DashboardClient";
 
 export default async function DashboardPage() {
@@ -21,7 +22,7 @@ export default async function DashboardPage() {
 
   const memberships = await prisma.companyMember.findMany({
     where: { userId },
-    include: { company: true },
+    include: { company: { include: { lateFeePolicy: true } } },
     orderBy: { createdAt: "asc" },
   });
   const companyIds = memberships.map((m) => m.companyId);
@@ -100,6 +101,11 @@ export default async function DashboardPage() {
       initialRepairs={openRequests.map(serializeRequestForLandlord)}
       expiringDocs={await expiringDocuments(companyIds, new Date(Date.now() + (SOON_DAYS + 1) * 86_400_000))}
       lateFees={lateFees}
+      // Each company's late-fee policy, so a card can say what the fee is
+      // made of and how close it is to the cap.
+      lateFeePolicies={Object.fromEntries(
+        memberships.map((m) => [m.companyId, policyDTO(m.company.lateFeePolicy)])
+      )}
       initialChases={Object.fromEntries(
         // findMany came back newest first, so the first entry per tenant wins.
         allNotices.reduce((seen, n) => {
