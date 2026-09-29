@@ -203,6 +203,12 @@ function shortDay(day: string): string {
  * `applied` is what the rule has already charged for this month (its run
  * records). Those days are skipped and their amounts count toward the cap,
  * so a charge the landlord deleted is a gift to the tenant, not a reset.
+ *
+ * `booked` is what each rule's charges still on the books come to for the
+ * month — what `owed` actually holds of its own fees. A deleted fee is in
+ * `applied` but not in `owed`, so taking `applied` off `owed` took it off
+ * twice and stopped the daily fee while rent was still unpaid. Without
+ * `booked`, every applied fee is assumed to be on the books.
  */
 export function lateFeesFor(opts: {
   rules: ChargeRule[];
@@ -213,8 +219,9 @@ export function lateFeesFor(opts: {
   today: Date;
   payments?: DatedPayment[];
   applied?: AppliedFee[];
+  booked?: Record<string, number>;
 }): AssessedFee[] {
-  const { rules, month, owed, rentThisMonth, dueDay, today, payments = [], applied = [] } = opts;
+  const { rules, month, owed, rentThisMonth, dueDay, today, payments = [], applied = [], booked } = opts;
   if (!(rentThisMonth > 0)) return [];
 
   const inMonth = payments.filter((p) => DAY.test(p.day) && p.day.slice(0, 7) === month);
@@ -239,9 +246,9 @@ export function lateFeesFor(opts: {
     // What they owed on a day, leaving out this rule's own fees: the
     // month-end figure less what this rule has put on it, plus money that
     // came later in the month, less money that came in a later month.
-    const charged0 = charged;
+    const onBooks = booked ? Math.max(0, booked[rule.id] ?? 0) : charged;
     const owedOn = (day: string) => {
-      let n = owed - charged0;
+      let n = owed - onBooks;
       for (const p of inMonth) if (p.day > day) n += Math.max(0, p.amount || 0);
       for (const p of later) if (p.day <= day) n -= Math.max(0, p.amount || 0);
       return cents(n);
