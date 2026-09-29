@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useId, useRef, type ReactNode } from "react";
+import { useEffect, useId, useRef, type ReactNode, type RefObject } from "react";
 import styles from "./overlay.module.css";
 
 /**
@@ -22,6 +22,7 @@ export default function Modal({
   onClose,
   narrow = false,
   topLayer = false,
+  initialFocus,
   children,
 }: {
   open: boolean;
@@ -34,6 +35,13 @@ export default function Modal({
    * tree. A confirmation is always asked *about* something already open.
    */
   topLayer?: boolean;
+  /**
+   * A field to land in instead of the panel — for a form opened to confirm
+   * one figure (a quick "Mark paid"), where the figure is what gets typed.
+   * An input also has its contents selected, so typing replaces the
+   * prefilled amount and Enter accepts it.
+   */
+  initialFocus?: RefObject<HTMLElement | null>;
   children: ReactNode;
 }) {
   const panel = useRef<HTMLDivElement>(null);
@@ -71,15 +79,47 @@ export default function Modal({
     // Move focus into the dialog so it's the thing being read and typed into,
     // but land on the panel rather than the first field: opening a sheet
     // shouldn't throw a keyboard up before anyone has asked for one.
-    panel.current?.focus();
+    const field = initialFocus?.current;
+    if (field) {
+      field.focus({ preventScroll: true });
+      if (field instanceof HTMLInputElement) {
+        try {
+          field.select();
+        } catch {
+          // Some input types can't be selected; focus is enough.
+        }
+      }
+    } else {
+      panel.current?.focus();
+    }
+
+    // On a phone the sheet sits on the bottom edge, which is exactly where
+    // the on-screen keyboard comes up. iOS doesn't shrink the layout for the
+    // keyboard, so without this the save button can sit behind it. The
+    // visual viewport says how much the keyboard covers; the scrim is lifted
+    // by that much and the sheet's height shrinks to match.
+    const vv = window.visualViewport;
+    const scrim = panel.current?.parentElement;
+    function fitKeyboard() {
+      if (!vv || !scrim) return;
+      const covered = Math.max(0, Math.round(window.innerHeight - vv.height - vv.offsetTop));
+      scrim.style.setProperty("--kb", `${covered}px`);
+    }
+    fitKeyboard();
+    vv?.addEventListener("resize", fitKeyboard);
+    vv?.addEventListener("scroll", fitKeyboard);
 
     return () => {
       const at = openDialogs.indexOf(token);
       if (at >= 0) openDialogs.splice(at, 1);
       document.removeEventListener("keydown", onKey);
+      vv?.removeEventListener("resize", fitKeyboard);
+      vv?.removeEventListener("scroll", fitKeyboard);
       document.body.style.overflow = previousOverflow;
       restoreTo.current?.focus?.();
     };
+    // initialFocus is read once, on open, like the focus it decides.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   if (!open) return null;

@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { openRepairCount } from "@/lib/requests";
 import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
+import { blobConfigured } from "@/lib/blob";
 import CalendarClient from "./CalendarClient";
 
 export default async function CalendarPage() {
@@ -50,8 +51,24 @@ export default async function CalendarPage() {
     openRepairCount(me.id),
   ]);
 
+  // Late fees on the books per tenant per month, as the overview has them,
+  // so "Mark paid" here offers the same amount owed as Needs attention.
+  const lateFeeRows = await prisma.tenantCharge.groupBy({
+    by: ["tenantId", "month"],
+    where: {
+      kind: "fee",
+      rule: { kind: "late" },
+      tenant: { active: true, property: { companyId: { in: companyIds } } },
+    },
+    _sum: { amount: true },
+  });
+  const lateFees: Record<string, number> = {};
+  for (const r of lateFeeRows) lateFees[`${r.tenantId}|${r.month}`] = Math.round((r._sum.amount ?? 0) * 100) / 100;
+
   return (
     <CalendarClient
+      lateFees={lateFees}
+      storageReady={blobConfigured()}
       openRepairs={openRepairs}
       serverToday={isoDay(new Date())}
       companies={memberships.map((m) => m.company)}
