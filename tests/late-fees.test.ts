@@ -19,8 +19,9 @@ import {
 } from "../lib/late-fee-policy.ts";
 import { lateFeeSummary } from "../lib/late-fee-text.ts";
 
-/* The owner's policy: 5 days' grace, 7% once, then $5 a day, at most 12%. */
-const POLICY = { ...DEFAULT_POLICY, enabled: true };
+/* A commercial LLC's policy: 5 days' grace, 7% once, then $5 a day, at most
+   12%. (The residential default caps at 10%; see tests/lease-types.test.ts.) */
+const POLICY = { ...DEFAULT_POLICY, enabled: true, leaseType: "commercial" as const, capPercent: 12 };
 
 const rule = (over: Partial<ChargeRule> = {}): ChargeRule => ({
   id: "p",
@@ -366,6 +367,7 @@ test("the reminder line", () => {
 test("policy input is clamped, and a mode is one of three", () => {
   assert.deepEqual(parsePolicy({ enabled: true, graceDays: 99, percent: 250, dailyAmount: -4, capPercent: "12" }), {
     enabled: true,
+    leaseType: "residential",
     graceDays: 28,
     percent: 100,
     dailyAmount: 0,

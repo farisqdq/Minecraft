@@ -152,15 +152,47 @@ tenant is a new record rather than an overwrite.
 ### Late fees
 
 An LLC can charge late fees automatically, the same way for every tenant,
-from the **Team** page:
+from the **Team** page (the LLC's **Late fees** panel):
 
-> If rent is still owed 5 days after the due day, a late fee of 7% of that
-> month's rent is charged, then $5 a day until it's paid, up to 12% of that
-> month's rent ($120 on $1,000).
+> Residential: If rent is still owed 5 days after the due day, a late fee of
+> 7% of that month's rent is charged, then $5 a day until it's paid, up to
+> 10% of that month's rent ($100 on $1,000).
+
+**Residential or commercial.** The top of the panel says what kind of leases
+the LLC has — **This LLC's leases: Residential / Commercial** — and every
+tenant of that LLC follows it; there is no per-tenant lease type. It sets the
+cap the numbers start from: **10%** of the month's rent for residential,
+**12%** for commercial (so "High Acres", commercial, caps a $4,570 unit at
+$548.40; "Nejad", residential, caps $1,000 rent at $100). Switching the
+choice fills in that type's cap; the owner can still change it, and nothing
+changes until **Save**. A new LLC starts residential: 7% after 5 days' grace,
+then $5 a day, up to 10%.
 
 The four numbers — grace days, the one-time percentage, the daily amount and
 the cap — are the LLC's, and the page reads the policy back in a sentence as
 you type. It is off until an owner switches it on.
+
+*Kentucky.* Kentucky law (including the landlord-tenant act Lexington has
+adopted) sets no maximum late fee; a late fee can be charged only if the
+**lease** provides for it, and it should be reasonable. Put the fee — grace
+period, the one-time amount, the daily amount and the cap — in the lease
+itself, and keep the numbers here the same as the lease. This app charges
+what you enter; it doesn't check your leases. (Not legal advice.)
+
+**Lowering a cap** (or switching an LLC from commercial to residential)
+never adds a fee and never deletes one. A month whose fees are already at or
+above the new cap simply gets no more, and **Run late fees now** lists it:
+"Alan D Ward — $150 in late fees for September 2026 is above the new 10% cap
+($100). No more will be added; delete the extra on their statement if you
+want it gone." Whether to give back the extra is the landlord's decision.
+
+*Upgrading (migration a22).* Every LLC's saved policy becomes **residential**
+and keeps its numbers exactly, with one exception: a policy still at the
+untouched old defaults — 5 days, 7%, $5/day, cap 12%, on or off — was never
+chosen by anyone, so its cap becomes the new residential 10%. Any other
+saved numbers, including a 12% cap saved alongside different numbers, are
+left alone. An LLC that should be commercial is switched on its panel, which
+suggests 12%.
 
 **Switching it on when rent is already overdue.** Saving applies the policy
 at once to every tenant of the LLC and lists, tenant by tenant, what was
@@ -172,7 +204,8 @@ days before the policy existed are never backfilled. "Still unpaid" means
 after later payments are set against the oldest rent first, so a tenant
 who carried a shortfall but has since caught up isn't charged for it. The
 12% cap per month holds regardless. **Run late fees now** does the same
-thing at any time and never charges twice.
+thing at any time and never charges twice. (The examples here use the
+commercial 12% cap; a residential LLC stops at 10%.)
 
 Each tenant's account then says which late fees apply to them, under **What
 bills itself**: the LLC's policy (the default), **their own late rules** with
@@ -228,7 +261,8 @@ $5 a day runs from the next day; the waived days are never billed; and the
 month's 12% cap counts only fees charged since. Waiving again removes those
 too.
 
-Backups carry the policy, each tenant's choice, every day already charged,
+Backups carry the policy (with the LLC's lease type; a backup from before
+lease types restores as residential with its numbers as saved), each tenant's choice, every day already charged,
 and every waiver (with the day it was taken back, if it was), so a restore
 neither forgets a fee, bills it twice, nor revives a waived one.
 

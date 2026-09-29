@@ -75,7 +75,14 @@ export function cardLateFeeLine(opts: {
   let line = terms.length ? `${head} (${terms.join(", ")})` : head;
   if (cap !== null) {
     // Floored, so a month a few cents short of the cap never reads "100%".
-    line += fees >= cap - EPSILON ? " · cap reached" : ` · ${Math.floor((fees / cap) * 100)}% of cap`;
+    // Above it means the cap was lowered after the fees were charged: none
+    // are deleted and no more are added, and "Run late fees now" says so.
+    line +=
+      fees > cap + EPSILON
+        ? " · above cap"
+        : fees >= cap - EPSILON
+          ? " · cap reached"
+          : ` · ${Math.floor((fees / cap) * 100)}% of cap`;
   }
   return line;
 }

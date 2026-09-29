@@ -17,8 +17,8 @@ import {
   type WaiverState,
 } from "../lib/late-fee-waiver.ts";
 
-/* The LLC's policy: 5 days' grace, 7% once, then $5 a day, at most 12%. */
-const POLICY = { ...DEFAULT_POLICY, enabled: true };
+/* A commercial LLC's policy: 5 days' grace, 7% once, then $5 a day, at most 12%. */
+const POLICY = { ...DEFAULT_POLICY, enabled: true, leaseType: "commercial" as const, capPercent: 12 };
 const policyRule = (id: string, over: Partial<ChargeRule> = {}): ChargeRule => ({
   id,
   ...policyRuleFields(POLICY),

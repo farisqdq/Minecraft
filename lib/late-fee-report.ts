@@ -62,6 +62,13 @@ export type LateFeeFacts = {
   paidThisMonth?: number;
   /** Late fees the rules in force charged for the month and someone since deleted. */
   deletedThisMonth?: number;
+  /**
+   * On the LLC's policy, the month's cap as it stands now — set only when
+   * the late fees already on the books for the month are above it, which
+   * happens when the cap was lowered after they were charged. Nothing is
+   * deleted and nothing more is added; the landlord decides about the extra.
+   */
+  aboveCap?: { cap: number; capPercent: number };
 };
 
 export type LateFeeLine = { tenantName: string; tone: "charged" | "none" | "check"; text: string };
@@ -103,6 +110,16 @@ export function lateFeeLine(f: LateFeeFacts): LateFeeLine {
       ? ` The policy is on for ${list(f.policyOnFor)}, not this one — turn it on for ${f.companyName ?? "this LLC"} on the Team page.`
       : "";
     return line(elsewhere ? "check" : "none", `Late fees are switched off for ${llc}.${elsewhere}`);
+  }
+  // A cap lowered after the month's fees were charged: say so rather than
+  // quietly stop, and never delete — the extra is the landlord's call.
+  if (f.mode === "default" && f.aboveCap && f.feesThisMonth > f.aboveCap.cap + 0.005) {
+    return line(
+      "check",
+      `${money(f.feesThisMonth)} in late fees for ${month} is above the new ${pctText(f.aboveCap.capPercent)} cap (${money(
+        f.aboveCap.cap
+      )}). No more will be added; delete the extra on their statement if you want it gone.`
+    );
   }
   if (f.startMonth && f.startMonth > f.month) {
     return line(
@@ -190,6 +207,8 @@ function list(items: string[]): string {
   if (items.length <= 1) return items[0] ?? "";
   return `${items.slice(0, -1).join(", ")} and ${items[items.length - 1]}`;
 }
+
+const pctText = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}%`;
 
 function ordinal(n: number): string {
   const tens = n % 100;

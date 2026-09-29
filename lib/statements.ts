@@ -19,8 +19,10 @@ import {
 import {
   DEFAULT_POLICY,
   parseLateFeeMode,
+  parseLeaseType,
   policyCharges,
   policyRuleFields,
+  policyRuleMatches,
   type LateFeeMode,
   type LateFeePolicyDTO,
 } from "@/lib/late-fee-policy";
@@ -154,17 +156,23 @@ const ruleDTO = (r: RuleRow): ChargeRule => ({
 
 type PolicyRow = {
   enabled: boolean;
+  leaseType: string;
   graceDays: number;
   percent: number;
   dailyAmount: number;
   capPercent: number;
 };
 
-/** The policy row as plain data; no row means the defaults, switched off. */
+/**
+ * The policy row as plain data; no row means the defaults (residential,
+ * cap 10%), switched off. The LLC's lease type (a22) rides along, so every
+ * tenant of the LLC — card, reminder, statement — reads the same numbers.
+ */
 export const policyDTO = (p: PolicyRow | null): LateFeePolicyDTO =>
   p
     ? {
         enabled: p.enabled,
+        leaseType: parseLeaseType(p.leaseType),
         graceDays: p.graceDays,
         percent: p.percent,
         dailyAmount: p.dailyAmount,
@@ -244,15 +252,11 @@ async function syncPolicyRule(opts: {
     });
     return true;
   }
+  // A changed number — including the cap an LLC's lease type (a22) brings —
+  // rewrites the rule in place below, start day and runs kept.
   const stale =
     !existing.active ||
-    existing.kind !== fields.kind ||
-    existing.label !== fields.label ||
-    existing.amount !== fields.amount ||
-    existing.percent !== fields.percent ||
-    existing.graceDays !== fields.graceDays ||
-    existing.dailyAmount !== fields.dailyAmount ||
-    existing.capPercent !== fields.capPercent ||
+    !policyRuleMatches({ ...existing, kind: existing.kind === "late" ? "late" : "monthly" }, policy) ||
     existing.endMonth !== null;
   if (!stale) return healed;
   await prisma.tenantChargeRule.update({
