@@ -20,9 +20,17 @@
  *    query where they don't apply.
  *  - Photos are shrunk in the browser; a HEIC the browser can't decode
  *    (anything but Safari) goes up as the original if it fits in 4 MB.
+ *  - "Scan" opens the document scanner in attachment mode: a crumpled
+ *    receipt or a check photographed at an angle comes back cropped and
+ *    cleaned up as one PDF, which joins the queue like any picked PDF. The
+ *    scanner is portalled to <body> (it is its own <form>, and this picker
+ *    sits inside the entry's form), and its submit/drag events are stopped
+ *    here so they don't bubble through React to the entry form or this zone.
  */
 
-import { useEffect, useId, useRef, useState, type DragEvent } from "react";
+import { useEffect, useId, useRef, useState, type DragEvent, type SyntheticEvent } from "react";
+import { createPortal } from "react-dom";
+import Scanner from "./Scanner";
 import { shrinkImage } from "@/lib/shrinkImage";
 import {
   CAMERA_ACCEPT,
@@ -33,6 +41,7 @@ import {
   proofCountLabel,
   proofKind,
   screenPicked,
+  proofScanTitle,
   shortName,
   type ProofKind,
 } from "@/lib/attachments-ui";
@@ -54,6 +63,20 @@ export type PendingProof = {
 };
 
 let seq = 0;
+
+/** Events from the portalled scanner still bubble through React; they stop here. */
+function stop(e: SyntheticEvent) {
+  e.stopPropagation();
+}
+
+function localDayKey(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function localDayLabel(): string {
+  return new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
 
 function toPending(file: File): PendingProof {
   const kind = proofKind(file.name, file.type) ?? "image";
@@ -197,6 +220,7 @@ export default function ProofPicker({
   disabled = false,
   label = "Attach proof",
   hint,
+  scanTitle,
 }: {
   value: PendingProof[];
   onChange: (next: PendingProof[]) => void;
@@ -204,6 +228,8 @@ export default function ProofPicker({
   disabled?: boolean;
   label?: string;
   hint?: string;
+  /** The name a scan starts with, e.g. "Receipt – Sep 29, 2026" (lib/attachments-ui proofScanTitle). */
+  scanTitle?: string;
 }) {
   const uid = useId().replace(/:/g, "");
   const cameraId = `proof-camera-${uid}`;
@@ -211,6 +237,10 @@ export default function ProofPicker({
   const [problems, setProblems] = useState<string[]>([]);
   const [dragging, setDragging] = useState(false);
   const dragDepth = useRef(0);
+  const [scanning, setScanning] = useState(false);
+  // The scanner is portalled to <body>, which only exists in the browser.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
 
   // Latest queue for the unmount cleanup below.
   const latest = useRef(value);
@@ -311,6 +341,19 @@ export default function ProofPicker({
           <span className={s.touchText}>Choose photo or file</span>
           <span className={s.pointerText}>Choose files</span>
         </label>
+        <button
+          type="button"
+          className={s.pick}
+          aria-disabled={disabled || full}
+          disabled={disabled || full}
+          data-proof-scan=""
+          onClick={() => {
+            setProblems([]);
+            setScanning(true);
+          }}
+        >
+          Scan
+        </button>
         <span className={s.dropHint}>{dragging ? "Drop to attach" : "or drag files here"}</span>
       </div>
 
@@ -349,6 +392,28 @@ export default function ProofPicker({
           {problems.join(" ")}
         </p>
       )}
+
+      {mounted &&
+        createPortal(
+          <div
+            onSubmit={stop}
+            onDragEnter={stop}
+            onDragOver={stop}
+            onDragLeave={stop}
+            onDrop={stop}
+          >
+            <Scanner
+              open={scanning}
+              onClose={() => setScanning(false)}
+              mode="attachment"
+              defaultTitle={scanTitle || proofScanTitle(null, localDayLabel())}
+              today={localDayKey()}
+              storageReady
+              onPdf={(file) => add([file])}
+            />
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
