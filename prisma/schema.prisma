@@ -61,6 +61,8 @@ model User {
   passwordResets      PasswordReset[]
   pushSubscriptions   PushSubscription[]
   ownerInvitesSent    PropertyOwnerInvite[] @relation("PropertyOwnerInviteSender")
+  lateFeesWaived      LateFeeWaiver[]       @relation("LateFeeWaivedBy")
+  lateFeesUnwaived    LateFeeWaiver[]       @relation("LateFeeUnwaivedBy")
 }
 
 model Company {
@@ -225,6 +227,8 @@ model Tenant {
   documents Document[]
   moveOut   MoveOut?
   thread    MessageThread?
+  /// Late fee waivers (a21).
+  lateFeeWaivers LateFeeWaiver[]
 
   // What they owed on the day you started keeping books here, and the first
   // month to charge rent for. Without these, a lease that began in 2023 and a
@@ -1139,4 +1143,36 @@ model OwnerPasswordReset {
   createdAt      DateTime      @default(now())
 
   @@index([ownerId])
+}
+
+/// ---- Late fee waivers (a21) ----
+
+/// "Waive late fee for this month": one tenant, one rent month. While
+/// waived (unwaivedAt null) lib/statements.ts plans no late fee of any kind
+/// for that tenant and month; the fees already charged were deleted when it
+/// was waived, and their TenantRuleRun rows kept so nothing is re-billed.
+/// Un-waiving keeps the row, stamped, because the day it was un-waived is
+/// where late fees start again — nothing before it is ever backfilled. See
+/// lib/late-fee-waiver.ts for the rules and lib/late-fee-waivers-db.ts for
+/// the writes. It never touches the LLC's policy or the tenant's lateFeeMode.
+model LateFeeWaiver {
+  id             String    @id @default(cuid())
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// The rent month waived, YYYY-MM.
+  month          String
+  waivedById     String?
+  waivedBy       User?     @relation("LateFeeWaivedBy", fields: [waivedById], references: [id], onDelete: SetNull)
+  /// Who, as shown when it was done — survives the user being removed and a
+  /// restore into a database where their id means nothing.
+  waivedByName   String    @default("")
+  waivedAt       DateTime  @default(now())
+  note           String?
+  /// Set when the waiver was taken back: late fees apply again from this day.
+  unwaivedAt     DateTime?
+  unwaivedById   String?
+  unwaivedBy     User?     @relation("LateFeeUnwaivedBy", fields: [unwaivedById], references: [id], onDelete: SetNull)
+  unwaivedByName String    @default("")
+
+  @@unique([tenantId, month])
 }

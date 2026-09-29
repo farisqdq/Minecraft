@@ -60,6 +60,7 @@ export async function runLateFeesFor(tenantIds: string[], now = new Date()): Pro
         today,
         problem: result.problem,
         capped: feesThisMonth >= cap - 0.005,
+        waived: result.lateFeeWaivers.some((w) => w.waived && w.month === month), // a21
       })
     );
   }
