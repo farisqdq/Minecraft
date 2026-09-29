@@ -11,6 +11,7 @@ import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
 import { documentsWhere } from "@/lib/documents-db";
 import { blobConfigured } from "@/lib/blob";
+import { fileLink } from "@/lib/file-links";
 import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
 import { serializeAsset } from "@/lib/assets-db";
@@ -168,7 +169,15 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         detail: t.detail ?? "",
         note: t.note ?? "",
         category: t.category ?? "",
-        proofCount: t.attachments.length,
+        // Thumbnails and the paperclip on "Recent activity" read these;
+        // files are only ever served through /api/files (access-checked).
+        attachments: t.attachments.map((a) => ({
+          id: a.id,
+          transactionId: t.id,
+          url: fileLink("attachment", a.id),
+          filename: a.filename,
+          contentType: a.contentType,
+        })),
         loanPaymentId: t.loanPaymentId,
       }))}
     />

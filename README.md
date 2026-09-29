@@ -605,9 +605,18 @@ screenshot, a contractor's invoice, a receipt PDF. Attach files when recording
 the entry, or add them to any existing row later with "+ Attach proof".
 Thumbnails appear in the ledger and open the full file in a new tab.
 
+The same works on each property page: the "+ Rent" and "+ Expense" forms (and
+Edit) have an **Attach proof** area, and every row in "Recent activity" shows
+a paperclip with the count — tap it for the thumbnails — plus "+ Attach proof".
+Up to 4 files per entry. On a phone there are two buttons: **Take photo**
+(opens the rear camera) and **Choose photo or file** (photo library, camera or
+Files — HEIC and PDF included). On a computer it's **Choose files** or drag the
+files onto the area.
+
 Photos are shrunk in the browser before upload (long edge 1600px, JPEG), so a
 phone photo uploads quickly and stays well under the 4 MB per-file limit. PDFs
-upload as-is.
+upload as-is, and so does an iPhone HEIC photo on a browser that can't decode
+it (anything but Safari), as long as it's under 4 MB.
 
 This needs a **private Vercel Blob** store:
 
