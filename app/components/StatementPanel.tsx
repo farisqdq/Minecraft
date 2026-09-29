@@ -5,7 +5,13 @@ import { money } from "@/lib/money";
 import { monthName } from "@/lib/notices";
 import type { Statement } from "@/lib/balance";
 import { ruleSummary, type ChargeRule } from "@/lib/charge-rules";
-import { policySentence, type LateFeeMode, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
+import {
+  LEASE_TYPE_LABELS,
+  parseLeaseType,
+  policySentence,
+  type LateFeeMode,
+  type LateFeePolicyDTO,
+} from "@/lib/late-fee-policy";
 import type { WaiverDTO } from "@/lib/late-fee-waivers-db";
 import styles from "../dashboard/dashboard.module.css";
 
@@ -412,7 +418,8 @@ export default function StatementPanel({
           </select>
           <span className={styles.helpText}>
             {data.lateFeeMode === "default"
-              ? policySentence(data.policy)
+              ? // Which lease type the LLC is on (a22), so "why 12%?" answers itself.
+                `This LLC's leases are ${LEASE_TYPE_LABELS[parseLeaseType(data.policy.leaseType)].toLowerCase()}. ${policySentence(data.policy)}`
               : data.lateFeeMode === "custom"
                 ? "Only the late rules below apply; the LLC's policy doesn't."
                 : "Nothing is charged when rent is late. Rules for every month still apply."}

@@ -1042,6 +1042,10 @@ model LateFeePolicy {
   companyId   String   @unique
   company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   enabled     Boolean  @default(false)
+  /// "residential" | "commercial" (a22): what kind of leases this LLC's
+  /// tenants are on. Every tenant of the LLC follows it; it sets the
+  /// default cap (10% residential, 12% commercial) the numbers start from.
+  leaseType   String   @default("residential")
   /// Days after the due day before the first fee.
   graceDays   Int      @default(5)
   /// One-time fee on the first late day, as a percentage of that month's rent.
@@ -1049,7 +1053,7 @@ model LateFeePolicy {
   /// Dollars for each further day the month stays owed.
   dailyAmount Float    @default(5)
   /// Ceiling on the month's late fees, as a percentage of that month's rent; 0 = none.
-  capPercent  Float    @default(12)
+  capPercent  Float    @default(10)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 }

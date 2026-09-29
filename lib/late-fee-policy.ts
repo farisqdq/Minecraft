@@ -14,8 +14,39 @@
 
 import { MAX_AUTO_CHARGE, type ChargeRule } from "./charge-rules.ts";
 
+/**
+ * What kind of leases an LLC's tenants are on (a22). Set once per LLC on its
+ * policy — every tenant of the LLC follows it — and it decides the default
+ * cap the numbers start from. Anything unrecognised reads as residential,
+ * the lower cap, so a bad value never raises anyone's fees.
+ */
+export type LeaseType = "residential" | "commercial";
+
+export const LEASE_TYPES: LeaseType[] = ["residential", "commercial"];
+
+export const LEASE_TYPE_LABELS: Record<LeaseType, string> = {
+  residential: "Residential",
+  commercial: "Commercial",
+};
+
+export function parseLeaseType(value: unknown, fallback: LeaseType = "residential"): LeaseType {
+  return value === "residential" || value === "commercial" ? value : fallback;
+}
+
+/**
+ * The cap each lease type starts from, as a percentage of the month's rent:
+ * 10% for a home, 12% for a business. Switching an LLC's lease type on the
+ * settings panel fills this in; the owner can still change it.
+ */
+export const DEFAULT_CAP_PERCENT: Record<LeaseType, number> = {
+  residential: 10,
+  commercial: 12,
+};
+
 export type LateFeePolicyDTO = {
   enabled: boolean;
+  /** The LLC's lease type (a22). Optional for callers that predate it; absent reads as residential. */
+  leaseType?: LeaseType;
   /** Days after the due day before the first fee. */
   graceDays: number;
   /** One-time fee on the first late day, as a percentage of that month's rent. */
@@ -31,14 +62,48 @@ export type LateFeePolicyDTO = {
  * row is treated as: the numbers the owner asked for, switched off until an
  * owner turns them on. A policy that billed every tenant of every company
  * the day the column arrived would not be a default, it would be a surprise.
+ *
+ * Residential, 7% once after 5 days' grace, then $5 a day, up to 10% of the
+ * month's rent (a22; the cap was 12% before lease types).
  */
 export const DEFAULT_POLICY: LateFeePolicyDTO = {
   enabled: false,
+  leaseType: "residential",
   graceDays: 5,
   percent: 7,
   dailyAmount: 5,
-  capPercent: 12,
+  capPercent: DEFAULT_CAP_PERCENT.residential,
 };
+
+/**
+ * The numbers every company started from before lease types (a15). A saved
+ * policy still holding exactly these was never chosen by anyone — they are
+ * what the form was filled in with. See migratedPolicy.
+ */
+export const OLD_DEFAULT_TERMS = { graceDays: 5, percent: 7, dailyAmount: 5, capPercent: 12 } as const;
+
+/**
+ * What prisma/migrations/a22_lease_types does to a policy saved before lease
+ * types, kept here so the rule is tested: it becomes residential and keeps
+ * the landlord's numbers — saved numbers are never changed behind their back
+ * — except a row still at the untouched old defaults (5 days, 7%, $5, cap
+ * 12; on or off), whose cap becomes the new residential 10%.
+ */
+export function migratedPolicy(saved: Omit<LateFeePolicyDTO, "leaseType">): LateFeePolicyDTO {
+  const untouched =
+    saved.graceDays === OLD_DEFAULT_TERMS.graceDays &&
+    saved.percent === OLD_DEFAULT_TERMS.percent &&
+    saved.dailyAmount === OLD_DEFAULT_TERMS.dailyAmount &&
+    saved.capPercent === OLD_DEFAULT_TERMS.capPercent;
+  return {
+    enabled: saved.enabled,
+    leaseType: "residential",
+    graceDays: saved.graceDays,
+    percent: saved.percent,
+    dailyAmount: saved.dailyAmount,
+    capPercent: untouched ? DEFAULT_CAP_PERCENT.residential : saved.capPercent,
+  };
+}
 
 /** A grace period longer than a month would never fire before the next one. */
 export const MAX_GRACE_DAYS = 28;
@@ -66,6 +131,8 @@ export function parsePolicy(input: unknown, base: LateFeePolicyDTO = DEFAULT_POL
   const b = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   return {
     enabled: "enabled" in b ? b.enabled === true : base.enabled,
+    // A backup from before lease types has none: residential, numbers as saved.
+    leaseType: parseLeaseType(b.leaseType, parseLeaseType(base.leaseType)),
     graceDays: Math.min(MAX_GRACE_DAYS, Math.max(0, Math.round(num(b.graceDays, base.graceDays)))),
     percent: Math.min(100, Math.max(0, cents(num(b.percent, base.percent)))),
     dailyAmount: Math.min(MAX_AUTO_CHARGE, Math.max(0, cents(num(b.dailyAmount, base.dailyAmount)))),
@@ -102,6 +169,31 @@ export function policyRuleFields(p: LateFeePolicyDTO): Pick<
   };
 }
 
+/**
+ * Whether a tenant's policy rule already carries the policy's numbers. When
+ * it doesn't — the numbers changed, or the LLC's lease type changed and its
+ * cap with it — lib/statements.ts rewrites the rule in place, keeping its
+ * start day and its runs, so nothing already billed is billed again.
+ */
+export function policyRuleMatches(
+  rule: Pick<ChargeRule, "kind" | "label" | "amount" | "percent" | "graceDays"> & {
+    dailyAmount?: number;
+    capPercent?: number;
+  },
+  p: LateFeePolicyDTO
+): boolean {
+  const f = policyRuleFields(p);
+  return (
+    rule.kind === f.kind &&
+    rule.label === f.label &&
+    rule.amount === f.amount &&
+    rule.percent === f.percent &&
+    rule.graceDays === f.graceDays &&
+    (rule.dailyAmount ?? 0) === f.dailyAmount &&
+    (rule.capPercent ?? 0) === f.capPercent
+  );
+}
+
 const dollars = (n: number) =>
   `$${n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`;
 const pct = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits: 2 })}%`;
@@ -116,8 +208,10 @@ const pct = (n: number) => `${n.toLocaleString("en-US", { maximumFractionDigits:
  * The worked example on a sample rent is there because "12%" means nothing
  * to a landlord until it's a number.
  */
-export function policySentence(p: LateFeePolicyDTO, sampleRent = 1000): string {
-  if (!policyCharges(p)) return "No late fees are charged automatically.";
+export function policySentence(p: LateFeePolicyDTO, sampleRent = 1000, withLeaseType = false): string {
+  // "Residential: If rent is still owed …" where the lease type needs saying.
+  const lead = withLeaseType ? `${LEASE_TYPE_LABELS[parseLeaseType(p.leaseType)]}: ` : "";
+  if (!policyCharges(p)) return `${lead}No late fees are charged automatically.`;
   const when =
     p.graceDays <= 0
       ? "If rent is still owed on the due day"
@@ -134,5 +228,5 @@ export function policySentence(p: LateFeePolicyDTO, sampleRent = 1000): string {
     const example = sampleRent > 0 ? ` (${dollars(cents((sampleRent * p.capPercent) / 100))} on ${dollars(sampleRent)})` : "";
     cap = `, up to ${pct(p.capPercent)} of that month's rent${example}`;
   }
-  return `${when}, ${parts.join(", ")}${cap}.`;
+  return `${lead}${when}, ${parts.join(", ")}${cap}.`;
 }

@@ -2,24 +2,37 @@
 
 import { useState } from "react";
 import {
+  DEFAULT_CAP_PERCENT,
   DEFAULT_POLICY,
+  LEASE_TYPE_LABELS,
+  LEASE_TYPES,
+  parseLeaseType,
   parsePolicy,
   policySentence,
   type LateFeePolicyDTO,
+  type LeaseType,
 } from "@/lib/late-fee-policy";
 import type { LateFeeLine } from "@/lib/late-fee-report";
 import styles from "../dashboard/dashboard.module.css";
 
 type Draft = {
   enabled: boolean;
+  leaseType: LeaseType;
   graceDays: string;
   percent: string;
   dailyAmount: string;
   capPercent: string;
 };
 
+/** What each lease type means, in the words the panel uses under the choice. */
+const LEASE_TYPE_MEANING: Record<LeaseType, string> = {
+  residential: `Residential — people live there. Every tenant of this LLC is on a home lease; the cap starts at ${DEFAULT_CAP_PERCENT.residential}% of the month's rent.`,
+  commercial: `Commercial — businesses rent here. Every tenant of this LLC is on a business lease; the cap starts at ${DEFAULT_CAP_PERCENT.commercial}% of the month's rent.`,
+};
+
 const toDraft = (p: LateFeePolicyDTO): Draft => ({
   enabled: p.enabled,
+  leaseType: parseLeaseType(p.leaseType),
   graceDays: String(p.graceDays),
   percent: String(p.percent),
   dailyAmount: String(p.dailyAmount),
@@ -59,6 +72,7 @@ export default function LateFeePanel({
   const preview = parsePolicy(
     {
       enabled: draft.enabled,
+      leaseType: draft.leaseType,
       graceDays: draft.graceDays === "" ? saved.graceDays : Number(draft.graceDays),
       percent: draft.percent === "" ? 0 : Number(draft.percent),
       dailyAmount: draft.dailyAmount === "" ? 0 : Number(draft.dailyAmount),
@@ -72,6 +86,12 @@ export default function LateFeePanel({
   function set(patch: Partial<Draft>) {
     setNote("");
     setDraft((d) => ({ ...d, ...patch }));
+  }
+
+  // Switching the LLC's lease type suggests that type's cap (10% / 12%);
+  // the owner can still change it before saving.
+  function setLeaseType(leaseType: LeaseType) {
+    set({ leaseType, capPercent: String(DEFAULT_CAP_PERCENT[leaseType]) });
   }
 
   async function save(e: React.FormEvent) {
@@ -126,6 +146,30 @@ export default function LateFeePanel({
           ordinary charge on the tenant&apos;s account that you can see and delete.
         </span>
       </div>
+
+      <fieldset className={styles.leaseTypeField} data-testid="lease-type">
+        <legend>This LLC&apos;s leases</legend>
+        <div className={styles.leaseTypeOptions}>
+          {LEASE_TYPES.map((t) => (
+            <label key={t} htmlFor={id(`lease-${t}`)} className={draft.leaseType === t ? styles.leaseTypeOn : ""}>
+              <input
+                id={id(`lease-${t}`)}
+                type="radio"
+                name={id("lease")}
+                value={t}
+                checked={draft.leaseType === t}
+                disabled={!canEdit}
+                onChange={() => setLeaseType(t)}
+              />
+              {LEASE_TYPE_LABELS[t]}
+            </label>
+          ))}
+        </div>
+        <span className={styles.helpText} style={{ margin: 0 }}>
+          {LEASE_TYPE_MEANING[draft.leaseType]}
+          {draft.leaseType !== saved.leaseType ? " Save to apply it." : ""}
+        </span>
+      </fieldset>
 
       <label className={styles.checkboxField} htmlFor={id("enabled")}>
         <input
@@ -200,7 +244,7 @@ export default function LateFeePanel({
       <p className={styles.helpText} style={{ margin: 0 }} aria-live="polite" data-testid="late-fee-sentence">
         {nothingToCharge
           ? "Enter a one-time fee or a daily amount, or switch late fees off."
-          : policySentence(preview)}
+          : policySentence(preview, 1000, true)}
       </p>
 
       {error && <div className={styles.errorBar}>{error}</div>}

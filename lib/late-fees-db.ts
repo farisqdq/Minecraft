@@ -117,6 +117,11 @@ export async function lateFeeStatuses(
         sharedWith: result.sharedWith,
         paidThisMonth: row?.paid ?? 0,
         deletedThisMonth: await deletedLateFees(id, result, month),
+        // Fees charged before the LLC's cap was lowered can sit above it.
+        aboveCap:
+          result.lateFeeMode === "default" && cap !== null && feesThisMonth > cap + 0.005
+            ? { cap, capPercent: result.policy.capPercent }
+            : undefined,
       }),
     });
   }
