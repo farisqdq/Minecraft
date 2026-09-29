@@ -41,7 +41,7 @@ import ProofPicker, {
   type ProofDTO,
 } from "../../../components/ProofPicker";
 import proofStyles from "../../../components/proof.module.css";
-import { MAX_PROOFS, proofCountLabel } from "@/lib/attachments-ui";
+import { MAX_PROOFS, proofCountLabel, proofScanTitle } from "@/lib/attachments-ui";
 
 type Property = {
   id: string;
@@ -1445,8 +1445,8 @@ export default function PropertyManageClient({
         </div>
         <p className={styles.helpText} style={{ marginTop: -6 }}>
           Leases, insurance certificates, licences and inspections — with the date each runs
-          out. Anything expiring in the next 30 days shows on the overview. To photograph
-          paper with your phone and save it as a PDF, open the filing cabinet.
+          out. Anything expiring in the next 30 days shows on the overview. Scan document
+          photographs paper with your phone and saves it here as a PDF.
         </p>
         <DocumentsPanel
           initial={initialDocuments}
@@ -1462,6 +1462,11 @@ export default function PropertyManageClient({
           storageReady={storageReady}
           onToast={(m, tone) => push(m, tone)}
           emptyText="Nothing filed for this property yet."
+          scan={{
+            properties: [{ id: property.id, name: property.name }],
+            tenants: currentTenants.map((t) => ({ id: t.id, name: t.name, propertyId: property.id })),
+            defaultPropertyId: property.id,
+          }}
         />
       </section>
 
@@ -2201,6 +2206,7 @@ export default function PropertyManageClient({
                   existing={entry.id ? (transactions.find((t) => t.id === entry.id)?.attachments.length ?? 0) : 0}
                   disabled={entrySaving}
                   label={entry.type === "rent" ? "Attach proof of payment (optional)" : "Attach receipt or photo (optional)"}
+                  scanTitle={proofScanTitle(entry.type, formatDay(entry.date || todayKey))}
                 />
               </>
             ) : (
@@ -2255,6 +2261,7 @@ export default function PropertyManageClient({
                     onChange={setAttachPending}
                     existing={t.attachments.length}
                     disabled={proofUploading}
+                    scanTitle={proofScanTitle(t.type, formatDay(t.date))}
                   />
                 </div>
                 {proofError && <div className={styles.errorBar}>{proofError}</div>}
