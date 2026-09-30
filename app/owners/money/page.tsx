@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireOwnerSession } from "@/lib/owner-access";
 import { money } from "@/lib/money";
+import { moneyTone, toneClass } from "@/lib/money-tone";
 import { monthKeyOf, monthSeries, monthsEnding, totalsFor } from "@/lib/owners";
 import { ownerTransactions } from "@/lib/owners-db";
 import OwnerShell from "../OwnerShell";
@@ -73,7 +74,6 @@ export default async function OwnerMoney() {
     <OwnerShell who={me.name}>
       <div className={styles.head}>
         <h1>Income &amp; expenses</h1>
-        <p>The last twelve months as recorded by the landlord, and the year so far.</p>
       </div>
 
       <section className={styles.card}>
@@ -98,7 +98,7 @@ export default async function OwnerMoney() {
           </div>
           <div className={styles.tile}>
             <div className={styles.tileLabel}>Net</div>
-            <div className={`${styles.tileValue} ${ytd.net < 0 ? styles.neg : styles.pos}`}>{signed(ytd.net)}</div>
+            <div className={`${styles.tileValue} ${toneClass(styles, moneyTone(ytd.net))}`}>{signed(ytd.net)}</div>
           </div>
         </div>
       </section>

@@ -270,7 +270,6 @@ export default function CalendarClient({
     <AppShell
       openRepairs={openRepairs}
       title="Calendar"
-      tagline="What's due to you on each day of the month, and what's come in."
     >
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
@@ -334,7 +333,7 @@ export default function CalendarClient({
         </div>
         <div className={styles.kpi}>
           <span className={styles.kpiLabel}>Collected</span>
-          <span className={`${styles.kpiValue} ${styles.pos} num`}>{money(cal.collected)}</span>
+          <span className={`${styles.kpiValue} num`}>{money(cal.collected)}</span>
         </div>
         <div className={styles.kpi}>
           <span className={styles.kpiLabel}>Still to come in</span>

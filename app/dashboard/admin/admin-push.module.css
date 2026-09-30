@@ -67,7 +67,7 @@
   text-align: center;
 }
 .ok {
-  color: var(--accent);
+  color: var(--success);
 }
 .fail {
   color: var(--expense);
@@ -82,6 +82,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 .row,
 .head {

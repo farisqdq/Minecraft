@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { money } from "@/lib/money";
+import { owedTone, toneClass } from "@/lib/money-tone";
 import { monthName } from "@/lib/notices";
 import type { Statement } from "@/lib/balance";
 import { ruleSummary, type ChargeRule } from "@/lib/charge-rules";
@@ -160,7 +161,7 @@ export default function StatementPanel({
           <div className={styles.statementLabel}>
             {owed > 0.005 ? "Owes" : owed < -0.005 ? "In credit" : "Balance"}
           </div>
-          <div className={`${styles.statementFigure} num ${owed > 0.005 ? styles.neg : styles.pos}`}>
+          <div className={`${styles.statementFigure} num ${toneClass(styles, owedTone(owed))}`}>
             {money(Math.abs(owed))}
           </div>
           {statement.behindSince && (

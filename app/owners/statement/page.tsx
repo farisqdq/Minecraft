@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { requireOwnerSession } from "@/lib/owner-access";
 import { money } from "@/lib/money";
+import { moneyTone, toneClass } from "@/lib/money-tone";
 import { monthName } from "@/lib/notices";
 import { isMonthKey, monthKeyOf, monthsEnding, shiftMonth, type OwnerStatement } from "@/lib/owners";
 import { ownerStatements } from "@/lib/owners-db";
@@ -61,7 +62,7 @@ function Lines({ s }: { s: OwnerStatement }) {
         </tr>
         <tr className={styles.totalRow}>
           <td>Net</td>
-          <td className={s.net < 0 ? styles.neg : styles.pos}>{signed(s.net)}</td>
+          <td className={toneClass(styles, moneyTone(s.net))}>{signed(s.net)}</td>
         </tr>
       </tbody>
     </table>

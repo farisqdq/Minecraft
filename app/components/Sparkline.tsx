@@ -35,7 +35,7 @@ export default function Sparkline({
   const crossesZero = min < 0 && max > 0;
 
   const stroke =
-    tone === "accent" ? "var(--accent)" : tone === "expense" ? "var(--expense)" : "var(--ink-2)";
+    tone === "accent" ? "var(--accent)" : tone === "expense" ? "var(--muted)" : "var(--ink-2)";
 
   return (
     <svg

@@ -23,7 +23,7 @@
   align-items: center;
   gap: 9px;
   color: var(--ink);
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -39,7 +39,7 @@
   color: var(--on-accent);
   display: grid;
   place-items: center;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
   flex: none;
@@ -72,7 +72,7 @@
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   padding: 6px 14px;
   font-size: 12.5px;
   font-weight: 500;
@@ -101,7 +101,7 @@
 
 .tab {
   padding: 8px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
@@ -214,11 +214,15 @@
 }
 
 .pos {
-  color: var(--accent);
+  color: var(--success);
 }
 
 .neg {
   color: var(--expense);
+}
+
+.zero {
+  color: var(--muted);
 }
 
 /* Tables: month rows, statement lines, the rent roll. */
@@ -323,21 +327,21 @@
 .pill {
   display: inline-block;
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   font-size: 11px;
   font-weight: 700;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--success-soft);
+  color: var(--success);
   vertical-align: 1px;
 }
 
 .pillVacant {
-  background: var(--expense-soft);
-  color: var(--expense);
+  background: var(--neutral-soft);
+  color: var(--neutral);
 }
 
 .pillWarn {
-  background: var(--gold-soft, var(--accent-soft));
+  background: var(--warning-soft);
   color: var(--gold);
 }
 
@@ -398,7 +402,7 @@
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   padding: 9px 16px;
   font-size: 13px;
   font-weight: 600;

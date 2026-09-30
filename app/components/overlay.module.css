@@ -5,7 +5,7 @@
   position: fixed;
   inset: 0;
   z-index: 100;
-  background: rgba(24, 20, 14, 0.42);
+  background: var(--scrim);
   backdrop-filter: blur(3px);
   -webkit-backdrop-filter: blur(3px);
   display: flex;
@@ -54,7 +54,7 @@
 }
 
 .panelTitle {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 20px;
   font-weight: 600;
   margin: 0;
@@ -204,7 +204,7 @@
 }
 
 .toast.good .toastDot {
-  background: var(--accent);
+  background: var(--success);
 }
 
 .toast.bad .toastDot {

@@ -103,11 +103,11 @@ export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
         </div>
         <div className={styles.legend}>
           <span className={styles.legendItem}>
-            <i className={styles.swatch} style={{ background: "var(--accent)" }} />
+            <i className={styles.swatch} style={{ background: "var(--chart-in)" }} />
             Rent in
           </span>
           <span className={styles.legendItem}>
-            <i className={styles.swatch} style={{ background: "var(--expense)" }} />
+            <i className={styles.swatch} style={{ background: "var(--chart-out)" }} />
             Money out
           </span>
         </div>
@@ -123,7 +123,7 @@ export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
         </span>
         <span>
           Net
-          <b className="num" style={{ color: readoutNet >= 0 ? "var(--accent)" : "var(--expense)" }}>
+          <b className="num" style={{ color: Math.abs(readoutNet) < 0.005 ? "var(--muted)" : readoutNet > 0 ? "var(--success)" : "var(--danger-text)" }}>
             {readoutNet < 0 ? "−" : ""}
             {money.format(Math.abs(readoutNet))}
           </b>

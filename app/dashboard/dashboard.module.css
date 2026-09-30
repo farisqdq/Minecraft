@@ -31,7 +31,7 @@
 }
 
 .chip {
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink-2);
@@ -60,8 +60,8 @@
 }
 
 .chipAdd:hover {
-  border-color: var(--gold);
-  color: var(--gold);
+  border-color: var(--accent-text);
+  color: var(--accent-text);
 }
 
 .inlineForm {
@@ -75,7 +75,7 @@
   font-family: inherit;
   font-size: 13.5px;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink);
@@ -83,8 +83,9 @@
 }
 
 .inlineForm input:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 /* ---------- Month navigator ---------- */
@@ -122,7 +123,7 @@
 }
 
 .monthLabel {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
   min-width: 132px;
@@ -160,6 +161,7 @@
   border-radius: var(--radius);
   padding: 28px;
   max-width: 560px;
+  box-shadow: var(--shadow-sm);
 }
 
 .firstRun h2 {
@@ -188,9 +190,9 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
-  background: var(--gold-soft);
-  color: var(--gold);
+  border-radius: var(--radius-6);
+  background: var(--neutral-soft);
+  color: var(--neutral);
   vertical-align: middle;
 }
 
@@ -315,7 +317,7 @@
 }
 
 .linkCell:hover {
-  color: var(--gold);
+  color: var(--accent-text);
   text-decoration: underline;
 }
 
@@ -404,11 +406,11 @@
 }
 
 .proofAdd:hover {
-  color: var(--gold);
+  color: var(--accent-text);
 }
 
 .joinCode {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -420,7 +422,7 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   background: var(--gold-soft);
   color: var(--gold);
 }
@@ -451,8 +453,8 @@
 
 .successBar {
   margin-top: 18px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
+  background: var(--success-soft);
+  border: 1px solid var(--success);
   border-radius: var(--radius);
   padding: 10px 14px;
   font-size: 13.5px;
@@ -490,7 +492,7 @@
 }
 
 .dangerTitle {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
   color: var(--expense);
@@ -585,6 +587,7 @@
   flex-direction: column;
   gap: 11px;
   transition: border-color var(--fast), background var(--fast);
+  box-shadow: var(--shadow-sm);
 }
 
 .propCard:hover {
@@ -594,7 +597,7 @@
 
 .propCard .name,
 .tenantCard .name {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -617,7 +620,7 @@
   color: var(--muted);
 }
 .propRow .v.pos {
-  color: var(--accent);
+  color: var(--success);
 }
 .propRow .v.neg {
   color: var(--expense);
@@ -632,12 +635,12 @@
 .bar > span {
   display: block;
   height: 100%;
-  background: var(--gold);
+  background: var(--accent);
   border-radius: 5px;
   transition: width 0.3s ease;
 }
 .bar > span.barFull {
-  background: var(--accent);
+  background: var(--success);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -684,9 +687,9 @@
   transition: border-color var(--fast), color var(--fast), background var(--fast);
 }
 .addCard:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--gold-soft);
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+  background: var(--accent-soft);
 }
 
 .btn {
@@ -694,21 +697,27 @@
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  padding: 8px 14px;
-  font-size: 13.5px;
+  min-height: var(--control-h);
+  padding: 0 14px;
+  gap: 6px;
+  font-size: var(--text-sm);
   font-weight: 500;
+  line-height: 1.2;
   text-decoration: none;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
   transition: border-color var(--fast), background var(--fast), opacity var(--fast);
 }
 .btn:hover {
-  border-color: var(--ink);
+  background: var(--surface-2);
+  border-color: var(--faint);
 }
-/* One primary colour across the app: green means "this is the action".
-   Ink stays reserved for selection states (the active LLC chip, the period
-   toggle), so a selected thing never looks like a button to press. */
+/* One primary colour across the app: the brand accent means "this is the
+   action". Ink stays reserved for selection states (the active LLC chip, the
+   period toggle), so a selected thing never looks like a button to press. */
 .btn.primary,
 .btn.accent {
   background: var(--accent);
@@ -724,14 +733,15 @@
   border-color: transparent;
   background: transparent;
   color: var(--muted);
+  box-shadow: none;
 }
 .btn.ghost:hover {
   color: var(--expense);
 }
 .btn.small {
-  padding: 6px 11px;
-  font-size: 12.5px;
-  min-height: 32px;
+  padding: 0 10px;
+  font-size: var(--text-sm);
+  min-height: var(--control-h-sm);
 }
 
 /* No border at rest; the hover fill is the affordance. */
@@ -739,6 +749,7 @@
   border-color: transparent;
   background: transparent;
   color: var(--ink-2);
+  box-shadow: none;
 }
 
 .btn.quiet:hover {
@@ -756,7 +767,7 @@
 
 .btn.quiet.danger:hover {
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
 }
 .btn[disabled] {
   opacity: 0.5;
@@ -768,6 +779,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 20px;
+  box-shadow: var(--shadow-sm);
 }
 
 /* A quick entry's fixed place, where the property picker would be. */
@@ -832,12 +844,12 @@
   transition: background var(--fast), color var(--fast);
 }
 .typeToggle button.active.rent {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--success-soft);
+  color: var(--success);
 }
 .typeToggle button.active.expense {
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
 }
 
 .fieldGrid {
@@ -869,17 +881,19 @@
 .field select {
   font-family: inherit;
   font-size: 14px;
-  padding: 8px 10px;
+  min-height: var(--control-h);
+  padding: 6px 10px;
   border-radius: 8px;
   border: 1px solid var(--line-strong);
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--ink);
   width: 100%;
 }
 .field input:focus,
 .field select:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 .formFoot {
@@ -946,6 +960,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 .ledger {
   width: 100%;
@@ -1011,7 +1026,7 @@
 
 .sortOn .sortArrow {
   opacity: 1;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* Desktop sorts from the header row; this picker is the phone's version. */
@@ -1032,7 +1047,7 @@
   white-space: nowrap;
 }
 .ledger td.amt.pos {
-  color: var(--accent);
+  color: var(--success);
 }
 .ledger td.amt.neg {
   color: var(--expense);
@@ -1042,15 +1057,15 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
 }
 .tag.rent {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--success-soft);
+  color: var(--success);
 }
 .tag.expense {
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
 }
 .rowDel {
   opacity: 0;
@@ -1079,6 +1094,7 @@ tr:hover .rowDel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 18px;
+  box-shadow: var(--shadow-sm);
 }
 
 /* ---------- KPI row ---------- */
@@ -1097,6 +1113,7 @@ tr:hover .rowDel {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  box-shadow: var(--shadow-sm);
 }
 
 .kpiLabel {
@@ -1115,7 +1132,7 @@ tr:hover .rowDel {
 }
 
 .kpiValue.pos {
-  color: var(--accent);
+  color: var(--success);
 }
 
 .kpiValue.neg {
@@ -1141,7 +1158,7 @@ tr:hover .rowDel {
 }
 
 .delta.good {
-  color: var(--accent);
+  color: var(--success);
 }
 
 .delta.bad {
@@ -1165,6 +1182,7 @@ tr:hover .rowDel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px 18px;
+  box-shadow: var(--shadow-sm);
 }
 
 .collectTop {
@@ -1204,13 +1222,13 @@ tr:hover .rowDel {
 .bigBar > span {
   display: block;
   height: 100%;
-  background: var(--gold);
+  background: var(--accent);
   border-radius: 7px;
   transition: width var(--med);
 }
 
 .bigBar > span.barFull {
-  background: var(--accent);
+  background: var(--success);
 }
 
 .collectMeta {
@@ -1247,6 +1265,7 @@ tr:hover .rowDel {
   border-radius: var(--radius);
   background: var(--surface);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 .attnRow {
@@ -1299,7 +1318,7 @@ tr:hover .rowDel {
   font-size: 11.5px;
   font-weight: 600;
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   vertical-align: middle;
 }
 
@@ -1310,12 +1329,12 @@ tr:hover .rowDel {
 
 .pill.bill {
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
 }
 
 .pill.paid {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .pill.vacant {
@@ -1329,8 +1348,8 @@ tr:hover .rowDel {
   gap: 10px;
   padding: 16px;
   border-radius: var(--radius);
-  background: var(--accent-soft);
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  background: var(--success-soft);
+  border: 1px solid var(--success-line);
   font-size: 13.5px;
   color: var(--ink);
 }
@@ -1339,7 +1358,7 @@ tr:hover .rowDel {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--accent);
+  background: var(--success);
   color: var(--on-accent);
   display: grid;
   place-items: center;
@@ -1383,7 +1402,7 @@ tr:hover .rowDel {
 }
 
 .figureValue.pos {
-  color: var(--accent);
+  color: var(--success);
 }
 
 .figureValue.neg {
@@ -1420,7 +1439,7 @@ tr:hover .rowDel {
     height: 48px;
     padding: 0 20px;
     border: none;
-    border-radius: 999px;
+    border-radius: var(--radius-8);
     background: var(--accent);
     color: var(--on-accent);
     font-size: 14.5px;
@@ -1646,9 +1665,9 @@ tr:hover .rowDel {
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: 999px;
+  color: var(--success);
+  background: var(--success-soft);
+  border-radius: var(--radius-8);
   padding: 3px 9px;
   flex: none;
 }
@@ -1656,7 +1675,7 @@ tr:hover .rowDel {
 /* The code itself is the thing being read off a screen and typed on a phone,
    so it gets the monospace treatment and room to breathe. */
 .portalCode {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-sans);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -1681,7 +1700,7 @@ tr:hover .rowDel {
   padding: 4px 2px;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--gold);
+  color: var(--accent-text);
   flex: none;
 }
 
@@ -1710,6 +1729,7 @@ tr:hover .rowDel {
   display: flex;
   flex-direction: column;
   gap: 11px;
+  box-shadow: var(--shadow-sm);
 }
 
 /* A past tenant stays visible for the history, but stops competing with the
@@ -1737,7 +1757,7 @@ tr:hover .rowDel {
   justify-content: center;
   min-height: 34px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink);
@@ -1749,7 +1769,7 @@ tr:hover .rowDel {
 
 .contactBtn:hover {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .tenantFacts {
@@ -1772,7 +1792,7 @@ tr:hover .rowDel {
 .periodToggle {
   display: inline-flex;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   overflow: hidden;
   background: var(--surface);
   flex: none;
@@ -1808,7 +1828,7 @@ tr:hover .rowDel {
   font-family: inherit;
   font-size: 13px;
   padding: 6px 28px 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
@@ -1905,7 +1925,8 @@ tr:hover .rowDel {
     border: 1px solid var(--line);
     border-radius: var(--radius);
     overflow: hidden;
-  }
+  box-shadow: var(--shadow-sm);
+}
 
   .kpi {
     border: none;
@@ -2011,6 +2032,7 @@ tr:hover .rowDel {
   border-radius: var(--radius);
   background: var(--surface);
   overflow: hidden;
+  box-shadow: var(--shadow-sm);
 }
 
 /* An urgent one that nobody has touched gets an edge you can spot from the
@@ -2047,7 +2069,7 @@ tr:hover .rowDel {
   grid-row: 1;
   justify-self: end;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -2057,13 +2079,13 @@ tr:hover .rowDel {
 
 .rs_open {
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
 }
 
 .rs_seen,
 .rs_scheduled {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .rs_done {
@@ -2161,7 +2183,7 @@ tr:hover .rowDel {
   display: grid;
   place-items: center;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   background: none;
   color: var(--muted);
   font-size: 15px;
@@ -2177,7 +2199,7 @@ tr:hover .rowDel {
 
 .threadDel:hover {
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
 }
 
 /* Nothing reveals it on a touch screen, so there it simply stays. */
@@ -2232,8 +2254,9 @@ tr:hover .rowDel {
 }
 
 .replyRow input:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
   background: var(--surface);
 }
 
@@ -2241,9 +2264,9 @@ tr:hover .rowDel {
   display: inline-block;
   margin-left: 7px;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -2288,11 +2311,18 @@ tr:hover .rowDel {
    colours a figure that has no other class on it, so they need to stand
    alone too — same colours, lower specificity, nothing else changes. */
 .pos {
-  color: var(--accent);
+  color: var(--success);
 }
 
 .neg {
   color: var(--expense);
+}
+
+/* Zero is neither good nor bad: neutral, never red or green (see lib/money-tone). */
+.zero,
+.kpiValue.zero,
+.figureValue.zero {
+  color: var(--muted);
 }
 
 /* The one line on a tenant card that answers "are we square?". */
@@ -2444,7 +2474,7 @@ tr:hover .rowDel {
 
 .chargeDel:hover {
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
 }
 
 .chargeDel[disabled] {
@@ -2545,7 +2575,7 @@ tr:hover .rowDel {
   font-family: inherit;
   font-size: 13.5px;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink);
@@ -2555,8 +2585,9 @@ tr:hover .rowDel {
 }
 
 .vendorSearch:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 @media (max-width: 640px) {
@@ -2642,7 +2673,7 @@ tr:hover .rowDel {
 }
 
 .docMain:hover .docTitle {
-  color: var(--gold);
+  color: var(--accent-text);
   text-decoration: underline;
 }
 
@@ -2662,7 +2693,7 @@ tr:hover .rowDel {
   font-weight: 600;
   color: var(--muted);
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   background: var(--surface-3);
   white-space: nowrap;
 }
@@ -2673,7 +2704,7 @@ tr:hover .rowDel {
 }
 
 .docExpired {
-  color: var(--expense);
+  color: var(--danger-text);
   background: var(--expense-soft);
 }
 
@@ -2711,6 +2742,7 @@ tr:hover .rowDel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 10px;
+  box-shadow: var(--shadow-sm);
 }
 
 .calWeekday {
@@ -2759,7 +2791,7 @@ tr:hover .rowDel {
   box-shadow: inset 3px 0 0 var(--gold);
 }
 .calDay.cal_paid {
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--success);
 }
 
 .calToday .calNum {
@@ -2792,7 +2824,7 @@ tr:hover .rowDel {
 .calIn {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--success);
   max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
@@ -2839,6 +2871,7 @@ tr:hover .rowDel {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   padding: 16px;
+  box-shadow: var(--shadow-sm);
 }
 
 .calDetail h3 {
@@ -2879,7 +2912,7 @@ tr:hover .rowDel {
 }
 
 .calItemName:hover {
-  color: var(--gold);
+  color: var(--accent-text);
 }
 
 .calItemSub {
@@ -2901,6 +2934,7 @@ tr:hover .rowDel {
   border-radius: var(--radius);
   padding: 4px 16px 6px;
   margin-bottom: 10px;
+  box-shadow: var(--shadow-sm);
 }
 
 .calAgendaHead {
@@ -2955,7 +2989,7 @@ tr:hover .rowDel {
 
 .secretKey,
 .backupCodes code {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-sans);
   font-size: 14px;
   letter-spacing: 0.04em;
   overflow-wrap: anywhere;
@@ -3023,7 +3057,7 @@ tr:hover .rowDel {
   background: var(--gold);
 }
 .splitPrincipal {
-  background: var(--accent);
+  background: var(--success);
 }
 
 .splitLegend {
@@ -3197,8 +3231,9 @@ tr:hover .rowDel {
   min-width: 0;
 }
 .moLines input:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 .moRentLabel {
   font-size: 14px;
@@ -3213,7 +3248,7 @@ tr:hover .rowDel {
   margin-top: 14px;
   padding: 12px 14px;
   border-radius: var(--radius-sm);
-  background: var(--accent-soft);
+  background: var(--success-soft);
   font-size: 14px;
 }
 .moResult b {
@@ -3275,7 +3310,7 @@ tr:hover .rowDel {
 .depFigure {
   font-size: 20px;
   font-weight: 650;
-  color: var(--accent);
+  color: var(--accent-text);
   letter-spacing: -0.01em;
 }
 
@@ -3286,6 +3321,7 @@ tr:hover .rowDel {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
 }
 .assetList li {
   display: flex;
@@ -3323,7 +3359,7 @@ tr:hover .rowDel {
 .attnLink:focus-visible {
   text-decoration: underline;
   text-underline-offset: 3px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* The card a link pointed at, for a moment after arriving. */
@@ -3333,8 +3369,8 @@ tr:hover .rowDel {
 @keyframes spotlight {
   0%,
   60% {
-    box-shadow: 0 0 0 3px var(--gold);
-    border-color: var(--gold);
+    box-shadow: var(--focus-ring);
+    border-color: var(--accent);
   }
   100% {
     box-shadow: none;
@@ -3343,7 +3379,7 @@ tr:hover .rowDel {
 @media (prefers-reduced-motion: reduce) {
   .spotlight {
     animation: none;
-    border-color: var(--gold);
+    border-color: var(--accent);
   }
 }
 
@@ -3363,7 +3399,7 @@ tr:hover .rowDel {
   gap: 4px;
   font-size: 11.5px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   background: var(--surface-3);
   color: var(--ink-2);
   white-space: nowrap;
@@ -3594,7 +3630,7 @@ tr:hover .rowDel {
   right: 4px;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   border: 1px solid var(--ink);
   background: var(--ink);
   color: var(--bg);
@@ -3797,7 +3833,7 @@ tr:hover .rowDel {
 }
 
 .lateReport .lateCharged {
-  background: var(--accent-soft);
+  background: var(--success-soft);
   color: var(--ink);
 }
 

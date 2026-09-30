@@ -8,6 +8,7 @@ import { rentTargetOf, unitIdsCountingToward } from "@/lib/rent-target";
 import { PROOF_ACCEPT } from "@/lib/attachments-ui";
 import proofStyles from "../components/proof.module.css";
 import { money, moneyRound } from "@/lib/money";
+import { moneyTone, toneClass } from "@/lib/money-tone";
 import { STATUS_LABEL, ago, type RequestDTO } from "@/lib/maintenance";
 import { chasedRecently, remindedAgo } from "@/lib/notices";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
@@ -1531,7 +1532,6 @@ export default function DashboardClient({
     <AppShell
       openRepairs={openRepairs}
       title="Overview"
-      tagline="Rent collected, repairs paid, and the profit left over — by property."
       userLabel={userLabel}
       actions={
         companies.length > 0 ? (
@@ -1717,7 +1717,7 @@ export default function DashboardClient({
 
             <div className={`${styles.kpi} ${styles.netKpi}`}>
               <div className={styles.kpiLabel}>Net profit</div>
-              <div className={`${styles.kpiValue} num ${overall.net >= 0 ? styles.pos : styles.neg}`}>
+              <div className={`${styles.kpiValue} num ${toneClass(styles, moneyTone(overall.net))}`}>
                 {overall.net >= 0 ? "" : "−"}
                 {money(Math.abs(overall.net))}
               </div>
@@ -2179,9 +2179,9 @@ export default function DashboardClient({
                           </button>
                         </td>
                         <td>{row.count}</td>
-                        <td className={`${styles.amt} num ${styles.pos}`}>{money(row.rent)}</td>
-                        <td className={`${styles.amt} num ${styles.neg}`}>{money(row.expense)}</td>
-                        <td className={`${styles.amt} num ${row.net >= 0 ? styles.pos : styles.neg}`}>
+                        <td className={`${styles.amt} num`}>{money(row.rent)}</td>
+                        <td className={`${styles.amt} num`}>{money(row.expense)}</td>
+                        <td className={`${styles.amt} num ${toneClass(styles, moneyTone(row.net))}`}>
                           {row.net >= 0 ? "" : "−"}
                           {money(Math.abs(row.net))}
                         </td>
@@ -2399,16 +2399,16 @@ export default function DashboardClient({
                     <div className={styles.propFigures}>
                       <div className={styles.figure}>
                         <span className={styles.figureLabel}>In</span>
-                        <span className={`${styles.figureValue} ${styles.pos} num`}>{money(t.rent)}</span>
+                        <span className={`${styles.figureValue} num`}>{money(t.rent)}</span>
                       </div>
                       <div className={styles.figure}>
                         <span className={styles.figureLabel}>Out</span>
-                        <span className={`${styles.figureValue} ${styles.neg} num`}>{money(t.expense)}</span>
+                        <span className={`${styles.figureValue} num`}>{money(t.expense)}</span>
                       </div>
                       <div className={styles.figure}>
                         <span className={styles.figureLabel}>Net</span>
                         <span
-                          className={`${styles.figureValue} ${t.net >= 0 ? styles.pos : styles.neg} num`}
+                          className={`${styles.figureValue} ${toneClass(styles, moneyTone(t.net))} num`}
                         >
                           {t.net >= 0 ? "" : "−"}
                           {money(Math.abs(t.net))}

@@ -101,8 +101,9 @@
 /* Keyboard focus lands on the clipped input; show it on its button. */
 .srOnly:focus-visible + .srOnly + .buttons .pick:first-child,
 .srOnly:focus-visible + .buttons .pick:nth-child(2) {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 /* Phones and tablets (coarse pointer): camera + "Choose photo or file".
@@ -236,7 +237,7 @@
   margin-top: 6px;
   min-height: 28px;
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink-2);
@@ -247,7 +248,7 @@
 
 .clip[aria-expanded="true"] {
   border-color: var(--accent);
-  color: var(--accent);
+  color: var(--accent-text);
   background: var(--accent-soft);
 }
 

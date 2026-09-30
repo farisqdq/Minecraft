@@ -23,6 +23,7 @@ import styles from "../../dashboard.module.css";
 import { useNow } from "../../../components/useNow";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { money, signedMoney } from "@/lib/money";
+import { moneyTone, toneClass } from "@/lib/money-tone";
 import { historyFor, rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import type { TenantDTO } from "@/lib/tenants";
 import { formatJoinCode } from "@/lib/codes";
@@ -1083,7 +1084,7 @@ export default function PropertyManageClient({
     <AppShell
       openRepairs={openRepairs}
       title={property.name}
-      tagline={[property.address, companyName].filter(Boolean).join(" · ") || "Units, tenants and bills"}
+      tagline={[property.address, companyName].filter(Boolean).join(" · ") || undefined}
       back={{ href: "/dashboard", label: "All properties" }}
       titleAction={<TitleEditButton label="Edit property" onClick={openPropertyEdit} />}
       actions={
@@ -1151,7 +1152,7 @@ export default function PropertyManageClient({
         </div>
         <div className={`${styles.kpi} ${styles.netKpi}`}>
           <div className={styles.kpiLabel}>Net, last 12 months</div>
-          <div className={`${styles.kpiValue} num ${lastTwelve.net >= 0 ? styles.pos : styles.neg}`}>
+          <div className={`${styles.kpiValue} num ${toneClass(styles, moneyTone(lastTwelve.net))}`}>
             {lastTwelve.net < 0 ? "\u2212" : ""}
             {money(Math.abs(lastTwelve.net))}
           </div>
@@ -1812,7 +1813,7 @@ export default function PropertyManageClient({
                   </td>
                   <td>{unitLabel(r.unitId)}</td>
                   <td>{scheduleLabel(r)}</td>
-                  <td className={`${styles.amt} num ${styles.neg}`}>{money(r.amount)}</td>
+                  <td className={`${styles.amt} num`}>{money(r.amount)}</td>
                   <td style={{ textAlign: "right" }}>
                     <button
                       type="button"

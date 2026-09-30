@@ -18,7 +18,7 @@
 }
 
 .title {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 16px;
   font-weight: 600;
   color: var(--ink);
@@ -99,7 +99,7 @@
   color: var(--muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-sans);
 }
 
 .plot {
@@ -166,12 +166,12 @@
 }
 
 .barUp {
-  background: var(--accent);
+  background: var(--chart-in);
   border-radius: 4px 4px 0 0;
 }
 
 .barDown {
-  background: var(--expense);
+  background: var(--chart-out);
   border-radius: 0 0 4px 4px;
 }
 
@@ -237,7 +237,7 @@
   display: block;
   height: 100%;
   min-width: 3px;
-  background: var(--expense);
+  background: var(--chart-out);
   border-radius: 4px;
   transition: width var(--med);
 }
@@ -247,7 +247,7 @@
   font-weight: 600;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-sans);
   white-space: nowrap;
 }
 
@@ -272,7 +272,7 @@
 }
 
 .tableToggle:hover {
-  color: var(--gold);
+  color: var(--accent-text);
 }
 
 .dataTableWrap {

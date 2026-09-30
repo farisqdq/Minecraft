@@ -23,7 +23,7 @@
   align-items: center;
   gap: 9px;
   color: var(--ink);
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-sans);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -38,7 +38,7 @@
   color: var(--on-accent);
   display: grid;
   place-items: center;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-sans);
   font-size: 12px;
   font-weight: 600;
   flex: none;
@@ -65,7 +65,7 @@
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   color: var(--muted);
   text-decoration: none;
   flex: none;
@@ -105,7 +105,7 @@
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   padding: 6px 14px;
   font-size: 12.5px;
   font-weight: 500;
@@ -141,15 +141,15 @@
   display: inline-block;
   margin-top: 10px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   font-size: 12px;
   font-weight: 600;
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .pill.warn {
-  background: var(--gold-soft, var(--accent-soft));
+  background: var(--warning-soft);
   color: var(--gold);
 }
 
@@ -203,7 +203,7 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   padding: 8px 16px;
   font-size: 13px;
   font-weight: 500;
@@ -252,7 +252,7 @@
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   padding: 7px 14px;
   font-size: 12.5px;
   font-weight: 600;
@@ -321,8 +321,9 @@
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
   background: var(--surface);
 }
 
@@ -339,13 +340,13 @@
   gap: 6px;
   padding: 4px;
   background: var(--surface-3);
-  border-radius: 999px;
+  border-radius: var(--radius-8);
 }
 
 .urgencyRow button {
   border: 0;
   background: none;
-  border-radius: 999px;
+  border-radius: var(--radius-8);
   padding: 9px 12px;
   font-size: 13px;
   font-weight: 500;
@@ -461,9 +462,9 @@
   display: inline-block;
   margin-left: 7px;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
   font-size: 10.5px;
   font-weight: 700;
   letter-spacing: 0.02em;
@@ -472,7 +473,7 @@
 
 .statusTag {
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   background: var(--surface-3);
   color: var(--muted);
   font-size: 11px;
@@ -487,18 +488,18 @@
 
 .s_seen,
 .s_scheduled {
-  background: var(--gold-soft, var(--accent-soft));
+  background: var(--warning-soft);
   color: var(--gold);
 }
 
 .s_done {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--success-soft);
+  color: var(--success);
 }
 
 .s_declined {
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
 }
 
 .requestMeta {
@@ -601,8 +602,9 @@
 }
 
 .replyRow input:focus {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
   background: var(--surface);
 }
 
@@ -615,9 +617,9 @@
 /* ---------- Notices from the landlord ---------- */
 .unreadTag {
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-6);
   background: var(--expense-soft);
-  color: var(--expense);
+  color: var(--danger-text);
   font-size: 11px;
   font-weight: 700;
   white-space: nowrap;
@@ -644,8 +646,8 @@
 
 /* One you haven't read yet keeps an edge until you have. */
 .noticeNew {
-  border-left: 3px solid var(--gold);
-  background: var(--gold-soft, var(--accent-soft));
+  border-left: 3px solid var(--accent);
+  background: var(--accent-soft);
 }
 
 .noticeWhen {
@@ -753,7 +755,7 @@
 }
 
 .docList a:hover {
-  color: var(--gold);
+  color: var(--accent-text);
 }
 
 /* ---------- Reminder preferences ---------- */
