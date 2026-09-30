@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
-import { FileLink } from "../../components/FileViewer";
+import { FileLink, ThumbWithActions } from "../../components/FileViewer";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
@@ -345,10 +345,12 @@ export default function RepairsClient({
             {current.photos.length > 0 && (
               <div className={styles.photoRow}>
                 {current.photos.map((p) => (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <FileLink key={p.id} url={p.url} name={p.filename} mime={p.contentType}>
-                    <img src={p.url} alt={p.filename} className={styles.repairPhoto} />
-                  </FileLink>
+                  <ThumbWithActions key={p.id} url={p.url} name={p.filename} mime={p.contentType}>
+                    <FileLink url={p.url} name={p.filename} mime={p.contentType}>
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img src={p.url} alt={p.filename} className={styles.repairPhoto} />
+                    </FileLink>
+                  </ThumbWithActions>
                 ))}
               </div>
             )}

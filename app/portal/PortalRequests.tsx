@@ -10,7 +10,7 @@ import {
   type RequestDTO,
 } from "@/lib/maintenance";
 import { useNow } from "../components/useNow";
-import { FileLink } from "../components/FileViewer";
+import { FileLink, ThumbWithActions } from "../components/FileViewer";
 import { useLivePulse } from "../components/useLivePulse";
 import { formatPhone, telHref } from "@/lib/lease";
 import styles from "./portal.module.css";
@@ -310,10 +310,12 @@ export default function PortalRequests({
                     {r.photos.length > 0 && (
                       <div className={styles.photoRow}>
                         {r.photos.map((p) => (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <FileLink key={p.id} url={p.url} name={p.filename} mime={p.contentType}>
-                            <img src={p.url} alt={p.filename} className={styles.photo} />
-                          </FileLink>
+                          <ThumbWithActions key={p.id} url={p.url} name={p.filename} mime={p.contentType}>
+                            <FileLink url={p.url} name={p.filename} mime={p.contentType}>
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img src={p.url} alt={p.filename} className={styles.photo} />
+                            </FileLink>
+                          </ThumbWithActions>
                         ))}
                       </div>
                     )}

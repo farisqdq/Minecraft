@@ -4,7 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AppShell from "./AppShell";
 import Modal from "./Modal";
-import { FileLink } from "./FileViewer";
+import { FileActions, FileLink } from "./FileViewer";
 import ConfirmDialog, { type ConfirmRequest } from "./ConfirmDialog";
 import Scanner, { type ScanProperty, type ScanTenant } from "./Scanner";
 import { Toasts, useToasts } from "./Toasts";
@@ -264,9 +264,7 @@ export default function FilingCabinet({
                     {expiryLabel(d.expiresOn, today, formatDay)}
                   </span>
                 )}
-                <a className={styles.portalLink} href={`${d.url}?download=1`}>
-                  Download
-                </a>
+                <FileActions url={d.url} name={d.filename || d.title} mime={d.contentType} />
                 <button
                   type="button"
                   className={styles.portalLink}

@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
 import { blobConfigured } from "@/lib/blob";
 import { fileLink } from "@/lib/file-links";
-import { FileLink } from "../components/FileViewer";
+import { FileActions, FileLink } from "../components/FileViewer";
 import { formatDay, formatPhone, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 import { money } from "@/lib/money";
 import { requestInclude, serializeRequest } from "@/lib/requests";
@@ -262,6 +262,7 @@ export default async function PortalHome() {
                   {d.kind}
                   {d.expiresOn ? ` · valid through ${formatDay(d.expiresOn.toISOString().slice(0, 10))}` : ""}
                 </span>
+                <FileActions url={fileLink("document", d.id)} name={d.filename || d.title} mime={d.contentType} />
               </li>
             ))}
           </ul>

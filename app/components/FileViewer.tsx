@@ -136,6 +136,36 @@ export function FileLink({
   );
 }
 
+/**
+ * View and Download, side by side, for a file row or a thumbnail. View opens
+ * the in-app viewer (a real link underneath, like FileLink); Download fetches
+ * the same file with ?download=1, so it is saved rather than shown. Both are
+ * at least 44px tall so they can be hit with a thumb.
+ */
+export function FileActions({ url, name, mime, className }: OpenFileRequest & { className?: string }) {
+  const label = name || "file";
+  return (
+    <span className={`${styles.fileActions}${className ? ` ${className}` : ""}`}>
+      <FileLink url={url} name={name} mime={mime} className={styles.fileBtn} aria-label={`View ${label}`}>
+        View
+      </FileLink>
+      <a className={styles.fileBtn} href={downloadHref(url)} download={name || true} aria-label={`Download ${label}`}>
+        Download
+      </a>
+    </span>
+  );
+}
+
+/** A thumbnail (or any preview) with View / Download underneath it. */
+export function ThumbWithActions({ url, name, mime, children }: OpenFileRequest & { children: ReactNode }) {
+  return (
+    <span className={styles.thumbWithActions}>
+      {children}
+      <FileActions url={url} name={name} mime={mime} />
+    </span>
+  );
+}
+
 /* ------------------------------------------------------------------ */
 
 type Loaded =

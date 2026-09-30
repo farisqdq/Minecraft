@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOwnerSession } from "@/lib/owner-access";
 import { OPEN_STATUSES } from "@/lib/maintenance";
 import { fileLink } from "@/lib/file-links";
-import { FileLink } from "../components/FileViewer";
+import { FileActions, FileLink } from "../components/FileViewer";
 import { formatDay } from "@/lib/lease";
 import { money } from "@/lib/money";
 import { monthName } from "@/lib/notices";
@@ -242,9 +242,8 @@ export default async function OwnerHome() {
                     <span className={styles.itemMeta}>
                       {d.kind} · {d.property?.name}
                       {d.expiresOn ? ` · valid through ${formatDay(d.expiresOn.toISOString().slice(0, 10))}` : ""}
-                      {" · "}
-                      <a href={`${fileLink("document", d.id)}?download=1`}>Download</a>
                     </span>
+                    <FileActions url={fileLink("document", d.id)} name={d.filename || d.title} mime={d.contentType} />
                   </li>
                 ))}
               </ul>

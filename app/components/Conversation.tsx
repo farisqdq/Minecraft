@@ -1,7 +1,7 @@
 "use client";
 
 import { ago } from "@/lib/maintenance";
-import { FileLink } from "./FileViewer";
+import { FileLink, ThumbWithActions } from "./FileViewer";
 import { formatSize, isImageType, isUnreadFor, type MessageDTO, type Side } from "@/lib/messages";
 import styles from "./messages.module.css";
 
@@ -75,16 +75,20 @@ export default function Conversation({
                 <div className={styles.files}>
                   {m.attachments.map((a) =>
                     isImageType(a.contentType) ? (
-                      <FileLink key={a.id} url={a.url} name={a.filename} mime={a.contentType} title={a.filename}>
-                        {/* eslint-disable-next-line @next/next/no-img-element */}
-                        <img src={a.url} alt={a.filename} className={styles.thumb} loading="lazy" />
-                      </FileLink>
+                      <ThumbWithActions key={a.id} url={a.url} name={a.filename} mime={a.contentType}>
+                        <FileLink url={a.url} name={a.filename} mime={a.contentType} title={a.filename}>
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={a.url} alt={a.filename} className={styles.thumb} loading="lazy" />
+                        </FileLink>
+                      </ThumbWithActions>
                     ) : (
-                      <FileLink key={a.id} url={a.url} name={a.filename} mime={a.contentType} className={styles.file}>
-                        <IconFile className={styles.fileIcon} />
-                        <span className={styles.fileName}>{a.filename}</span>
-                        {a.size > 0 && <span className={styles.fileSize}>{formatSize(a.size)}</span>}
-                      </FileLink>
+                      <ThumbWithActions key={a.id} url={a.url} name={a.filename} mime={a.contentType}>
+                        <FileLink url={a.url} name={a.filename} mime={a.contentType} className={styles.file}>
+                          <IconFile className={styles.fileIcon} />
+                          <span className={styles.fileName}>{a.filename}</span>
+                          {a.size > 0 && <span className={styles.fileSize}>{formatSize(a.size)}</span>}
+                        </FileLink>
+                      </ThumbWithActions>
                     )
                   )}
                 </div>

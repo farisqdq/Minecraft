@@ -31,7 +31,7 @@
 import { useEffect, useId, useRef, useState, type DragEvent, type SyntheticEvent } from "react";
 import { createPortal } from "react-dom";
 import Scanner from "./Scanner";
-import { FileLink } from "./FileViewer";
+import { FileActions, FileLink } from "./FileViewer";
 import { shrinkImage } from "@/lib/shrinkImage";
 import {
   CAMERA_ACCEPT,
@@ -191,6 +191,7 @@ export function ProofStrip({
               )}
             </FileLink>
             <span className={s.name}>{shortName(a.filename, 16)}</span>
+            <FileActions url={a.url} name={a.filename} mime={a.contentType} />
             {onRemove && (
               <button
                 type="button"

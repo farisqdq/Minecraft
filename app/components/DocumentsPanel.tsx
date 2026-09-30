@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Modal from "./Modal";
-import { FileLink } from "./FileViewer";
+import { FileActions, FileLink } from "./FileViewer";
 import ConfirmDialog, { type ConfirmRequest } from "./ConfirmDialog";
 import Scanner, { type ScanProperty, type ScanTenant } from "./Scanner";
 import styles from "../dashboard/dashboard.module.css";
@@ -189,6 +189,7 @@ export default function DocumentsPanel({
                     {expiryLabel(d.expiresOn, today, formatDay)}
                   </span>
                 )}
+                <FileActions url={d.url} name={d.filename || d.title} mime={d.contentType} />
                 <button
                   type="button"
                   className={styles.portalLink}
