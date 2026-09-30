@@ -31,9 +31,7 @@ import {
   IconX,
   type IconProps,
 } from "../../icons";
-import { ledgerSans } from "./font";
 import { initialsOf, isNavOn } from "@/lib/layouts/ledger-nav";
-import "./ledger-tokens-temp.css";
 import styles from "./ledger-shell.module.css";
 
 type Badge = "repairs" | "messages";
@@ -122,11 +120,7 @@ export default function LedgerShell({
   ];
 
   return (
-    <div className={`${styles.shell} ${ledgerSans.variable}`}>
-      {/* The font's family name is generated at build time; hand it to the
-          token that --font-sans reads, so sheets and dialogs rendered
-          outside this tree get it too. */}
-      <style>{`:root[data-layout="ledger"]{--font-ledger:${ledgerSans.style.fontFamily};}`}</style>
+    <div className={styles.shell}>
 
       <header className={styles.bar}>
         <div className={styles.barInner}>

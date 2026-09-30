@@ -860,7 +860,7 @@ export default function CommandDashboard(props: DashboardProps) {
                         <tr>
                           <th>Property</th>
                           <th>Tenant</th>
-                          {showLlcColumn && <th>LLC</th>}
+                          {showLlcColumn && <th className={styles.llcCol}>LLC</th>}
                           <th className={styles.numCol}>Rent</th>
                           <th>Status</th>
                           <th className={styles.numCol}>Balance</th>
@@ -896,7 +896,7 @@ export default function CommandDashboard(props: DashboardProps) {
                                 )}
                               </td>
                               {showLlcColumn && (
-                                <td data-label="LLC" className={styles.llcCell}>
+                                <td data-label="LLC" className={`${styles.llcCell} ${styles.llcCol}`}>
                                   {company?.name ?? ""}
                                 </td>
                               )}

@@ -230,8 +230,8 @@
 }
 
 .propCell {
-  min-width: 180px;
-  max-width: 280px;
+  min-width: 160px;
+  max-width: 240px;
 }
 
 .propCell .sub {
@@ -279,12 +279,12 @@
 }
 
 .tenantCell {
-  min-width: 140px;
+  min-width: 120px;
 }
 
 .llcCell {
   color: var(--ink-2);
-  max-width: 180px;
+  max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -990,6 +990,15 @@
   }
 
   .propTable td.llcCell {
+    display: none;
+  }
+}
+
+/* With the right rail beside it, the table has ~800px on a laptop screen:
+   the LLC column (also shown by the switcher) steps aside there so Balance
+   stays in view instead of behind a sideways scroll. */
+@media (min-width: 1024px) and (max-width: 1599px) {
+  .table .llcCol {
     display: none;
   }
 }
