@@ -8,6 +8,13 @@ import { amountOwed, owedLine, rentPrefill } from "@/lib/quick-record";
 import AppShell from "../../components/AppShell";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
+import cs from "./calendar.module.css";
+import StatusBadge, { type Status } from "../../components/ui/StatusBadge";
+import OverflowMenu, { type MenuItem } from "../../components/ui/OverflowMenu";
+import SegmentedControl from "../../components/ui/SegmentedControl";
+import KpiTile, { KpiRow } from "../../components/ui/KpiTile";
+import EmptyState from "../../components/ui/EmptyState";
+import { IconCalendar, IconChevronLeft, IconChevronRight, IconMessage, IconPhone } from "../../components/icons";
 import { money } from "@/lib/money";
 import { isoDay, smsHref, telHref } from "@/lib/lease";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
@@ -36,11 +43,11 @@ const STATUS_WORDS: Record<DueStatus, string> = {
   late: "Late",
 };
 
-const STATUS_PILL: Record<DueStatus, string> = {
+const STATUS_BADGE: Record<DueStatus, Status> = {
   paid: "paid",
-  partial: "owed",
-  due: "vacant",
-  late: "bill",
+  partial: "partial",
+  due: "neutral",
+  late: "late",
 };
 
 export default function CalendarClient({
@@ -221,18 +228,26 @@ export default function CalendarClient({
   // focus from a button someone had just pressed.
   function itemRow(item: DueItem) {
     const owed = amountOwed({ expected: item.expected, paid: item.paid, fees: feesFor(item) });
+    const canMark = item.status !== "paid" && owed > 0.005;
+    const contact: MenuItem[] =
+      item.phone && item.status !== "paid"
+        ? [
+            { label: "Call", icon: IconPhone, href: telHref(item.phone) },
+            { label: "Text", icon: IconMessage, href: smsHref(item.phone) },
+          ]
+        : [];
     return (
-      <div key={item.key} className={styles.calItem}>
-        <div className={styles.calItemMain}>
-          <div className={styles.calItemHead}>
-            <Link href={`/dashboard/properties/${item.propertyId}`} className={styles.calItemName}>
+      <div key={item.key} className={cs.item}>
+        <div className={cs.itemMain}>
+          <div className={cs.itemHead}>
+            <Link href={`/dashboard/properties/${item.propertyId}`} className={cs.itemName}>
               {item.tenantName || item.label}
             </Link>
-            <span className={`${styles.pill} ${styles[STATUS_PILL[item.status]]}`}>
+            <StatusBadge status={STATUS_BADGE[item.status]}>
               {item.status === "late" ? `${item.daysLate} ${item.daysLate === 1 ? "day" : "days"} late` : STATUS_WORDS[item.status]}
-            </span>
+            </StatusBadge>
           </div>
-          <div className={styles.calItemSub}>
+          <div className={`${cs.itemSub} num`}>
             {item.tenantName ? `${item.label} · ` : ""}
             {item.paid > 0 && item.status !== "paid"
               ? `${money(item.paid)} of ${money(item.expected)} in`
@@ -241,30 +256,33 @@ export default function CalendarClient({
               ` · rent ${money(item.rent)} + ${item.extras.map((e) => `${e.label.toLowerCase()} ${money(e.amount)}`).join(" + ")}`}
           </div>
         </div>
-        <div className={styles.calItemActions}>
-          {item.phone && item.status !== "paid" && (
-            <>
-              <a className={`${styles.btn} ${styles.small} ${styles.quiet}`} href={telHref(item.phone)}>
-                Call
-              </a>
-              <a className={`${styles.btn} ${styles.small} ${styles.quiet}`} href={smsHref(item.phone)}>
-                Text
-              </a>
-            </>
-          )}
-          {item.status !== "paid" && owed > 0.005 && (
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.small} ${styles.primary}`}
-              onClick={() => markPaid(item)}
-            >
-              {`Mark ${money(owed)} paid`}
-            </button>
-          )}
-        </div>
+        {(canMark || contact.length > 0) && (
+          <div className={cs.itemActions}>
+            {canMark && (
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                onClick={() => markPaid(item)}
+              >
+                {`Mark ${money(owed)} paid`}
+              </button>
+            )}
+            {contact.length > 0 && (
+              <OverflowMenu items={contact} label={`Contact ${item.tenantName || item.label}`} />
+            )}
+          </div>
+        )}
       </div>
     );
   }
+
+  const longDate = (date: string, short = false) =>
+    new Date(`${date}T12:00:00Z`).toLocaleDateString("en-US", {
+      weekday: short ? "short" : "long",
+      month: short ? "short" : "long",
+      day: "numeric",
+      timeZone: "UTC",
+    });
 
   return (
     <AppShell
@@ -286,74 +304,55 @@ export default function CalendarClient({
         />
       )}
 
-      <div className={styles.contextBar}>
-        {companies.length > 1 ? (
-          <div className={styles.companyBar}>
-            <button
-              type="button"
-              className={`${styles.chip} ${company === "all" ? styles.active : ""}`}
-              onClick={() => setCompany("all")}
-            >
-              All LLCs
-            </button>
-            {companies.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                className={`${styles.chip} ${company === c.id ? styles.active : ""}`}
-                onClick={() => setCompany(c.id)}
-              >
-                {c.name}
-              </button>
-            ))}
+      <div className={cs.toolbar}>
+        {companies.length > 1 && (
+          <div className={cs.toolbarScroll}>
+            <SegmentedControl
+              label="Company"
+              size="sm"
+              value={company}
+              onChange={setCompany}
+              options={[{ value: "all", label: "All LLCs" }, ...companies.map((c) => ({ value: c.id, label: c.name }))]}
+            />
           </div>
-        ) : (
-          <span />
         )}
-        <div className={styles.monthBar}>
-          <button type="button" className={styles.monthArrow} aria-label="Previous month" onClick={() => go(-1)}>
-            ‹
+        <div className={cs.monthNav}>
+          <button type="button" className={cs.navBtn} aria-label="Previous month" onClick={() => go(-1)}>
+            <IconChevronLeft size={16} />
           </button>
-          <span className={styles.monthLabel}>{monthName(month)}</span>
-          <button type="button" className={styles.monthArrow} aria-label="Next month" onClick={() => go(1)}>
-            ›
+          <span className={cs.monthLabel}>{monthName(month)}</span>
+          <button type="button" className={cs.navBtn} aria-label="Next month" onClick={() => go(1)}>
+            <IconChevronRight size={16} />
           </button>
           {!today.startsWith(month) && (
-            <button type="button" className={`${styles.btn} ${styles.small} ${styles.quiet}`} onClick={jumpToday}>
+            <button type="button" className={`${styles.btn} ${styles.small} ${cs.todayBtn}`} onClick={jumpToday}>
               Today
             </button>
           )}
         </div>
       </div>
 
-      <div className={`${styles.kpis} ${styles.calKpis}`}>
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Due this month</span>
-          <span className={`${styles.kpiValue} num`}>{money(cal.expected)}</span>
-        </div>
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Collected</span>
-          <span className={`${styles.kpiValue} num`}>{money(cal.collected)}</span>
-        </div>
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Still to come in</span>
-          <span className={`${styles.kpiValue} num`}>{money(cal.outstanding)}</span>
-        </div>
-        <div className={styles.kpi}>
-          <span className={styles.kpiLabel}>Of that, overdue</span>
-          <span className={`${styles.kpiValue} ${cal.overdue > 0 ? styles.neg : ""} num`}>{money(cal.overdue)}</span>
-        </div>
+      <div className={cs.kpis}>
+        <KpiRow>
+          <KpiTile label="Due this month" value={money(cal.expected)} />
+          <KpiTile label="Collected" value={money(cal.collected)} />
+          <KpiTile label="Still to come in" value={money(cal.outstanding)} />
+          <KpiTile
+            label="Of that, overdue"
+            value={<span className={cal.overdue > 0 ? cs.overdue : undefined}>{money(cal.overdue)}</span>}
+          />
+        </KpiRow>
       </div>
 
-      <div className={styles.calLayout}>
-        <div className={styles.calGrid} role="grid" aria-label={`${monthName(month)} rent calendar`}>
+      <div className={cs.layout}>
+        <div className={`${cs.card} ${cs.grid}`} role="grid" aria-label={`${monthName(month)} rent calendar`}>
           {WEEKDAYS.map((w) => (
-            <div key={w} className={styles.calWeekday} role="columnheader">
+            <div key={w} className={cs.weekday} role="columnheader">
               {w}
             </div>
           ))}
           {Array.from({ length: leading }, (_, i) => (
-            <div key={`blank-${i}`} className={styles.calBlank} aria-hidden="true" />
+            <div key={`blank-${i}`} className={cs.blank} aria-hidden="true" />
           ))}
           {cal.days.map((d) => {
             const state = worst(d.items);
@@ -367,28 +366,29 @@ export default function CalendarClient({
                   d.received ? `, ${money(d.received)} received` : ""
                 }`}
                 className={[
-                  styles.calDay,
-                  d.date === today ? styles.calToday : "",
-                  d.date === selected ? styles.calSelected : "",
-                  state ? styles[`cal_${state}`] : "",
+                  cs.day,
+                  d.date === today ? cs.today : "",
+                  d.date === selected ? cs.selected : "",
+                  state ? cs[`st_${state}`] : "",
                 ].join(" ")}
                 onClick={() => setSelected(d.date)}
               >
-                <span className={styles.calNum}>{d.day}</span>
+                <span className={cs.num}>{d.day}</span>
                 {d.expected > 0 && (
-                  <span className={`${styles.calAmt} num`}>
-                    <span className={styles.calFull}>{money(d.expected)}</span>
-                    <span className={styles.calShort}>
-                      <span className={styles.calCur}>$</span>
+                  <span className={`${cs.amt} num`}>
+                    <span className={cs.dot} aria-hidden="true" />
+                    <span className={cs.full}>{money(d.expected)}</span>
+                    <span className={cs.short}>
+                      <span className={cs.cur}>$</span>
                       {compactMoney(d.expected).slice(1)}
                     </span>
                   </span>
                 )}
                 {d.received > 0 && (
-                  <span className={`${styles.calIn} num`}>
-                    +<span className={styles.calFull}>{money(d.received)}</span>
-                    <span className={styles.calShort}>
-                      <span className={styles.calCur}>$</span>
+                  <span className={`${cs.in} num`}>
+                    +<span className={cs.full}>{money(d.received)}</span>
+                    <span className={cs.short}>
+                      <span className={cs.cur}>$</span>
                       {compactMoney(d.received).slice(1)}
                     </span>
                   </span>
@@ -398,56 +398,46 @@ export default function CalendarClient({
           })}
         </div>
 
-        <aside className={styles.calDetail} aria-live="polite">
+        <aside className={`${cs.card} ${cs.detail}`} aria-live="polite">
           {selectedDay && (
             <>
-              <h3>
-                {new Date(`${selectedDay.date}T12:00:00Z`).toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                  timeZone: "UTC",
-                })}
-              </h3>
-              <p className={styles.helpText} style={{ marginTop: 2 }}>
-                {selectedDay.expected > 0 ? `${money(selectedDay.expected)} due` : "Nothing due"}
-                {selectedDay.received > 0 ? ` · ${money(selectedDay.received)} came in` : ""}
-              </p>
+              <div className={cs.detailHead}>
+                <h2>{longDate(selectedDay.date)}</h2>
+                <p className="num">
+                  {selectedDay.expected > 0 ? `${money(selectedDay.expected)} due` : "Nothing due"}
+                  {selectedDay.received > 0 ? ` · ${money(selectedDay.received)} came in` : ""}
+                </p>
+              </div>
               {selectedDay.items.length > 0 ? (
                 selectedDay.items.map(itemRow)
               ) : (
-                <p className={styles.helpText}>No rent falls due on this day.</p>
+                <p className={cs.detailEmpty}>No rent falls due on this day.</p>
               )}
             </>
           )}
         </aside>
       </div>
 
-      <section className={styles.block}>
-        <div className={styles.blockHead}>
+      <section className={cs.section}>
+        <div className={cs.sectionHead}>
           <h2>Every due date in {monthName(month).split(" ")[0]}</h2>
         </div>
         {agenda.length === 0 ? (
-          <div className={styles.ledgerWrap}>
-            <div className={styles.emptyState}>No rent is due this month.</div>
+          <div className={cs.card}>
+            <EmptyState icon={IconCalendar} title="No rent is due this month." />
           </div>
         ) : (
-          agenda.map((d) => (
-            <div key={d.date} className={styles.calAgendaDay}>
-              <div className={styles.calAgendaHead}>
-                <span>
-                  {new Date(`${d.date}T12:00:00Z`).toLocaleDateString("en-US", {
-                    weekday: "short",
-                    month: "short",
-                    day: "numeric",
-                    timeZone: "UTC",
-                  })}
-                </span>
-                <span className="num">{money(d.expected)}</span>
+          <div className={`${cs.card} ${cs.agenda}`}>
+            {agenda.map((d) => (
+              <div key={d.date} className={cs.agendaDay}>
+                <div className={cs.agendaHead}>
+                  <span>{longDate(d.date, true)}</span>
+                  <span className="num">{money(d.expected)}</span>
+                </div>
+                {d.items.map(itemRow)}
               </div>
-              {d.items.map(itemRow)}
-            </div>
-          ))
+            ))}
+          </div>
         )}
       </section>
     </AppShell>
