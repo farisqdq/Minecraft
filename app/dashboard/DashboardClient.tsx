@@ -37,6 +37,7 @@ import CashFlowChart from "../components/CashFlowChart";
 import CategoryBars from "../components/CategoryBars";
 import Sparkline from "../components/Sparkline";
 import Modal from "../components/Modal";
+import { FileLink } from "../components/FileViewer";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
 import { Toasts, useToasts } from "../components/Toasts";
 import styles from "./dashboard.module.css";
@@ -2013,14 +2014,14 @@ export default function DashboardClient({
                           </div>
                         </div>
                         <div className={styles.attnActions}>
-                          <a
+                          <FileLink
                             className={`${styles.btn} ${styles.small} ${styles.quiet}`}
-                            href={d.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
+                            url={d.url}
+                            name={d.filename || d.title}
+                            mime={d.contentType}
                           >
                             View
-                          </a>
+                          </FileLink>
                           <Link
                             href={
                               d.vendorId
@@ -2640,14 +2641,14 @@ export default function DashboardClient({
                             <div className={styles.proofRow}>
                               {t.attachments.map((a) => (
                                 <span key={a.id} className={styles.proofItem}>
-                                  <a href={a.url} target="_blank" rel="noopener noreferrer" title={a.filename}>
+                                  <FileLink url={a.url} name={a.filename} mime={a.contentType} title={a.filename}>
                                     {a.contentType.startsWith("image/") ? (
                                       // eslint-disable-next-line @next/next/no-img-element
                                       <img src={a.url} alt={a.filename} className={styles.proofThumb} />
                                     ) : (
                                       <span className={styles.proofFile}>PDF</span>
                                     )}
-                                  </a>
+                                  </FileLink>
                                   <button
                                     type="button"
                                     className={styles.proofRemove}

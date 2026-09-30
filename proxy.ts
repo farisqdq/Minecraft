@@ -131,7 +131,10 @@ export default async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  // Everything except the build's own static files and the app icons, which
-  // are served as-is and need neither a session nor a nonce.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest).*)"],
+  // Everything except the build's own static files, the app icons and the
+  // PDF viewer's worker and data (public/pdfjs), which are served as-is and
+  // need neither a session nor a nonce. The worker gets no page policy of its
+  // own this way, like the build's chunks: it runs only pdf.js code, with
+  // eval turned off, and may use WebAssembly to decode scanned images.
+  matcher: ["/((?!_next/static|_next/image|pdfjs/|favicon.ico|icon.png|apple-icon.png|manifest.webmanifest).*)"],
 };

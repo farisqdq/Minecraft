@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import AppShell from "./AppShell";
 import Modal from "./Modal";
+import { FileLink } from "./FileViewer";
 import ConfirmDialog, { type ConfirmRequest } from "./ConfirmDialog";
 import Scanner, { type ScanProperty, type ScanTenant } from "./Scanner";
 import { Toasts, useToasts } from "./Toasts";
@@ -247,7 +248,7 @@ export default function FilingCabinet({
             const where = property ? d.ownerLabel : [propertyName(d.propertyId) || null, d.tenantId || d.vendorId ? d.ownerLabel : null].filter(Boolean).join(" · ");
             return (
               <li key={d.id}>
-                <a className={styles.docMain} href={d.url} target="_blank" rel="noopener noreferrer">
+                <FileLink className={styles.docMain} url={d.url} name={d.filename || d.title} mime={d.contentType}>
                   <span className={styles.docTitle}>{d.title}</span>
                   <span className={styles.docMeta}>
                     {d.kind}
@@ -257,7 +258,7 @@ export default function FilingCabinet({
                     {d.shared ? " · on their portal" : ""}
                     {d.sharedWithOwners ? " · shown to owners" : ""}
                   </span>
-                </a>
+                </FileLink>
                 {d.expiresOn && (
                   <span className={`${styles.docExpiry} ${state === "expired" ? styles.docExpired : state === "soon" ? styles.docSoon : ""}`}>
                     {expiryLabel(d.expiresOn, today, formatDay)}

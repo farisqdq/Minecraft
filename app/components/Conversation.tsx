@@ -1,6 +1,7 @@
 "use client";
 
 import { ago } from "@/lib/maintenance";
+import { FileLink } from "./FileViewer";
 import { formatSize, isImageType, isUnreadFor, type MessageDTO, type Side } from "@/lib/messages";
 import styles from "./messages.module.css";
 
@@ -74,16 +75,16 @@ export default function Conversation({
                 <div className={styles.files}>
                   {m.attachments.map((a) =>
                     isImageType(a.contentType) ? (
-                      <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" title={a.filename}>
+                      <FileLink key={a.id} url={a.url} name={a.filename} mime={a.contentType} title={a.filename}>
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={a.url} alt={a.filename} className={styles.thumb} loading="lazy" />
-                      </a>
+                      </FileLink>
                     ) : (
-                      <a key={a.id} href={a.url} target="_blank" rel="noopener noreferrer" className={styles.file}>
+                      <FileLink key={a.id} url={a.url} name={a.filename} mime={a.contentType} className={styles.file}>
                         <IconFile className={styles.fileIcon} />
                         <span className={styles.fileName}>{a.filename}</span>
                         {a.size > 0 && <span className={styles.fileSize}>{formatSize(a.size)}</span>}
-                      </a>
+                      </FileLink>
                     )
                   )}
                 </div>

@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import Modal from "./Modal";
+import { FileLink } from "./FileViewer";
 import ConfirmDialog, { type ConfirmRequest } from "./ConfirmDialog";
 import Scanner, { type ScanProperty, type ScanTenant } from "./Scanner";
 import styles from "../dashboard/dashboard.module.css";
@@ -170,7 +171,7 @@ export default function DocumentsPanel({
             const state = expiryState(d.expiresOn, today);
             return (
               <li key={d.id}>
-                <a className={styles.docMain} href={d.url} target="_blank" rel="noopener noreferrer">
+                <FileLink className={styles.docMain} url={d.url} name={d.filename || d.title} mime={d.contentType}>
                   <span className={styles.docTitle}>{d.title}</span>
                   <span className={styles.docMeta}>
                     {d.kind}
@@ -178,7 +179,7 @@ export default function DocumentsPanel({
                     {d.shared ? " · on their portal" : ""}
                     {d.sharedWithOwners ? " · shown to owners" : ""}
                   </span>
-                </a>
+                </FileLink>
                 {d.expiresOn && (
                   <span
                     className={`${styles.docExpiry} ${

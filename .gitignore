@@ -30,3 +30,6 @@ tsconfig.tsbuildinfo
 
 # Subagent worktrees (local only)
 .claude/worktrees/
+
+# pdf.js worker and data, copied from node_modules (scripts/copy-pdfjs.js)
+/public/pdfjs/

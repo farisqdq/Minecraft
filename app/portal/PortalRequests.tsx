@@ -10,6 +10,7 @@ import {
   type RequestDTO,
 } from "@/lib/maintenance";
 import { useNow } from "../components/useNow";
+import { FileLink } from "../components/FileViewer";
 import { useLivePulse } from "../components/useLivePulse";
 import { formatPhone, telHref } from "@/lib/lease";
 import styles from "./portal.module.css";
@@ -310,9 +311,9 @@ export default function PortalRequests({
                       <div className={styles.photoRow}>
                         {r.photos.map((p) => (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
+                          <FileLink key={p.id} url={p.url} name={p.filename} mime={p.contentType}>
                             <img src={p.url} alt={p.filename} className={styles.photo} />
-                          </a>
+                          </FileLink>
                         ))}
                       </div>
                     )}

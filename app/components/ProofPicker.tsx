@@ -31,6 +31,7 @@
 import { useEffect, useId, useRef, useState, type DragEvent, type SyntheticEvent } from "react";
 import { createPortal } from "react-dom";
 import Scanner from "./Scanner";
+import { FileLink } from "./FileViewer";
 import { shrinkImage } from "@/lib/shrinkImage";
 import {
   CAMERA_ACCEPT,
@@ -175,10 +176,10 @@ export function ProofStrip({
       <ul className={s.strip}>
         {items.map((a) => (
           <li key={a.id} className={s.item}>
-            <a
-              href={a.url}
-              target="_blank"
-              rel="noopener noreferrer"
+            <FileLink
+              url={a.url}
+              name={a.filename}
+              mime={a.contentType}
               className={s.thumbLink}
               title={a.filename}
               aria-label={`Open ${a.filename}`}
@@ -188,7 +189,7 @@ export function ProofStrip({
               ) : (
                 <FileTile label="PDF" />
               )}
-            </a>
+            </FileLink>
             <span className={s.name}>{shortName(a.filename, 16)}</span>
             {onRemove && (
               <button
