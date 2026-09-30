@@ -816,7 +816,30 @@ without browser chrome. The layout is built for a phone first — a bottom tab
 bar in thumb reach, the record form as a sheet that rises from the bottom,
 and the ledger as a card per entry rather than a table you scroll sideways.
 
-Dark mode follows the system setting.
+Dark mode follows the system setting unless you choose otherwise under
+**Settings › Appearance** (below).
+
+## Appearance
+
+Each person picks their own look under **Settings › Appearance**
+(`/dashboard/settings/appearance`, also linked from Account & security).
+It's saved to that login only — teammates keep theirs.
+
+- **Layout** — Classic (the original app), Command Center, Ledger or Status
+  Board. The layout changes the frame and the Overview; every other page
+  works the same in each, restyled by the layout's tokens.
+- **Mode** — Light, Dark or Match my device (the default).
+- **Accent** — indigo, blue, green, violet, orange or rose, or the layout's
+  own default (Classic's green, Command indigo, Ledger blue, Status Board
+  violet). Paid and money-in stay green whatever the accent.
+
+Changes apply straight away without a reload. The server writes the choice
+onto `<html>` (`data-layout`, `data-theme`, `data-accent`) before the first
+paint, so there's no flash, and `app/globals.css` keys every colour, font
+and radius off those attributes. Tenants and owners get **Appearance** with
+just Light / Dark / Match my device, on the portal page and the owner
+Account page. Appearance isn't part of a backup: it's a personal display
+preference, not LLC data, so a restore leaves everyone on the defaults.
 
 ## Backups
 
