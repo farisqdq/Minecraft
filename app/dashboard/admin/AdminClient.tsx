@@ -9,6 +9,7 @@ import styles from "../dashboard.module.css";
 import { formatDay } from "@/lib/lease";
 import { planAccountDeletion } from "@/lib/admin";
 import type { AdminAccount, AdminCompany, AdminSnapshot } from "@/lib/admin-db";
+import AdminPush from "./AdminPush";
 
 type Role = "owner" | "member";
 
@@ -373,6 +374,8 @@ export default function AdminClient({
           )}
         </div>
       </section>
+
+      <AdminPush devices={data.devices} onSnapshot={setData} confirm={setConfirming} toast={push} />
 
       <section className={styles.block}>
         <div className={styles.blockHead}>

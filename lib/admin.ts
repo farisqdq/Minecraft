@@ -93,6 +93,8 @@ export const ADMIN_ACTIONS = [
   "company.member.add",
   "company.member.role",
   "company.member.remove",
+  "push.send",
+  "push.device.remove",
 ] as const;
 export type AdminAction = (typeof ADMIN_ACTIONS)[number];
 
@@ -128,6 +130,10 @@ export function describeAction(a: { action: string; target: string; detail: stri
       return `Changed a role on ${a.target}${d}`;
     case "company.member.remove":
       return `Removed ${a.detail ?? "someone"} from ${a.target}`;
+    case "push.send":
+      return `Sent a notification to ${a.target}${d}`;
+    case "push.device.remove":
+      return `Removed a notification device of ${a.target}${d}`;
     default:
       return `${a.action} ${a.target}${d}`;
   }

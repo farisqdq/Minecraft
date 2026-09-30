@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
 import { describeAction, type AdminAction } from "@/lib/admin";
+import { describeDevice, pushServiceName } from "@/lib/push-rules";
 
 type Db = Prisma.TransactionClient | typeof prisma;
 
@@ -70,7 +71,70 @@ export type AdminLogEntry = {
   text: string;
 };
 
-export type AdminSnapshot = { accounts: AdminAccount[]; companies: AdminCompany[]; log: AdminLogEntry[] };
+/** A phone or browser with notifications on, and whose it is. */
+export type AdminDevice = {
+  id: string;
+  /** "user:<id>" or "tenant:<accountId>" — what "send to this person" targets. */
+  owner: string;
+  kind: "landlord" | "tenant";
+  /** The account's name or email; a tenant's name. */
+  who: string;
+  /** The email, or for a tenant the property (and unit). */
+  whoDetail: string;
+  device: string;
+  service: string;
+  createdAt: string;
+  lastSuccessAt: string | null;
+  lastError: string | null;
+  lastErrorAt: string | null;
+};
+
+export type AdminSnapshot = { accounts: AdminAccount[]; companies: AdminCompany[]; log: AdminLogEntry[]; devices: AdminDevice[] };
+
+/** Every device with notifications on, newest first, with enough about its owner to recognise them. */
+export async function adminDevices(): Promise<AdminDevice[]> {
+  const rows = await prisma.pushSubscription.findMany({
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      endpoint: true,
+      userAgent: true,
+      createdAt: true,
+      lastUsedAt: true,
+      lastError: true,
+      lastErrorAt: true,
+      user: { select: { id: true, email: true, name: true } },
+      tenantAccount: {
+        select: {
+          id: true,
+          email: true,
+          tenant: { select: { name: true, unit: { select: { name: true } }, property: { select: { name: true } } } },
+        },
+      },
+    },
+  });
+  return rows.flatMap((r): AdminDevice[] => {
+    const base = {
+      id: r.id,
+      device: describeDevice(r.userAgent),
+      service: pushServiceName(r.endpoint),
+      createdAt: r.createdAt.toISOString(),
+      lastSuccessAt: r.lastUsedAt ? r.lastUsedAt.toISOString() : null,
+      lastError: r.lastError,
+      lastErrorAt: r.lastErrorAt ? r.lastErrorAt.toISOString() : null,
+    };
+    if (r.user) {
+      return [{ ...base, owner: `user:${r.user.id}`, kind: "landlord", who: r.user.name || r.user.email, whoDetail: r.user.name ? r.user.email : "Landlord account" }];
+    }
+    if (r.tenantAccount) {
+      const t = r.tenantAccount.tenant;
+      const place = [t.property.name, t.unit?.name].filter(Boolean).join(" · ");
+      return [{ ...base, owner: `tenant:${r.tenantAccount.id}`, kind: "tenant", who: t.name, whoDetail: `Tenant · ${place}` }];
+    }
+    // No owner left (shouldn't happen: both relations cascade).
+    return [];
+  });
+}
 
 const role = (r: string) => (r === "owner" ? "owner" : "member") as "owner" | "member";
 
@@ -80,7 +144,7 @@ const role = (r: string) => (r === "owner" ? "owner" : "member") as "owner" | "m
  * the database doesn't have, which this app has been bitten by before.
  */
 export async function adminSnapshot(): Promise<AdminSnapshot> {
-  const [users, companies, log] = await Promise.all([
+  const [users, companies, log, devices] = await Promise.all([
     prisma.user.findMany({
       orderBy: { createdAt: "asc" },
       select: {
@@ -107,6 +171,7 @@ export async function adminSnapshot(): Promise<AdminSnapshot> {
       },
     }),
     prisma.adminLog.findMany({ orderBy: { createdAt: "desc" }, take: 80 }),
+    adminDevices(),
   ]);
   return {
     accounts: users.map((u) => ({
@@ -146,5 +211,6 @@ export async function adminSnapshot(): Promise<AdminSnapshot> {
       createdAt: l.createdAt.toISOString(),
       text: describeAction(l),
     })),
+    devices,
   };
 }
