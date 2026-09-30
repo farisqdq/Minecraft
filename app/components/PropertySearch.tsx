@@ -52,7 +52,15 @@ function reasonFor(hit: Hit, q: string): string {
  * dashboard grid so it works from Team, Backup and Export too, and it takes
  * you to the place rather than filtering cards you may not be looking at.
  */
-export default function PropertySearch() {
+export default function PropertySearch({
+  variant = "bar",
+  shortcuts = true,
+}: {
+  /** "side": a full-width field in the sidebar. "bar": the compact top bar. */
+  variant?: "side" | "bar";
+  /** Whether this box answers ⌘K and "/" — only the one on screen should. */
+  shortcuts?: boolean;
+} = {}) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
@@ -134,6 +142,7 @@ export default function PropertySearch() {
 
   // ⌘K / Ctrl-K from anywhere, and "/" when you aren't already typing.
   useEffect(() => {
+    if (!shortcuts) return;
     function onKey(e: KeyboardEvent) {
       const el = e.target as HTMLElement | null;
       const typing =
@@ -151,7 +160,7 @@ export default function PropertySearch() {
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [load]);
+  }, [load, shortcuts]);
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
     if (e.key === "Escape") {
@@ -175,8 +184,10 @@ export default function PropertySearch() {
 
   const showList = open && needle.length > 0;
 
+  const variantClass = variant === "side" ? styles.searchSide : styles.searchBar;
+
   return (
-    <>
+    <div className={`${styles.searchHost} ${variantClass}`}>
       {/* On a phone the bar has no room for a field, so it starts as an icon
           and takes the whole bar over once you tap it. */}
       <button
@@ -265,6 +276,6 @@ export default function PropertySearch() {
           </ul>
         )}
       </div>
-    </>
+    </div>
   );
 }

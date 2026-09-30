@@ -1,37 +1,27 @@
 "use client";
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from "react";
 import { usePathname } from "next/navigation";
-import { centeredScrollLeft, edgeFades, initialBarState, nextBarState, type EdgeFades } from "../../lib/nav-scroll";
+import { initialBarState, nextBarState } from "../../lib/nav-scroll";
 import styles from "./shell.module.css";
 
-const PHONE = "(max-width: 720px)";
-const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
-
-// Runs before paint in the browser, quietly does nothing on the server.
-const useBeforePaint = typeof window === "undefined" ? useEffect : useLayoutEffect;
-
-// Every page renders its own shell, so the bar remounts on each navigation.
-// Remembering where the row was scrolled lets the new bar start from there
-// and glide to the new tab instead of snapping back to Home first.
-let lastRowScroll: number | null = null;
+/** Where the bottom bar is used instead of the sidebar (see shell.module.css). */
+const COMPACT = "(max-width: 1023px)";
 
 /**
- * The phone tab bar: one row that swipes sideways when the sections don't
- * fit, and that tucks itself away while the page is being read downward so
- * the content gets the whole screen. A pill stays at the bottom edge while
- * it's away; tapping it, scrolling back up, reaching the end of the page or
- * moving to another page all bring the bar back.
+ * The bottom tab bar on phones and tablets: five fixed tabs, and it tucks
+ * itself away while the page is being read downward so the content gets the
+ * whole screen. A pill stays at the bottom edge while it's away; tapping it,
+ * scrolling back up, reaching the end of the page or moving to another page
+ * all bring the bar back.
  *
- * On desktop the bar is display:none and none of this runs.
+ * On a desktop the bar is display:none and none of this runs.
  */
 export default function TabBar({ label, children }: { label: string; children: ReactNode }) {
   const pathname = usePathname() ?? "";
   const navRef = useRef<HTMLElement>(null);
-  const rowRef = useRef<HTMLDivElement>(null);
   const scrollState = useRef(initialBarState());
   const [visible, setVisible] = useState(true);
-  const [fades, setFades] = useState<EdgeFades>({ start: false, end: false });
 
   const show = useCallback(() => {
     scrollState.current = initialBarState(window.scrollY);
@@ -41,7 +31,7 @@ export default function TabBar({ label, children }: { label: string; children: R
   // Vertical page scroll decides whether the bar is out. Passive listener,
   // one measurement per frame, and state only changes when the answer does.
   useEffect(() => {
-    const phone = window.matchMedia(PHONE);
+    const compact = window.matchMedia(COMPACT);
     let frame = 0;
     const measure = () => {
       frame = 0;
@@ -60,12 +50,12 @@ export default function TabBar({ label, children }: { label: string; children: R
       window.removeEventListener("scroll", onScroll);
       scrollState.current = initialBarState(window.scrollY);
       setVisible(true);
-      if (phone.matches) window.addEventListener("scroll", onScroll, { passive: true });
+      if (compact.matches) window.addEventListener("scroll", onScroll, { passive: true });
     };
     sync();
-    phone.addEventListener("change", sync);
+    compact.addEventListener("change", sync);
     return () => {
-      phone.removeEventListener("change", sync);
+      compact.removeEventListener("change", sync);
       window.removeEventListener("scroll", onScroll);
       if (frame) cancelAnimationFrame(frame);
     };
@@ -78,57 +68,10 @@ export default function TabBar({ label, children }: { label: string; children: R
     if (nav) nav.inert = !visible;
   }, [visible]);
 
-  const measureFades = useCallback(() => {
-    const row = rowRef.current;
-    if (!row) return;
-    const next = edgeFades(row.scrollLeft, row.scrollWidth, row.clientWidth);
-    setFades((prev) => (prev.start === next.start && prev.end === next.end ? prev : next));
-  }, []);
-
-  // Horizontal swipes on the row only change which edges fade.
+  // Every navigation brings the bar back.
   useEffect(() => {
-    const row = rowRef.current;
-    if (!row) return;
-    let frame = 0;
-    const onRowScroll = () => {
-      lastRowScroll = row.scrollLeft;
-      if (!frame)
-        frame = requestAnimationFrame(() => {
-          frame = 0;
-          measureFades();
-        });
-    };
-    row.addEventListener("scroll", onRowScroll, { passive: true });
-    window.addEventListener("resize", measureFades, { passive: true });
-    // Badges arriving or the font loading can change how wide the row is.
-    const resized = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(measureFades);
-    resized?.observe(row);
-    return () => {
-      row.removeEventListener("scroll", onRowScroll);
-      window.removeEventListener("resize", measureFades);
-      resized?.disconnect();
-      if (frame) cancelAnimationFrame(frame);
-    };
-  }, [measureFades]);
-
-  // After every navigation: bring the bar back and centre the current tab.
-  // scrollLeft is set directly — scrollIntoView could also scroll the page.
-  useBeforePaint(() => {
     show();
-    const row = rowRef.current;
-    if (!row) return;
-    const tab = row.querySelector<HTMLElement>('[aria-current="page"]');
-    const from = lastRowScroll;
-    if (from !== null) row.scrollLeft = from;
-    if (tab) {
-      const left = centeredScrollLeft(tab.offsetLeft, tab.offsetWidth, row.clientWidth, row.scrollWidth);
-      const still = from === null || window.matchMedia(REDUCED_MOTION).matches;
-      if (still) row.scrollLeft = left;
-      else row.scrollTo({ left, behavior: "smooth" });
-    }
-    lastRowScroll = row.scrollLeft;
-    measureFades();
-  }, [pathname, show, measureFades]);
+  }, [pathname, show]);
 
   const reveal = (e: MouseEvent<HTMLButtonElement>) => {
     show();
@@ -136,8 +79,8 @@ export default function TabBar({ label, children }: { label: string; children: R
     // bar, since the pill is about to disappear from under it.
     if (e.detail === 0) {
       requestAnimationFrame(() => {
-        const row = rowRef.current;
-        (row?.querySelector<HTMLElement>('[aria-current="page"]') ?? row?.querySelector<HTMLElement>("a"))?.focus();
+        const nav = navRef.current;
+        (nav?.querySelector<HTMLElement>('[aria-current="page"]') ?? nav?.querySelector<HTMLElement>("a"))?.focus();
       });
     }
   };
@@ -151,12 +94,7 @@ export default function TabBar({ label, children }: { label: string; children: R
         // Belt and braces for browsers without `inert`: a focused link shows the bar.
         onFocus={show}
       >
-        <div
-          ref={rowRef}
-          className={`${styles.tabRow} ${fades.start ? styles.fadeStart : ""} ${fades.end ? styles.fadeEnd : ""}`}
-        >
-          {children}
-        </div>
+        <div className={styles.tabRow}>{children}</div>
       </nav>
       <button
         type="button"

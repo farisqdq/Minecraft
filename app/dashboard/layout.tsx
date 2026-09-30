@@ -9,5 +9,9 @@ import { ShellProvider } from "../components/ShellContext";
  */
 export default async function DashboardLayout({ children }: { children: ReactNode }) {
   const me = await getCurrentUser();
-  return <ShellProvider admin={Boolean(me?.isAdmin)}>{children}</ShellProvider>;
+  return (
+    <ShellProvider admin={Boolean(me?.isAdmin)} name={me?.name ?? null} email={me?.email ?? null}>
+      {children}
+    </ShellProvider>
+  );
 }

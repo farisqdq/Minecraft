@@ -4,13 +4,26 @@ import { createContext, useContext, type ReactNode } from "react";
 
 /**
  * What the frame around every signed-in page needs to know about who's
- * looking: for now, whether they run the site. Set once by the dashboard
- * layout, so no page has to thread it through.
+ * looking: whether they run the site (for the Admin link), and their name
+ * and email for the account menu. Set once by the dashboard layout, so no
+ * page has to thread it through.
  */
-const ShellContext = createContext<{ admin: boolean }>({ admin: false });
+type ShellInfo = { admin: boolean; name: string | null; email: string | null };
 
-export function ShellProvider({ admin, children }: { admin: boolean; children: ReactNode }) {
-  return <ShellContext.Provider value={{ admin }}>{children}</ShellContext.Provider>;
+const ShellContext = createContext<ShellInfo>({ admin: false, name: null, email: null });
+
+export function ShellProvider({
+  admin,
+  name = null,
+  email = null,
+  children,
+}: {
+  admin: boolean;
+  name?: string | null;
+  email?: string | null;
+  children: ReactNode;
+}) {
+  return <ShellContext.Provider value={{ admin, name, email }}>{children}</ShellContext.Provider>;
 }
 
 export function useShellInfo() {
