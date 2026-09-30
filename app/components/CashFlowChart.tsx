@@ -1,6 +1,9 @@
 "use client";
 
 import { useState } from "react";
+import { fromFirstData, hasTrend } from "@/lib/cash-flow-series";
+import EmptyState from "./ui/EmptyState";
+import { IconReceipt } from "./icons";
 import styles from "./charts.module.css";
 
 export type CashFlowPoint = { month: string; rent: number; expense: number };
@@ -44,25 +47,31 @@ function monthParts(key: string) {
  * of rent. Hovering swaps the numbers in the readout above the plot rather
  * than floating a tooltip, which keeps marks unobscured on a phone.
  */
-export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
+export default function CashFlowChart({ data: months }: { data: CashFlowPoint[] }) {
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
 
+  // Start at the first month anything was recorded: a year of empty columns
+  // in front of the real history reads as a bad year, not a new account.
+  const data = fromFirstData(months);
   const totalRent = data.reduce((s, d) => s + d.rent, 0);
   const totalExpense = data.reduce((s, d) => s + d.expense, 0);
 
-  if (data.length === 0 || (totalRent === 0 && totalExpense === 0)) {
+  if (!hasTrend(data)) {
     return (
       <figure className={styles.chart}>
         <figcaption className={styles.head}>
           <div>
             <div className={styles.title}>Cash flow</div>
-            <div className={styles.sub}>Last 12 months</div>
+            <div className={styles.sub}>Money in and out by month</div>
           </div>
         </figcaption>
-        <div className={styles.chartEmpty}>
-          Record a rent payment or an expense and this fills in month by month.
-        </div>
+        <EmptyState
+          compact
+          icon={IconReceipt}
+          title="Not enough history yet"
+          detail="The chart fills in once two months have rent or expenses recorded."
+        />
       </figure>
     );
   }
@@ -114,7 +123,7 @@ export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
       </figcaption>
 
       <div className={styles.readout} aria-live="polite">
-        <span className={styles.readoutMonth}>{shown ? monthParts(shown.month).full : "12-month total"}</span>
+        <span className={styles.readoutMonth}>{shown ? monthParts(shown.month).full : `${data.length}-month total`}</span>
         <span>
           Rent<b className="num">{money.format(readoutRent)}</b>
         </span>
