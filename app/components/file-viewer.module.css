@@ -1,0 +1,251 @@
+/* The full-screen file viewer (FileViewer.tsx). Dark whatever the theme:
+   photos and pages read best on it, and it's plainly not the app's own page. */
+
+.viewer {
+  position: fixed;
+  inset: 0;
+  /* Above dialogs (100, 110) — a receipt is often opened from one — and
+     below toasts (120), which may report on what the page is doing. */
+  z-index: 115;
+  display: flex;
+  flex-direction: column;
+  background: #0f0e0b;
+  color: #f2eee6;
+  animation: fade var(--fast) both;
+}
+
+.bar {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Clear of the notch / status bar / rounded corners in the installed app. */
+  padding-top: max(8px, env(safe-area-inset-top));
+  padding-right: max(8px, env(safe-area-inset-right));
+  padding-bottom: 8px;
+  padding-left: max(16px, env(safe-area-inset-left));
+  background: rgba(15, 14, 11, 0.92);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.name {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font: 600 15px/1.3 "Inter", system-ui, sans-serif;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.barActions {
+  flex: none;
+  display: flex;
+  gap: 6px;
+}
+
+.action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: inherit;
+  text-decoration: none;
+  font: 500 14px/1 "Inter", system-ui, sans-serif;
+  background: rgba(255, 255, 255, 0.06);
+  transition: background var(--fast);
+}
+
+.action:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.close {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--fast);
+}
+
+.close:hover {
+  background: rgba(255, 255, 255, 0.24);
+}
+
+.action:focus-visible,
+.close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+/* On a phone the header keeps the name and the X; the two actions shrink to
+   icons so neither gets pushed off the edge. */
+@media (max-width: 640px) {
+  .action {
+    padding: 0;
+    width: 44px;
+    justify-content: center;
+  }
+  .action span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+  .cardActions .action {
+    width: auto;
+    padding: 0 14px;
+  }
+  .cardActions .action span {
+    position: static;
+    width: auto;
+    height: auto;
+    clip: auto;
+  }
+}
+
+.body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+  display: flex;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* The scroll area. Native pinch-zoom and panning are left alone in here. */
+.zoom {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pinch-zoom pan-x pan-y;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.image {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  margin: auto;
+}
+
+.pages {
+  flex-direction: column;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 12px;
+}
+
+.page {
+  display: block;
+  flex: none;
+  background: #fff;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+
+.center {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  padding: 24px 16px;
+  text-align: center;
+}
+
+.loadingText {
+  font: 500 14px/1.4 "Inter", system-ui, sans-serif;
+  color: rgba(242, 238, 230, 0.75);
+}
+
+.spinner {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: #fff;
+  animation: spin 0.8s linear infinite;
+}
+
+.floating {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  margin: -16px 0 0 -16px;
+}
+
+.card {
+  max-width: 420px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 28px 20px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.cardTitle {
+  margin: 0;
+  font: 600 16px/1.35 "Inter", system-ui, sans-serif;
+  word-break: break-word;
+}
+
+.cardDetail {
+  margin: 0;
+  font: 400 14px/1.45 "Inter", system-ui, sans-serif;
+  color: rgba(242, 238, 230, 0.75);
+}
+
+.cardActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+@keyframes fade {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .viewer {
+    animation: none;
+  }
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}

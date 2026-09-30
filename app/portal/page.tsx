@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
 import { blobConfigured } from "@/lib/blob";
 import { fileLink } from "@/lib/file-links";
+import { FileLink } from "../components/FileViewer";
 import { formatDay, formatPhone, isoDay, leaseRange, leaseStatus, ordinal, smsHref, telHref } from "@/lib/lease";
 import { money } from "@/lib/money";
 import { requestInclude, serializeRequest } from "@/lib/requests";
@@ -56,7 +57,7 @@ export default async function PortalHome() {
   // Both conditions are in the query — nothing is fetched and then hidden.
   const sharedDocs = await prisma.document.findMany({
     where: { tenantId: tenant.id, shared: true },
-    select: { id: true, title: true, kind: true, expiresOn: true },
+    select: { id: true, title: true, kind: true, expiresOn: true, filename: true, contentType: true },
     orderBy: { createdAt: "desc" },
   });
 
@@ -254,9 +255,9 @@ export default async function PortalHome() {
           <ul className={styles.docList}>
             {sharedDocs.map((d) => (
               <li key={d.id}>
-                <a href={fileLink("document", d.id)} target="_blank" rel="noopener noreferrer">
+                <FileLink url={fileLink("document", d.id)} name={d.filename || d.title} mime={d.contentType}>
                   {d.title}
-                </a>
+                </FileLink>
                 <span className={styles.factLabel}>
                   {d.kind}
                   {d.expiresOn ? ` · valid through ${formatDay(d.expiresOn.toISOString().slice(0, 10))}` : ""}

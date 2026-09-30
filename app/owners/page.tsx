@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireOwnerSession } from "@/lib/owner-access";
 import { OPEN_STATUSES } from "@/lib/maintenance";
 import { fileLink } from "@/lib/file-links";
+import { FileLink } from "../components/FileViewer";
 import { formatDay } from "@/lib/lease";
 import { money } from "@/lib/money";
 import { monthName } from "@/lib/notices";
@@ -59,7 +60,16 @@ export default async function OwnerHome() {
     // Both conditions are in the query — nothing is fetched and then hidden.
     prisma.document.findMany({
       where: { propertyId: { in: ids }, sharedWithOwners: true },
-      select: { id: true, title: true, kind: true, expiresOn: true, createdAt: true, property: { select: { name: true } } },
+      select: {
+        id: true,
+        title: true,
+        kind: true,
+        expiresOn: true,
+        createdAt: true,
+        filename: true,
+        contentType: true,
+        property: { select: { name: true } },
+      },
       orderBy: { createdAt: "desc" },
     }),
     ownerTransactions(ids, new Date(Date.UTC(now.getUTCFullYear(), 0, 1))),
@@ -225,9 +235,9 @@ export default async function OwnerHome() {
                 {docs.map((d) => (
                   <li key={d.id} className={styles.item}>
                     <span className={styles.itemTitle}>
-                      <a href={fileLink("document", d.id)} target="_blank" rel="noopener noreferrer">
+                      <FileLink url={fileLink("document", d.id)} name={d.filename || d.title} mime={d.contentType}>
                         {d.title}
-                      </a>
+                      </FileLink>
                     </span>
                     <span className={styles.itemMeta}>
                       {d.kind} · {d.property?.name}

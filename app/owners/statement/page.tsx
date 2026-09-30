@@ -6,6 +6,7 @@ import { isMonthKey, monthKeyOf, monthsEnding, shiftMonth, type OwnerStatement }
 import { ownerStatements } from "@/lib/owners-db";
 import OwnerShell from "../OwnerShell";
 import MonthPicker from "./MonthPicker";
+import { FileLink } from "../../components/FileViewer";
 import styles from "../owners.module.css";
 
 export const dynamic = "force-dynamic";
@@ -92,6 +93,16 @@ export default async function OwnerStatementPage({ searchParams }: { searchParam
       <section className={styles.card}>
         <div className={styles.controls}>
           <MonthPicker months={choices} value={month} labels={choices.map(monthName)} />
+          {/* Viewed in the app's own file viewer, which has a way back — a
+              downloaded PDF in the installed app can leave you with none. */}
+          <FileLink
+            className={styles.btn}
+            url={`/api/owners/statement?month=${month}`}
+            name={`owner-statement-${month}.pdf`}
+            mime="application/pdf"
+          >
+            View
+          </FileLink>
           <a className={`${styles.btn} ${styles.btnPrimary}`} href={`/api/owners/statement?month=${month}`} download>
             Download PDF
           </a>

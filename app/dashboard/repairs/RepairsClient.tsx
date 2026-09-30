@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
+import { FileLink } from "../../components/FileViewer";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
@@ -345,9 +346,9 @@ export default function RepairsClient({
               <div className={styles.photoRow}>
                 {current.photos.map((p) => (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer">
+                  <FileLink key={p.id} url={p.url} name={p.filename} mime={p.contentType}>
                     <img src={p.url} alt={p.filename} className={styles.repairPhoto} />
-                  </a>
+                  </FileLink>
                 ))}
               </div>
             )}
