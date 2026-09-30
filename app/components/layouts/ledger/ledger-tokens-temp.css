@@ -1,0 +1,448 @@
+/* TEMPORARY — the Ledger layout's tokens until the shared theme stylesheet
+ * lands. Values copied from wip/redesign-foundation:app/globals.css and
+ * scoped to the Ledger layout (light, dark, device, accents). Delete on
+ * merge once the infra tokens cover data-layout=ledger. */
+
+:root[data-layout="ledger"] {
+  color-scheme: light;
+
+  /* ---- Neutral scale (zinc: true grey, no brown) ---- */
+  --gray-0: #ffffff;
+  --gray-50: #fafafa;
+  --gray-100: #f4f4f5;
+  --gray-150: #ececee;
+  --gray-200: #e4e4e7;
+  --gray-300: #d4d4d8;
+  --gray-400: #a1a1aa;
+  --gray-500: #71717a;
+  --gray-600: #52525b;
+  --gray-700: #3f3f46;
+  --gray-800: #27272a;
+  --gray-900: #18181b;
+  --gray-950: #09090b;
+
+  /* ---- Surfaces & text ---- */
+  --bg: #f7f7f8; /* the page behind cards */
+  --surface: #ffffff; /* cards, sheets, inputs */
+  --surface-2: #fafafa; /* subtle inset: table header, hover row */
+  --surface-3: #f4f4f5; /* hover fill for quiet controls */
+  --ink: #18181b; /* primary text */
+  --ink-2: #3f3f46; /* secondary text that still needs weight */
+  --muted: #71717a; /* labels, captions, zero amounts */
+  --faint: #a1a1aa; /* placeholders, disabled */
+  --line: #e4e4e7; /* card and table borders */
+  --line-strong: #d4d4d8; /* input borders, dividers that must show */
+
+  /* ---- Brand accent: primary buttons, links, focus, active nav ---- */
+  --accent: #4f46e5;
+  --accent-strong: #4338ca; /* hover / pressed */
+  --accent-soft: rgba(79, 70, 229, 0.08);
+  --accent-text: #4338ca; /* accent used as text on a surface */
+  --on-accent: #ffffff;
+
+  /* ---- Status: only for signed changes and statuses, never plain totals ---- */
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --success-line: #bbf7d0;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --warning-line: #fde68a;
+  --danger: #dc2626;
+  --danger-text: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+  --on-danger: #ffffff;
+  --neutral: #52525b;
+  --neutral-soft: #f4f4f5;
+  --neutral-line: #e4e4e7;
+
+  /* Legacy names, mapped onto the system above. */
+  --expense: var(--danger);
+  --expense-strong: #b91c1c;
+  --expense-soft: var(--danger-soft);
+  --on-expense: var(--on-danger);
+  --gold: var(--warning);
+  --gold-soft: var(--warning-soft);
+  --pos: var(--success);
+  --neg: var(--danger-text);
+
+  /* Focus: one ring everywhere. */
+  --focus: var(--accent);
+  --focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.22);
+
+  /* Chart chrome sits one step off the surface so data stays the loud thing. */
+  --chart-grid: rgba(24, 24, 27, 0.06);
+  --chart-axis: rgba(24, 24, 27, 0.14);
+  --chart-ghost: rgba(24, 24, 27, 0.1);
+  --chart-in: #4f46e5;
+  --chart-out: #a1a1aa;
+
+  /* ---- Elevation (subtle) ---- */
+  --shadow-sm: 0 1px 2px rgba(16, 16, 20, 0.04);
+  --shadow-md: 0 1px 2px rgba(16, 16, 20, 0.04), 0 4px 12px -2px rgba(16, 16, 20, 0.06);
+  --shadow-lg: 0 2px 4px rgba(16, 16, 20, 0.04), 0 12px 32px -8px rgba(16, 16, 20, 0.14);
+  --shadow-overlay: 0 16px 48px -12px rgba(16, 16, 20, 0.28), 0 0 0 1px rgba(16, 16, 20, 0.04);
+  --shadow: var(--shadow-md);
+  --scrim: rgba(9, 9, 11, 0.4);
+
+  /* ---- Radii ---- */
+  --radius-6: 6px; /* badges, small chips, checkbox-sized things */
+  --radius-8: 8px; /* buttons, inputs, menu items */
+  --radius-12: 12px; /* cards, dialogs, sheets */
+  --radius-full: 999px; /* only avatars, count badges and dots */
+  --radius-sm: var(--radius-8);
+  --radius: var(--radius-12);
+  --radius-lg: var(--radius-12);
+
+  /* ---- Spacing: 8px scale (with 4 and 12 for tight spots) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---- Type ---- */
+  --font-sans: var(--font-ledger, "Instrument Sans"), "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-kpi: 26px;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --tracking-tight: -0.011em;
+  --tracking-title: -0.02em;
+
+  /* ---- Controls & layout ---- */
+  --control-h: 36px;
+  --control-h-sm: 32px;
+  --tap: 44px;
+  --sidebar-w: 240px;
+  --sidebar-rail: 64px;
+  --content-max: 1200px;
+  --page-pad: 32px;
+
+  --ease: cubic-bezier(0.32, 0.72, 0, 1);
+  --fast: 120ms var(--ease);
+  --med: 220ms var(--ease);}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-layout="ledger"]:not([data-theme="light"]) {
+  color-scheme: dark;
+  --bg: #0a0a0b;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --surface-3: #1f1f23;
+  --ink: #f4f4f5;
+  --ink-2: #d4d4d8;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --line: #232327;
+  --line-strong: #323238;
+  --accent: #6366f1;
+  --accent-strong: #4f46e5;
+  --accent-soft: rgba(129, 140, 248, 0.14);
+  --accent-text: #a5b4fc;
+  --on-accent: #ffffff;
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.1);
+  --success-line: rgba(74, 222, 128, 0.25);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.1);
+  --warning-line: rgba(251, 191, 36, 0.25);
+  --danger: #ef4444;
+  --danger-text: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.1);
+  --danger-line: rgba(248, 113, 113, 0.25);
+  --on-danger: #ffffff;
+  --neutral: #a1a1aa;
+  --neutral-soft: rgba(161, 161, 170, 0.12);
+  --neutral-line: rgba(161, 161, 170, 0.22);
+  --expense-strong: #f87171;
+  --focus: #818cf8;
+  --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.3);
+  --chart-grid: rgba(244, 244, 245, 0.06);
+  --chart-axis: rgba(244, 244, 245, 0.14);
+  --chart-ghost: rgba(244, 244, 245, 0.1);
+  --chart-in: #818cf8;
+  --chart-out: #52525b;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+  --shadow-overlay: 0 16px 48px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --scrim: rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-layout="ledger"][data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0a0b;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --surface-3: #1f1f23;
+  --ink: #f4f4f5;
+  --ink-2: #d4d4d8;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --line: #232327;
+  --line-strong: #323238;
+  --accent: #6366f1;
+  --accent-strong: #4f46e5;
+  --accent-soft: rgba(129, 140, 248, 0.14);
+  --accent-text: #a5b4fc;
+  --on-accent: #ffffff;
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.1);
+  --success-line: rgba(74, 222, 128, 0.25);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.1);
+  --warning-line: rgba(251, 191, 36, 0.25);
+  --danger: #ef4444;
+  --danger-text: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.1);
+  --danger-line: rgba(248, 113, 113, 0.25);
+  --on-danger: #ffffff;
+  --neutral: #a1a1aa;
+  --neutral-soft: rgba(161, 161, 170, 0.12);
+  --neutral-line: rgba(161, 161, 170, 0.22);
+  --expense-strong: #f87171;
+  --focus: #818cf8;
+  --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.3);
+  --chart-grid: rgba(244, 244, 245, 0.06);
+  --chart-axis: rgba(244, 244, 245, 0.14);
+  --chart-ghost: rgba(244, 244, 245, 0.1);
+  --chart-in: #818cf8;
+  --chart-out: #52525b;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+  --shadow-overlay: 0 16px 48px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --scrim: rgba(0, 0, 0, 0.6);}
+
+:root[data-layout="ledger"][data-accent="indigo"] {
+  --accent: #4f46e5;
+  --accent-strong: #4338ca;
+  --accent-soft: rgba(79, 70, 229, 0.08);
+  --accent-text: #4338ca;
+  --focus: #4f46e5;
+  --focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.22);
+  --chart-in: #4f46e5;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-layout="ledger"][data-accent="indigo"]:not([data-theme="light"]) {
+    --accent: #6366f1;
+    --accent-strong: #4f46e5;
+    --accent-soft: rgba(129, 140, 248, 0.14);
+    --accent-text: #a5b4fc;
+    --focus: #a5b4fc;
+    --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.3);
+    --chart-in: #a5b4fc;
+  }
+}
+
+:root[data-layout="ledger"][data-accent="indigo"][data-theme="dark"] {
+  --accent: #6366f1;
+  --accent-strong: #4f46e5;
+  --accent-soft: rgba(129, 140, 248, 0.14);
+  --accent-text: #a5b4fc;
+  --focus: #a5b4fc;
+  --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.3);
+  --chart-in: #a5b4fc;
+}
+
+:root[data-layout="ledger"][data-accent="blue"] {
+  --accent: #2563eb;
+  --accent-strong: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, 0.08);
+  --accent-text: #1d4ed8;
+  --focus: #2563eb;
+  --focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.22);
+  --chart-in: #2563eb;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-layout="ledger"][data-accent="blue"]:not([data-theme="light"]) {
+    --accent: #3b82f6;
+    --accent-strong: #2563eb;
+    --accent-soft: rgba(96, 165, 250, 0.14);
+    --accent-text: #93c5fd;
+    --focus: #93c5fd;
+    --focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.3);
+    --chart-in: #93c5fd;
+  }
+}
+
+:root[data-layout="ledger"][data-accent="blue"][data-theme="dark"] {
+  --accent: #3b82f6;
+  --accent-strong: #2563eb;
+  --accent-soft: rgba(96, 165, 250, 0.14);
+  --accent-text: #93c5fd;
+  --focus: #93c5fd;
+  --focus-ring: 0 0 0 3px rgba(96, 165, 250, 0.3);
+  --chart-in: #93c5fd;
+}
+
+:root[data-layout="ledger"][data-accent="green"] {
+  --accent: #15803d;
+  --accent-strong: #166534;
+  --accent-soft: rgba(21, 128, 61, 0.08);
+  --accent-text: #166534;
+  --focus: #15803d;
+  --focus-ring: 0 0 0 3px rgba(21, 128, 61, 0.22);
+  --chart-in: #15803d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-layout="ledger"][data-accent="green"]:not([data-theme="light"]) {
+    --accent: #22c55e;
+    --accent-strong: #16a34a;
+    --accent-soft: rgba(74, 222, 128, 0.14);
+    --accent-text: #86efac;
+    --focus: #86efac;
+    --focus-ring: 0 0 0 3px rgba(74, 222, 128, 0.3);
+    --chart-in: #86efac;
+  }
+}
+
+:root[data-layout="ledger"][data-accent="green"][data-theme="dark"] {
+  --accent: #22c55e;
+  --accent-strong: #16a34a;
+  --accent-soft: rgba(74, 222, 128, 0.14);
+  --accent-text: #86efac;
+  --focus: #86efac;
+  --focus-ring: 0 0 0 3px rgba(74, 222, 128, 0.3);
+  --chart-in: #86efac;
+}
+
+:root[data-layout="ledger"][data-accent="violet"] {
+  --accent: #7c3aed;
+  --accent-strong: #6d28d9;
+  --accent-soft: rgba(124, 58, 237, 0.08);
+  --accent-text: #6d28d9;
+  --focus: #7c3aed;
+  --focus-ring: 0 0 0 3px rgba(124, 58, 237, 0.22);
+  --chart-in: #7c3aed;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-layout="ledger"][data-accent="violet"]:not([data-theme="light"]) {
+    --accent: #8b5cf6;
+    --accent-strong: #7c3aed;
+    --accent-soft: rgba(167, 139, 250, 0.14);
+    --accent-text: #c4b5fd;
+    --focus: #c4b5fd;
+    --focus-ring: 0 0 0 3px rgba(167, 139, 250, 0.3);
+    --chart-in: #c4b5fd;
+  }
+}
+
+:root[data-layout="ledger"][data-accent="violet"][data-theme="dark"] {
+  --accent: #8b5cf6;
+  --accent-strong: #7c3aed;
+  --accent-soft: rgba(167, 139, 250, 0.14);
+  --accent-text: #c4b5fd;
+  --focus: #c4b5fd;
+  --focus-ring: 0 0 0 3px rgba(167, 139, 250, 0.3);
+  --chart-in: #c4b5fd;
+}
+
+:root[data-layout="ledger"][data-accent="orange"] {
+  --accent: #c2410c;
+  --accent-strong: #9a3412;
+  --accent-soft: rgba(194, 65, 12, 0.08);
+  --accent-text: #9a3412;
+  --focus: #c2410c;
+  --focus-ring: 0 0 0 3px rgba(194, 65, 12, 0.22);
+  --chart-in: #c2410c;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-layout="ledger"][data-accent="orange"]:not([data-theme="light"]) {
+    --accent: #f97316;
+    --accent-strong: #ea580c;
+    --accent-soft: rgba(251, 146, 60, 0.14);
+    --accent-text: #fdba74;
+    --focus: #fdba74;
+    --focus-ring: 0 0 0 3px rgba(251, 146, 60, 0.3);
+    --chart-in: #fdba74;
+  }
+}
+
+:root[data-layout="ledger"][data-accent="orange"][data-theme="dark"] {
+  --accent: #f97316;
+  --accent-strong: #ea580c;
+  --accent-soft: rgba(251, 146, 60, 0.14);
+  --accent-text: #fdba74;
+  --focus: #fdba74;
+  --focus-ring: 0 0 0 3px rgba(251, 146, 60, 0.3);
+  --chart-in: #fdba74;
+}
+
+:root[data-layout="ledger"][data-accent="rose"] {
+  --accent: #e11d48;
+  --accent-strong: #be123c;
+  --accent-soft: rgba(225, 29, 72, 0.08);
+  --accent-text: #be123c;
+  --focus: #e11d48;
+  --focus-ring: 0 0 0 3px rgba(225, 29, 72, 0.22);
+  --chart-in: #e11d48;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-layout="ledger"][data-accent="rose"]:not([data-theme="light"]) {
+    --accent: #f43f5e;
+    --accent-strong: #e11d48;
+    --accent-soft: rgba(251, 113, 133, 0.14);
+    --accent-text: #fda4af;
+    --focus: #fda4af;
+    --focus-ring: 0 0 0 3px rgba(251, 113, 133, 0.3);
+    --chart-in: #fda4af;
+  }
+}
+
+:root[data-layout="ledger"][data-accent="rose"][data-theme="dark"] {
+  --accent: #f43f5e;
+  --accent-strong: #e11d48;
+  --accent-soft: rgba(251, 113, 133, 0.14);
+  --accent-text: #fda4af;
+  --focus: #fda4af;
+  --focus-ring: 0 0 0 3px rgba(251, 113, 133, 0.3);
+  --chart-in: #fda4af;
+}
+
+@media (max-width: 720px) {
+  :root[data-layout="ledger"] {
+    --control-h: 44px;
+    --control-h-sm: 40px;
+    --page-pad: 16px;
+  }
+}
+
+:root[data-layout="ledger"] body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:root[data-layout="ledger"] h1,
+:root[data-layout="ledger"] h2,
+:root[data-layout="ledger"] h3 {
+  font-family: var(--font-sans);
+  letter-spacing: var(--tracking-title);
+}
+
+:root[data-layout="ledger"] .num {
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+}
+
+:root[data-layout="ledger"] :focus-visible {
+  outline-color: var(--focus);
+}
