@@ -15,6 +15,9 @@ import {
 import { createPortal } from "react-dom";
 import { downloadHref, isPlainClick, pdfPageScale, viewKindFromContentType, viewKindOf, type ViewKind } from "@/lib/file-view";
 import styles from "./file-viewer.module.css";
+import iconBtn from "./ui/IconButton.module.css";
+import { IconDownload } from "./icons";
+import { IconEye } from "./file-icons";
 
 /**
  * Every receipt, repair photo, lease and message attachment opens here, on
@@ -109,11 +112,14 @@ export function FileLink({
   className,
   title,
   children,
+  tip,
   "aria-label": ariaLabel,
 }: OpenFileRequest & {
   className?: string;
   title?: string;
   children: ReactNode;
+  /** A short CSS tooltip (IconButton's `.tip` style reads data-tip). */
+  tip?: string;
   "aria-label"?: string;
 }) {
   const open = useOpenFile();
@@ -125,6 +131,7 @@ export function FileLink({
       className={className}
       title={title}
       aria-label={ariaLabel}
+      data-tip={tip}
       onClick={(e: MouseEvent<HTMLAnchorElement>) => {
         if (!open || !isPlainClick(e)) return;
         e.preventDefault();
@@ -136,32 +143,68 @@ export function FileLink({
   );
 }
 
+const iconCls = (tooltip: "top" | "bottom", extra = "") =>
+  `${iconBtn.btn} ${iconBtn.tip} ${tooltip === "top" ? iconBtn.tipTop : ""} ${styles.fileIcon} ${extra}`;
+
 /**
- * View and Download, side by side, for a file row or a thumbnail. View opens
- * the in-app viewer (a real link underneath, like FileLink); Download fetches
- * the same file with ?download=1, so it is saved rather than shown. Both are
- * at least 44px tall so they can be hit with a thumb.
+ * Download as an icon button with a tooltip: the same file with ?download=1,
+ * so it is saved rather than shown, with the download attribute kept for the
+ * browsers that honour it. Accessible name "Download <name>".
  */
-export function FileActions({ url, name, mime, className }: OpenFileRequest & { className?: string }) {
+export function DownloadButton({
+  url,
+  name,
+  className = "",
+  tooltip = "bottom",
+}: {
+  url: string;
+  name?: string;
+  className?: string;
+  tooltip?: "top" | "bottom";
+}) {
+  return (
+    <a
+      className={iconCls(tooltip, className)}
+      href={downloadHref(url)}
+      download={name || true}
+      aria-label={`Download ${name || "file"}`}
+      data-tip="Download"
+    >
+      <IconDownload size={18} />
+    </a>
+  );
+}
+
+/**
+ * View and Download, side by side, for a file row or a thumbnail: two icon
+ * buttons with tooltips, 44px on a phone (--control-h). View opens the in-app
+ * viewer (a real link underneath, like FileLink); Download fetches the same
+ * file with ?download=1. Accessible names "View <name>" / "Download <name>".
+ */
+export function FileActions({
+  url,
+  name,
+  mime,
+  className,
+  tooltip = "bottom",
+}: OpenFileRequest & { className?: string; tooltip?: "top" | "bottom" }) {
   const label = name || "file";
   return (
     <span className={`${styles.fileActions}${className ? ` ${className}` : ""}`}>
-      <FileLink url={url} name={name} mime={mime} className={styles.fileBtn} aria-label={`View ${label}`}>
-        View
+      <FileLink url={url} name={name} mime={mime} className={iconCls(tooltip)} aria-label={`View ${label}`} tip="View">
+        <IconEye size={18} />
       </FileLink>
-      <a className={styles.fileBtn} href={downloadHref(url)} download={name || true} aria-label={`Download ${label}`}>
-        Download
-      </a>
+      <DownloadButton url={url} name={name} tooltip={tooltip} />
     </span>
   );
 }
 
-/** A thumbnail (or any preview) with View / Download underneath it. */
+/** A thumbnail (or any preview) with View / Download icon buttons underneath it. */
 export function ThumbWithActions({ url, name, mime, children }: OpenFileRequest & { children: ReactNode }) {
   return (
     <span className={styles.thumbWithActions}>
       {children}
-      <FileActions url={url} name={name} mime={mime} />
+      <FileActions url={url} name={name} mime={mime} className={styles.thumbActions} />
     </span>
   );
 }
