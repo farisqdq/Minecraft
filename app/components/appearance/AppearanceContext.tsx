@@ -57,18 +57,33 @@ export function AppearanceProvider({
     async (patch: Partial<Appearance>) => {
       const before = latest.current;
       const next = { ...before, ...patch };
+      latest.current = next;
       setAppearance(next);
       applyToDocument(next);
+      let ok = false;
       try {
         const res = await fetch(endpoint, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(patch),
         });
-        return res.ok;
+        ok = res.ok;
       } catch {
-        return false;
+        ok = false;
       }
+      if (!ok) {
+        // Not saved: put back just the fields this change touched, so the
+        // screen never shows a choice the account doesn't hold.
+        const undo: Partial<Appearance> = {};
+        for (const key of Object.keys(patch) as (keyof Appearance)[]) {
+          (undo as Record<string, unknown>)[key] = before[key];
+        }
+        const reverted = { ...latest.current, ...undo };
+        latest.current = reverted;
+        setAppearance(reverted);
+        applyToDocument(reverted);
+      }
+      return ok;
     },
     [endpoint]
   );

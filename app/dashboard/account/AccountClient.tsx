@@ -177,6 +177,11 @@ export default function AccountClient({
     >
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
+      <p className={styles.helpText} style={{ marginTop: 0 }}>
+        Layout, light or dark, and accent colour — just for you:{" "}
+        <Link href="/dashboard/settings/appearance">Settings › Appearance</Link>
+      </p>
+
       <section className={styles.block}>
         <div className={styles.blockHead}>
           <h2>Notifications on this device</h2>

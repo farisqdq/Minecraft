@@ -82,3 +82,44 @@ export function htmlAttributes(a: Appearance): Record<string, string> {
     ...(a.accent ? { "data-accent": a.accent } : {}),
   };
 }
+
+/** Each new layout's accent when the person hasn't picked one (Classic keeps its green). */
+export const LAYOUT_DEFAULT_ACCENT: Record<Exclude<UiLayout, "classic">, UiAccent> = {
+  command: "indigo",
+  ledger: "blue",
+  board: "violet",
+};
+
+/** Page backgrounds, for the browser/OS chrome (viewport theme-color). */
+const PAGE_BG = {
+  classic: { light: "#f4f1e9", dark: "#131109" },
+  neutral: { light: "#f7f7f8", dark: "#0a0a0b" },
+} as const;
+
+/**
+ * The viewport theme-color entries for a person's choice: the page's own
+ * background, so the status bar blends in. "Match my device" gives one per
+ * scheme (Classic's is exactly what the app always sent); a forced mode gives
+ * that mode's colour whatever the device says.
+ */
+export function themeColors(a: Appearance): { media?: string; color: string }[] {
+  const bg = a.layout === "classic" ? PAGE_BG.classic : PAGE_BG.neutral;
+  if (a.theme === "light") return [{ color: bg.light }];
+  if (a.theme === "dark") return [{ color: bg.dark }];
+  return [
+    { media: "(prefers-color-scheme: light)", color: bg.light },
+    { media: "(prefers-color-scheme: dark)", color: bg.dark },
+  ];
+}
+
+/** Tenants and owners choose only a mode; their portals always have the Classic look. */
+export function portalAppearance(row: { uiTheme?: string | null } | null | undefined): Appearance {
+  return { layout: "classic", theme: isTheme(row?.uiTheme) ? row!.uiTheme : "system", accent: null };
+}
+
+/** A posted portal change: just { theme }, checked. Null when invalid. */
+export function parsePortalThemePatch(body: unknown): UiTheme | null {
+  if (!body || typeof body !== "object") return null;
+  const t = (body as Record<string, unknown>).theme;
+  return isTheme(t) ? t : null;
+}
