@@ -23,6 +23,8 @@ import {
   IconLogOut,
   IconMessage,
   IconMore,
+  IconKey,
+  IconSettings,
   IconShield,
   IconSliders,
   IconUser,
@@ -60,8 +62,9 @@ function secondary(admin: boolean): NavItem[] {
     { href: "/dashboard/reminders", label: "Reminders", Icon: IconBell },
     { href: "/dashboard/backup", label: "Backup", Icon: IconArchive },
     { href: "/dashboard/export", label: "Export", Icon: IconDownload },
-    ...(admin ? [{ href: "/dashboard/admin", label: "Admin", Icon: IconSliders }] : []),
+    ...(admin ? [{ href: "/dashboard/admin", label: "Admin", Icon: IconKey }] : []),
     { href: "/dashboard/account", label: "Account & security", Icon: IconShield },
+    { href: "/dashboard/settings", label: "Settings", Icon: IconSettings },
   ];
 }
 

@@ -24,6 +24,7 @@ import {
   IconMessage,
   IconMore,
   IconShield,
+  IconSettings,
   IconSliders,
   IconUsers,
   IconWrench,
@@ -171,8 +172,8 @@ export default function BoardShell({ title, titleAction, actions, back, userLabe
               items={settings}
               label="Settings"
               align="start"
-              icon={IconSliders}
-              trigger={<IconSliders size={20} />}
+              icon={IconSettings}
+              trigger={<IconSettings size={20} />}
               triggerClassName={`${styles.railLink} ${settingsOn ? styles.on : ""}`}
               menuClassName={styles.railMenu}
             />

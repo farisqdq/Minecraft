@@ -30,7 +30,7 @@ import {
   IconReceipt,
   IconShield,
   IconSidebar,
-  IconSliders,
+  IconSettings,
   IconUser,
   IconUsers,
   IconWrench,
@@ -272,7 +272,7 @@ export default function CommandShell({ title, titleAction, actions, back, userLa
               triggerClassName={`${styles.navLink} ${onSettings ? styles.on : ""}`}
               trigger={
                 <>
-                  <IconSliders size={18} className={styles.navIcon} />
+                  <IconSettings size={18} className={styles.navIcon} />
                   <span className={styles.navLabel}>Settings</span>
                 </>
               }
