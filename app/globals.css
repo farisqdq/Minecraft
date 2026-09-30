@@ -1,3 +1,31 @@
+/* ==========================================================================
+   Design tokens — the ONE place colours, type, radii and elevation live.
+
+   Every person picks a layout, a mode and an accent (Settings > Appearance);
+   the server writes them onto <html> as data-layout / data-theme /
+   data-accent before the first paint, and everything below keys off those.
+
+   CLASSIC (data-layout="classic", or no attribute at all) is the original
+   app: its values are exactly what production has always rendered. With
+   data-theme="system" (the default) it follows the device as it always did;
+   "light" and "dark" force one or the other. Its accent is its own green
+   unless the person picks a swatch.
+
+   COMMAND / LEDGER / BOARD share a neutral system (zinc greys, near-black
+   dark surfaces, one accent, 8px controls) and differ only in typeface and
+   default accent.
+
+   Selector weights are chosen so the order below is the whole story:
+     classic light  :root                                  (0,1,0)
+     classic dark   :root:not([data-theme=light]) in media  (0,2,0)
+                    :root[data-theme=dark]                  (0,2,0)
+     neutral light  :root:is(<new layouts>)                 (0,2,0) later, wins
+     neutral dark   … :not([data-theme=light]) / [data-theme=dark]  (0,3,0)
+     accent choice  :root[data-accent=…]                    (0,2,0) last
+   An accent only picks from --pal-* swatch variables, which each mode
+   defines, so one accent rule serves light and dark alike.
+   ========================================================================== */
+
 :root {
   --bg: #f4f1e9;
   --surface: #ffffff;
@@ -39,10 +67,103 @@
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --fast: 120ms var(--ease);
   --med: 220ms var(--ease);
+
+  /* Classic's typefaces and shapes, named so the shared page modules can
+     read them and the new layouts can swap them. Values = what the modules
+     used to hard-code. */
+  --font-body: "Inter", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
+  --font-num: "IBM Plex Mono", ui-monospace, monospace;
+  --font-sans: var(--font-body);
+  --radius-pill: 999px; /* pill buttons and chips; 8px in the new layouts */
+  --radius-chip: 999px; /* small tags and status chips; 6px in the new layouts */
+  --radius-full: 999px; /* things that are round in every layout: dots, avatars */
+  --focus: var(--gold);
+  --link: var(--gold);
+  --link-soft: var(--gold-soft);
+  /* Paid, collected, money in: Classic's green whatever accent is picked. */
+  --good: var(--pal-classic);
+  --good-soft: var(--pal-classic-soft);
+  --on-good: var(--pal-classic-on);
+  --accent-text: var(--accent);
+  --scrim: rgba(24, 20, 14, 0.42);
+  --viewer-bg: #0f0e0b;
+  --viewer-ink: #f2eee6;
+  --viewer-ink-soft: rgba(242, 238, 230, 0.75);
+  --viewer-bar: rgba(15, 14, 11, 0.92);
+
+  /* Layout-independent scales (only the new layouts read them). */
+  --radius-6: 6px;
+  --radius-8: 8px;
+  --radius-12: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-kpi: 26px;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --tracking-tight: -0.011em;
+  --tracking-title: -0.02em;
+  --control-h: 36px;
+  --control-h-sm: 32px;
+  --tap: 44px;
+  --sidebar-w: 240px;
+  --sidebar-rail: 64px;
+  --content-max: 1400px;
+  --page-pad: 32px;
+
+  /* Accent swatches, light. Each mode redefines them; [data-accent] picks one. */
+  --pal-classic: #2f6844; /* Classic's own green, for the Appearance page's swatch */
+  --pal-classic-soft: rgba(47, 104, 68, 0.1);
+  --pal-classic-on: #ffffff;
+  --pal-indigo: #4f46e5;
+  --pal-indigo-strong: #4338ca;
+  --pal-indigo-soft: rgba(79, 70, 229, 0.09);
+  --pal-indigo-text: #4338ca;
+  --pal-indigo-on: #ffffff;
+  --pal-blue: #2563eb;
+  --pal-blue-strong: #1d4ed8;
+  --pal-blue-soft: rgba(37, 99, 235, 0.09);
+  --pal-blue-text: #1d4ed8;
+  --pal-blue-on: #ffffff;
+  --pal-green: #047857;
+  --pal-green-strong: #065f46;
+  --pal-green-soft: rgba(4, 120, 87, 0.09);
+  --pal-green-text: #047857;
+  --pal-green-on: #ffffff;
+  --pal-violet: #7c3aed;
+  --pal-violet-strong: #6d28d9;
+  --pal-violet-soft: rgba(124, 58, 237, 0.09);
+  --pal-violet-text: #6d28d9;
+  --pal-violet-on: #ffffff;
+  --pal-orange: #c2410c;
+  --pal-orange-strong: #9a3412;
+  --pal-orange-soft: rgba(194, 65, 12, 0.09);
+  --pal-orange-text: #c2410c;
+  --pal-orange-on: #ffffff;
+  --pal-rose: #e11d48;
+  --pal-rose-strong: #be123c;
+  --pal-rose-soft: rgba(225, 29, 72, 0.09);
+  --pal-rose-text: #be123c;
+  --pal-rose-on: #ffffff;
 }
 
+/* Classic dark: the device asks for it (unless the person forced light)… */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #131109;
     --surface: #1d1a13;
     --surface-2: #252118;
@@ -71,8 +192,361 @@
     --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px -10px rgba(0, 0, 0, 0.6);
     --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 18px 40px -16px rgba(0, 0, 0, 0.7);
     --shadow-overlay: 0 24px 64px -20px rgba(0, 0, 0, 0.8);
+
+    --pal-classic: #5fb383;
+    --pal-classic-soft: rgba(95, 179, 131, 0.14);
+    --pal-classic-on: #0d1f16;
+    --pal-indigo: #4f46e5;
+    --pal-indigo-strong: #6366f1;
+    --pal-indigo-soft: rgba(129, 140, 248, 0.14);
+    --pal-indigo-text: #a5b4fc;
+    --pal-indigo-on: #ffffff;
+    --pal-blue: #2563eb;
+    --pal-blue-strong: #3b82f6;
+    --pal-blue-soft: rgba(96, 165, 250, 0.14);
+    --pal-blue-text: #93c5fd;
+    --pal-blue-on: #ffffff;
+    --pal-green: #34d399;
+    --pal-green-strong: #6ee7b7;
+    --pal-green-soft: rgba(52, 211, 153, 0.14);
+    --pal-green-text: #6ee7b7;
+    --pal-green-on: #052e1f;
+    --pal-violet: #7c3aed;
+    --pal-violet-strong: #8b5cf6;
+    --pal-violet-soft: rgba(167, 139, 250, 0.14);
+    --pal-violet-text: #c4b5fd;
+    --pal-violet-on: #ffffff;
+    --pal-orange: #fb923c;
+    --pal-orange-strong: #fdba74;
+    --pal-orange-soft: rgba(251, 146, 60, 0.14);
+    --pal-orange-text: #fdba74;
+    --pal-orange-on: #2a1003;
+    --pal-rose: #e11d48;
+    --pal-rose-strong: #f43f5e;
+    --pal-rose-soft: rgba(251, 113, 133, 0.14);
+    --pal-rose-text: #fda4af;
+    --pal-rose-on: #ffffff;
   }
 }
+
+/* …or the person forced dark on a light device. Same values as above. */
+:root[data-theme="dark"] {
+  --bg: #131109;
+  --surface: #1d1a13;
+  --surface-2: #252118;
+  --surface-3: #2c2719;
+  --ink: #f0ebdf;
+  --ink-2: #c8c1b0;
+  --muted: #a49b85;
+  --line: rgba(237, 232, 220, 0.12);
+  --line-strong: rgba(237, 232, 220, 0.24);
+  --accent: #5fb383;
+  --accent-strong: #7cc79a;
+  --accent-soft: rgba(95, 179, 131, 0.14);
+  --expense: #e58868;
+  --expense-strong: #f0a389;
+  --on-accent: #0d1f16;
+  --on-expense: #2a0f07;
+  --expense-soft: rgba(229, 136, 104, 0.14);
+  --gold: #dcb45c;
+  --gold-soft: rgba(220, 180, 92, 0.16);
+
+  --chart-grid: rgba(237, 232, 220, 0.08);
+  --chart-axis: rgba(237, 232, 220, 0.18);
+  --chart-ghost: rgba(237, 232, 220, 0.16);
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px -10px rgba(0, 0, 0, 0.6);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 18px 40px -16px rgba(0, 0, 0, 0.7);
+  --shadow-overlay: 0 24px 64px -20px rgba(0, 0, 0, 0.8);
+
+  --pal-classic: #5fb383;
+  --pal-classic-soft: rgba(95, 179, 131, 0.14);
+  --pal-classic-on: #0d1f16;
+  --pal-indigo: #4f46e5;
+  --pal-indigo-strong: #6366f1;
+  --pal-indigo-soft: rgba(129, 140, 248, 0.14);
+  --pal-indigo-text: #a5b4fc;
+  --pal-indigo-on: #ffffff;
+  --pal-blue: #2563eb;
+  --pal-blue-strong: #3b82f6;
+  --pal-blue-soft: rgba(96, 165, 250, 0.14);
+  --pal-blue-text: #93c5fd;
+  --pal-blue-on: #ffffff;
+  --pal-green: #34d399;
+  --pal-green-strong: #6ee7b7;
+  --pal-green-soft: rgba(52, 211, 153, 0.14);
+  --pal-green-text: #6ee7b7;
+  --pal-green-on: #052e1f;
+  --pal-violet: #7c3aed;
+  --pal-violet-strong: #8b5cf6;
+  --pal-violet-soft: rgba(167, 139, 250, 0.14);
+  --pal-violet-text: #c4b5fd;
+  --pal-violet-on: #ffffff;
+  --pal-orange: #fb923c;
+  --pal-orange-strong: #fdba74;
+  --pal-orange-soft: rgba(251, 146, 60, 0.14);
+  --pal-orange-text: #fdba74;
+  --pal-orange-on: #2a1003;
+  --pal-rose: #e11d48;
+  --pal-rose-strong: #f43f5e;
+  --pal-rose-soft: rgba(251, 113, 133, 0.14);
+  --pal-rose-text: #fda4af;
+  --pal-rose-on: #ffffff;
+}
+
+/* ---------- The new layouts: neutral system, light ---------- */
+:root:is([data-layout="command"], [data-layout="ledger"], [data-layout="board"]) {
+  color-scheme: light;
+
+  --gray-0: #ffffff;
+  --gray-50: #fafafa;
+  --gray-100: #f4f4f5;
+  --gray-150: #ececee;
+  --gray-200: #e4e4e7;
+  --gray-300: #d4d4d8;
+  --gray-400: #a1a1aa;
+  --gray-500: #71717a;
+  --gray-600: #52525b;
+  --gray-700: #3f3f46;
+  --gray-800: #27272a;
+  --gray-900: #18181b;
+  --gray-950: #09090b;
+
+  --bg: #f7f7f8;
+  --surface: #ffffff;
+  --surface-2: #fafafa;
+  --surface-3: #f4f4f5;
+  --ink: #18181b;
+  --ink-2: #3f3f46;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
+
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --success-line: #bbf7d0;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --warning-line: #fde68a;
+  --danger: #dc2626;
+  --danger-text: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+  --on-danger: #ffffff;
+  --neutral: #52525b;
+  --neutral-soft: #f4f4f5;
+  --neutral-line: #e4e4e7;
+
+  /* Classic's names, mapped onto the system above so every shared page
+     module renders in these layouts without knowing about them. */
+  --expense: var(--danger);
+  --expense-strong: #b91c1c;
+  --expense-soft: var(--danger-soft);
+  --on-expense: var(--on-danger);
+  --gold: var(--warning);
+  --gold-soft: var(--warning-soft);
+  --pos: var(--success);
+  --neg: var(--danger-text);
+
+  --focus: var(--accent);
+  --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
+  --link: var(--accent-text);
+  --link-soft: var(--accent-soft);
+  --good: var(--success);
+  --good-soft: var(--success-soft);
+  --on-good: #ffffff;
+
+  --chart-grid: rgba(24, 24, 27, 0.06);
+  --chart-axis: rgba(24, 24, 27, 0.14);
+  --chart-ghost: rgba(24, 24, 27, 0.1);
+  --chart-in: var(--accent);
+  --chart-out: #a1a1aa;
+
+  --shadow-sm: 0 1px 2px rgba(16, 16, 20, 0.04);
+  --shadow-md: 0 1px 2px rgba(16, 16, 20, 0.04), 0 4px 12px -2px rgba(16, 16, 20, 0.06);
+  --shadow-lg: 0 2px 4px rgba(16, 16, 20, 0.04), 0 12px 32px -8px rgba(16, 16, 20, 0.14);
+  --shadow-overlay: 0 16px 48px -12px rgba(16, 16, 20, 0.28), 0 0 0 1px rgba(16, 16, 20, 0.04);
+  --shadow: var(--shadow-md);
+  --scrim: rgba(9, 9, 11, 0.4);
+
+  --radius-sm: var(--radius-8);
+  --radius: var(--radius-12);
+  --radius-lg: var(--radius-12);
+  --radius-pill: var(--radius-8);
+  --radius-chip: var(--radius-6);
+
+  --font-body: var(--font-sans);
+  --font-display: var(--font-sans);
+  --font-num: var(--font-sans);
+
+  --viewer-bg: #0a0a0b;
+  --viewer-ink: #f4f4f5;
+  --viewer-ink-soft: rgba(244, 244, 245, 0.72);
+  --viewer-bar: rgba(10, 10, 11, 0.92);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:is([data-layout="command"], [data-layout="ledger"], [data-layout="board"]):not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0a0a0b;
+    --surface: #111113;
+    --surface-2: #18181b;
+    --surface-3: #1f1f23;
+    --ink: #f4f4f5;
+    --ink-2: #d4d4d8;
+    --muted: #a1a1aa;
+    --faint: #71717a;
+    --line: #232327;
+    --line-strong: #323238;
+    --success: #4ade80;
+    --success-soft: rgba(74, 222, 128, 0.1);
+    --success-line: rgba(74, 222, 128, 0.25);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.1);
+    --warning-line: rgba(251, 191, 36, 0.25);
+    --danger: #ef4444;
+    --danger-text: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.1);
+    --danger-line: rgba(248, 113, 113, 0.25);
+    --on-danger: #ffffff;
+    --neutral: #a1a1aa;
+    --neutral-soft: rgba(161, 161, 170, 0.12);
+    --neutral-line: rgba(161, 161, 170, 0.22);
+    --on-good: #052e16;
+    --expense-strong: #f87171;
+    --chart-grid: rgba(244, 244, 245, 0.06);
+    --chart-axis: rgba(244, 244, 245, 0.14);
+    --chart-ghost: rgba(244, 244, 245, 0.1);
+    --chart-out: #52525b;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+    --shadow-overlay: 0 16px 48px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --scrim: rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root:is([data-layout="command"], [data-layout="ledger"], [data-layout="board"])[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0a0b;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --surface-3: #1f1f23;
+  --ink: #f4f4f5;
+  --ink-2: #d4d4d8;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --line: #232327;
+  --line-strong: #323238;
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.1);
+  --success-line: rgba(74, 222, 128, 0.25);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.1);
+  --warning-line: rgba(251, 191, 36, 0.25);
+  --danger: #ef4444;
+  --danger-text: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.1);
+  --danger-line: rgba(248, 113, 113, 0.25);
+  --on-danger: #ffffff;
+  --neutral: #a1a1aa;
+  --neutral-soft: rgba(161, 161, 170, 0.12);
+  --neutral-line: rgba(161, 161, 170, 0.22);
+  --on-good: #052e16;
+  --expense-strong: #f87171;
+  --chart-grid: rgba(244, 244, 245, 0.06);
+  --chart-axis: rgba(244, 244, 245, 0.14);
+  --chart-ghost: rgba(244, 244, 245, 0.1);
+  --chart-out: #52525b;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+  --shadow-overlay: 0 16px 48px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --scrim: rgba(0, 0, 0, 0.6);
+}
+
+/* Phones: every control is a full thumb's height, pages get 16px gutters. */
+@media (max-width: 720px) {
+  :root:is([data-layout="command"], [data-layout="ledger"], [data-layout="board"]) {
+    --control-h: 44px;
+    --control-h-sm: 40px;
+    --page-pad: 16px;
+  }
+}
+
+/* Each new layout's typeface (self-hosted by next/font, see app/layout.tsx)
+   and default accent. */
+:root[data-layout="command"] {
+  --font-sans: var(--font-geist), "Geist", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --accent: var(--pal-indigo);
+  --accent-strong: var(--pal-indigo-strong);
+  --accent-soft: var(--pal-indigo-soft);
+  --accent-text: var(--pal-indigo-text);
+  --on-accent: var(--pal-indigo-on);
+}
+:root[data-layout="ledger"] {
+  --font-sans: var(--font-instrument), "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --accent: var(--pal-blue);
+  --accent-strong: var(--pal-blue-strong);
+  --accent-soft: var(--pal-blue-soft);
+  --accent-text: var(--pal-blue-text);
+  --on-accent: var(--pal-blue-on);
+}
+:root[data-layout="board"] {
+  --font-sans: var(--font-manrope), "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --accent: var(--pal-violet);
+  --accent-strong: var(--pal-violet-strong);
+  --accent-soft: var(--pal-violet-soft);
+  --accent-text: var(--pal-violet-text);
+  --on-accent: var(--pal-violet-on);
+}
+
+/* The person's accent choice, in any layout (Classic included). */
+:root[data-accent="indigo"] {
+  --accent: var(--pal-indigo);
+  --accent-strong: var(--pal-indigo-strong);
+  --accent-soft: var(--pal-indigo-soft);
+  --accent-text: var(--pal-indigo-text);
+  --on-accent: var(--pal-indigo-on);
+}
+:root[data-accent="blue"] {
+  --accent: var(--pal-blue);
+  --accent-strong: var(--pal-blue-strong);
+  --accent-soft: var(--pal-blue-soft);
+  --accent-text: var(--pal-blue-text);
+  --on-accent: var(--pal-blue-on);
+}
+:root[data-accent="green"] {
+  --accent: var(--pal-green);
+  --accent-strong: var(--pal-green-strong);
+  --accent-soft: var(--pal-green-soft);
+  --accent-text: var(--pal-green-text);
+  --on-accent: var(--pal-green-on);
+}
+:root[data-accent="violet"] {
+  --accent: var(--pal-violet);
+  --accent-strong: var(--pal-violet-strong);
+  --accent-soft: var(--pal-violet-soft);
+  --accent-text: var(--pal-violet-text);
+  --on-accent: var(--pal-violet-on);
+}
+:root[data-accent="orange"] {
+  --accent: var(--pal-orange);
+  --accent-strong: var(--pal-orange-strong);
+  --accent-soft: var(--pal-orange-soft);
+  --accent-text: var(--pal-orange-text);
+  --on-accent: var(--pal-orange-on);
+}
+:root[data-accent="rose"] {
+  --accent: var(--pal-rose);
+  --accent-strong: var(--pal-rose-strong);
+  --accent-soft: var(--pal-rose-soft);
+  --accent-text: var(--pal-rose-text);
+  --on-accent: var(--pal-rose-on);
+}
+
 
 @media (prefers-reduced-motion: reduce) {
   *,
@@ -85,7 +559,7 @@
 }
 
 :focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -103,20 +577,37 @@ body {
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-body);
 }
 
 h1,
 h2,
 h3 {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-display);
   text-wrap: balance;
   margin: 0;
 }
 
 .num {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
   font-variant-numeric: tabular-nums;
+}
+
+/* The new layouts set numbers in the body face, so figures still line up
+   in columns everywhere without a monospace. */
+:root:is([data-layout="command"], [data-layout="ledger"], [data-layout="board"]) body {
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+:where(:root:is([data-layout="command"], [data-layout="ledger"], [data-layout="board"])) :is(h1, h2, h3) {
+  letter-spacing: var(--tracking-tight);
+}
+:root:is([data-layout="command"], [data-layout="ledger"], [data-layout="board"]) ::placeholder {
+  color: var(--faint);
+}
+:root:is([data-layout="command"], [data-layout="ledger"], [data-layout="board"]) ::selection {
+  background: var(--accent-soft);
 }
 
 a {
@@ -169,7 +660,7 @@ button {
   color: var(--on-accent);
   display: grid;
   place-items: center;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
   font-size: 21px;
   font-weight: 600;
   box-shadow: var(--shadow);
@@ -239,7 +730,7 @@ button {
 
 .field input:focus,
 .field input:focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
   background: var(--surface);
 }
@@ -302,7 +793,7 @@ button {
   color: var(--ink);
 }
 .authNote a {
-  color: var(--gold);
+  color: var(--link);
   font-weight: 600;
 }
 
@@ -323,7 +814,7 @@ button {
 }
 
 .authFoot a {
-  color: var(--gold);
+  color: var(--link);
   font-weight: 600;
   text-decoration: none;
 }

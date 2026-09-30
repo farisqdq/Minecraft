@@ -31,7 +31,7 @@
 }
 
 .chip {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink-2);
@@ -60,8 +60,8 @@
 }
 
 .chipAdd:hover {
-  border-color: var(--gold);
-  color: var(--gold);
+  border-color: var(--link);
+  color: var(--link);
 }
 
 .inlineForm {
@@ -75,7 +75,7 @@
   font-family: inherit;
   font-size: 13.5px;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink);
@@ -83,7 +83,7 @@
 }
 
 .inlineForm input:focus {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -122,7 +122,7 @@
 }
 
 .monthLabel {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 16px;
   font-weight: 600;
   min-width: 132px;
@@ -188,7 +188,7 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   background: var(--gold-soft);
   color: var(--gold);
   vertical-align: middle;
@@ -315,7 +315,7 @@
 }
 
 .linkCell:hover {
-  color: var(--gold);
+  color: var(--link);
   text-decoration: underline;
 }
 
@@ -404,11 +404,11 @@
 }
 
 .proofAdd:hover {
-  color: var(--gold);
+  color: var(--link);
 }
 
 .joinCode {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -420,7 +420,7 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   background: var(--gold-soft);
   color: var(--gold);
 }
@@ -451,8 +451,8 @@
 
 .successBar {
   margin-top: 18px;
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
+  background: var(--good-soft);
+  border: 1px solid var(--good);
   border-radius: var(--radius);
   padding: 10px 14px;
   font-size: 13.5px;
@@ -490,7 +490,7 @@
 }
 
 .dangerTitle {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 16px;
   font-weight: 600;
   color: var(--expense);
@@ -594,7 +594,7 @@
 
 .propCard .name,
 .tenantCard .name {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
@@ -617,7 +617,7 @@
   color: var(--muted);
 }
 .propRow .v.pos {
-  color: var(--accent);
+  color: var(--good);
 }
 .propRow .v.neg {
   color: var(--expense);
@@ -637,7 +637,7 @@
   transition: width 0.3s ease;
 }
 .bar > span.barFull {
-  background: var(--accent);
+  background: var(--good);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -684,9 +684,9 @@
   transition: border-color var(--fast), color var(--fast), background var(--fast);
 }
 .addCard:hover {
-  border-color: var(--gold);
-  color: var(--gold);
-  background: var(--gold-soft);
+  border-color: var(--link);
+  color: var(--link);
+  background: var(--link-soft);
 }
 
 .btn {
@@ -832,8 +832,8 @@
   transition: background var(--fast), color var(--fast);
 }
 .typeToggle button.active.rent {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--good-soft);
+  color: var(--good);
 }
 .typeToggle button.active.expense {
   background: var(--expense-soft);
@@ -878,7 +878,7 @@
 }
 .field input:focus,
 .field select:focus {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -1032,7 +1032,7 @@
   white-space: nowrap;
 }
 .ledger td.amt.pos {
-  color: var(--accent);
+  color: var(--good);
 }
 .ledger td.amt.neg {
   color: var(--expense);
@@ -1042,11 +1042,11 @@
   font-size: 11px;
   font-weight: 600;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
 }
 .tag.rent {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--good-soft);
+  color: var(--good);
 }
 .tag.expense {
   background: var(--expense-soft);
@@ -1115,7 +1115,7 @@ tr:hover .rowDel {
 }
 
 .kpiValue.pos {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .kpiValue.neg {
@@ -1141,7 +1141,7 @@ tr:hover .rowDel {
 }
 
 .delta.good {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .delta.bad {
@@ -1210,7 +1210,7 @@ tr:hover .rowDel {
 }
 
 .bigBar > span.barFull {
-  background: var(--accent);
+  background: var(--good);
 }
 
 .collectMeta {
@@ -1299,7 +1299,7 @@ tr:hover .rowDel {
   font-size: 11.5px;
   font-weight: 600;
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   vertical-align: middle;
 }
 
@@ -1314,8 +1314,8 @@ tr:hover .rowDel {
 }
 
 .pill.paid {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--good-soft);
+  color: var(--good);
 }
 
 .pill.vacant {
@@ -1329,8 +1329,8 @@ tr:hover .rowDel {
   gap: 10px;
   padding: 16px;
   border-radius: var(--radius);
-  background: var(--accent-soft);
-  border: 1px solid color-mix(in srgb, var(--accent) 34%, transparent);
+  background: var(--good-soft);
+  border: 1px solid color-mix(in srgb, var(--good) 34%, transparent);
   font-size: 13.5px;
   color: var(--ink);
 }
@@ -1339,8 +1339,8 @@ tr:hover .rowDel {
   width: 22px;
   height: 22px;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--good);
+  color: var(--on-good);
   display: grid;
   place-items: center;
   font-size: 13px;
@@ -1383,7 +1383,7 @@ tr:hover .rowDel {
 }
 
 .figureValue.pos {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .figureValue.neg {
@@ -1420,7 +1420,7 @@ tr:hover .rowDel {
     height: 48px;
     padding: 0 20px;
     border: none;
-    border-radius: 999px;
+    border-radius: var(--radius-pill);
     background: var(--accent);
     color: var(--on-accent);
     font-size: 14.5px;
@@ -1646,9 +1646,9 @@ tr:hover .rowDel {
   font-size: 11.5px;
   font-weight: 600;
   letter-spacing: 0.02em;
-  color: var(--accent);
-  background: var(--accent-soft);
-  border-radius: 999px;
+  color: var(--good);
+  background: var(--good-soft);
+  border-radius: var(--radius-chip);
   padding: 3px 9px;
   flex: none;
 }
@@ -1656,7 +1656,7 @@ tr:hover .rowDel {
 /* The code itself is the thing being read off a screen and typed on a phone,
    so it gets the monospace treatment and room to breathe. */
 .portalCode {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.06em;
@@ -1681,7 +1681,7 @@ tr:hover .rowDel {
   padding: 4px 2px;
   font-size: 12.5px;
   font-weight: 600;
-  color: var(--gold);
+  color: var(--link);
   flex: none;
 }
 
@@ -1737,7 +1737,7 @@ tr:hover .rowDel {
   justify-content: center;
   min-height: 34px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink);
@@ -1772,7 +1772,7 @@ tr:hover .rowDel {
 .periodToggle {
   display: inline-flex;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   overflow: hidden;
   background: var(--surface);
   flex: none;
@@ -1808,7 +1808,7 @@ tr:hover .rowDel {
   font-family: inherit;
   font-size: 13px;
   padding: 6px 28px 6px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
@@ -2047,7 +2047,7 @@ tr:hover .rowDel {
   grid-row: 1;
   justify-self: end;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
@@ -2232,7 +2232,7 @@ tr:hover .rowDel {
 }
 
 .replyRow input:focus {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
   background: var(--surface);
 }
@@ -2241,7 +2241,7 @@ tr:hover .rowDel {
   display: inline-block;
   margin-left: 7px;
   padding: 2px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   background: var(--expense-soft);
   color: var(--expense);
   font-size: 10.5px;
@@ -2288,7 +2288,7 @@ tr:hover .rowDel {
    colours a figure that has no other class on it, so they need to stand
    alone too — same colours, lower specificity, nothing else changes. */
 .pos {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .neg {
@@ -2545,7 +2545,7 @@ tr:hover .rowDel {
   font-family: inherit;
   font-size: 13.5px;
   padding: 7px 12px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink);
@@ -2555,7 +2555,7 @@ tr:hover .rowDel {
 }
 
 .vendorSearch:focus {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 
@@ -2642,7 +2642,7 @@ tr:hover .rowDel {
 }
 
 .docMain:hover .docTitle {
-  color: var(--gold);
+  color: var(--link);
   text-decoration: underline;
 }
 
@@ -2662,7 +2662,7 @@ tr:hover .rowDel {
   font-weight: 600;
   color: var(--muted);
   padding: 2px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   background: var(--surface-3);
   white-space: nowrap;
 }
@@ -2759,7 +2759,7 @@ tr:hover .rowDel {
   box-shadow: inset 3px 0 0 var(--gold);
 }
 .calDay.cal_paid {
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--good);
 }
 
 .calToday .calNum {
@@ -2792,7 +2792,7 @@ tr:hover .rowDel {
 .calIn {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--good);
   max-width: 100%;
   overflow: hidden;
   white-space: nowrap;
@@ -2879,7 +2879,7 @@ tr:hover .rowDel {
 }
 
 .calItemName:hover {
-  color: var(--gold);
+  color: var(--link);
 }
 
 .calItemSub {
@@ -2955,7 +2955,7 @@ tr:hover .rowDel {
 
 .secretKey,
 .backupCodes code {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
   font-size: 14px;
   letter-spacing: 0.04em;
   overflow-wrap: anywhere;
@@ -3197,7 +3197,7 @@ tr:hover .rowDel {
   min-width: 0;
 }
 .moLines input:focus {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
 }
 .moRentLabel {
@@ -3333,8 +3333,8 @@ tr:hover .rowDel {
 @keyframes spotlight {
   0%,
   60% {
-    box-shadow: 0 0 0 3px var(--gold);
-    border-color: var(--gold);
+    box-shadow: 0 0 0 3px var(--focus);
+    border-color: var(--focus);
   }
   100% {
     box-shadow: none;
@@ -3343,7 +3343,7 @@ tr:hover .rowDel {
 @media (prefers-reduced-motion: reduce) {
   .spotlight {
     animation: none;
-    border-color: var(--gold);
+    border-color: var(--focus);
   }
 }
 
@@ -3363,7 +3363,7 @@ tr:hover .rowDel {
   gap: 4px;
   font-size: 11.5px;
   padding: 2px 8px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   background: var(--surface-3);
   color: var(--ink-2);
   white-space: nowrap;
@@ -3594,7 +3594,7 @@ tr:hover .rowDel {
   right: 4px;
   min-height: 28px;
   padding: 0 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--ink);
   background: var(--ink);
   color: var(--bg);

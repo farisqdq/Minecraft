@@ -15,6 +15,8 @@ import PortalRequests from "./PortalRequests";
 import PortalNotices from "./PortalNotices";
 import PortalPreferences from "./PortalPreferences";
 import PortalMessages from "./PortalMessages";
+import ModeChoice from "../components/appearance/ModeChoice";
+import { getRequestAppearance } from "@/lib/appearance-server";
 import styles from "./portal.module.css";
 
 export const dynamic = "force-dynamic";
@@ -151,6 +153,8 @@ export default async function PortalHome() {
         initial={{ emailReminders: tenant.emailReminders, pushReminders: tenant.pushReminders, phone: tenant.phone ?? "" }}
         email={tenant.email || me.email}
       />
+
+      <ModeChoice initial={(await getRequestAppearance()).theme} endpoint="/api/portal/appearance" className={styles.card} />
 
       {showAccount && account && (() => {
         const owed = account.statement.balance;

@@ -91,7 +91,7 @@
   font-size: 14px;
   font-weight: 600;
   padding: 9px 16px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   cursor: pointer;
   border: 1px solid transparent;
 }

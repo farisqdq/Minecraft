@@ -1,6 +1,51 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { DEFAULT_APPEARANCE, appearanceFrom, htmlAttributes, parseAppearancePatch } from "../lib/appearance.ts";
+import {
+  ACCENTS,
+  DEFAULT_APPEARANCE,
+  LAYOUTS,
+  LAYOUT_DEFAULT_ACCENT,
+  appearanceFrom,
+  htmlAttributes,
+  parseAppearancePatch,
+  parsePortalThemePatch,
+  portalAppearance,
+  themeColors,
+} from "../lib/appearance.ts";
+
+test("theme-color: Classic on its device setting sends exactly what the app always sent", () => {
+  assert.deepEqual(themeColors(DEFAULT_APPEARANCE), [
+    { media: "(prefers-color-scheme: light)", color: "#f4f1e9" },
+    { media: "(prefers-color-scheme: dark)", color: "#131109" },
+  ]);
+});
+
+test("theme-color: a forced mode gives one colour whatever the device says, per layout family", () => {
+  assert.deepEqual(themeColors({ layout: "classic", theme: "dark", accent: null }), [{ color: "#131109" }]);
+  assert.deepEqual(themeColors({ layout: "command", theme: "light", accent: "rose" }), [{ color: "#f7f7f8" }]);
+  assert.deepEqual(themeColors({ layout: "board", theme: "dark", accent: null }), [{ color: "#0a0a0b" }]);
+  assert.equal(themeColors({ layout: "ledger", theme: "system", accent: null }).length, 2);
+});
+
+test("portals: only the mode is theirs; the look is always Classic with its own green", () => {
+  assert.deepEqual(portalAppearance(null), DEFAULT_APPEARANCE);
+  assert.deepEqual(portalAppearance({ uiTheme: "dark" }), { layout: "classic", theme: "dark", accent: null });
+  assert.deepEqual(portalAppearance({ uiTheme: "neon" }), DEFAULT_APPEARANCE);
+});
+
+test("portal change: just a valid theme", () => {
+  assert.equal(parsePortalThemePatch({ theme: "light" }), "light");
+  assert.equal(parsePortalThemePatch({ theme: "sepia" }), null);
+  assert.equal(parsePortalThemePatch({ layout: "command" }), null);
+  assert.equal(parsePortalThemePatch(null), null);
+});
+
+test("every new layout has a default accent that is one of the swatches", () => {
+  for (const l of LAYOUTS) {
+    if (l === "classic") continue;
+    assert.ok(ACCENTS.includes(LAYOUT_DEFAULT_ACCENT[l]));
+  }
+});
 
 test("nobody's view changes until they choose: the default is Classic, device mode, no accent", () => {
   assert.deepEqual(appearanceFrom(null), DEFAULT_APPEARANCE);
