@@ -62,7 +62,6 @@ function secondary(admin: boolean): NavItem[] {
     { href: "/dashboard/export", label: "Export", Icon: IconDownload },
     ...(admin ? [{ href: "/dashboard/admin", label: "Admin", Icon: IconSliders }] : []),
     { href: "/dashboard/account", label: "Account & security", Icon: IconShield },
-    { href: APPEARANCE_HREF, label: "Settings › Appearance", Icon: IconSliders },
   ];
 }
 

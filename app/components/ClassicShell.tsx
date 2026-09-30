@@ -59,12 +59,12 @@ function IconBackup(props: { className?: string }) {
   );
 }
 
-function IconShield(props: { className?: string }) {
+function IconSettings(props: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
       strokeLinejoin="round" aria-hidden="true" {...props}>
-      <path d="M12 3.5 5 6.2v5.3c0 4.3 2.9 7.6 7 9 4.1-1.4 7-4.7 7-9V6.2Z" />
-      <path d="m9 12 2.2 2.2L15.5 10" />
+      <path d="M12.2 2h-.4a2 2 0 0 0-2 2v.2a2 2 0 0 1-1 1.7l-.4.3a2 2 0 0 1-2 0l-.2-.1a2 2 0 0 0-2.7.7l-.2.4a2 2 0 0 0 .7 2.7l.2.1a2 2 0 0 1 1 1.7v.6a2 2 0 0 1-1 1.7l-.2.1a2 2 0 0 0-.7 2.7l.2.4a2 2 0 0 0 2.7.7l.2-.1a2 2 0 0 1 2 0l.4.3a2 2 0 0 1 1 1.7v.2a2 2 0 0 0 2 2h.4a2 2 0 0 0 2-2v-.2a2 2 0 0 1 1-1.7l.4-.3a2 2 0 0 1 2 0l.2.1a2 2 0 0 0 2.7-.7l.2-.4a2 2 0 0 0-.7-2.7l-.2-.1a2 2 0 0 1-1-1.7v-.6a2 2 0 0 1 1-1.7l.2-.1a2 2 0 0 0 .7-2.7l-.2-.4a2 2 0 0 0-2.7-.7l-.2.1a2 2 0 0 1-2 0l-.4-.3a2 2 0 0 1-1-1.7V4a2 2 0 0 0-2-2Z" />
+      <circle cx="12" cy="12" r="3" />
     </svg>
   );
 }
@@ -251,13 +251,17 @@ export default function ClassicShell({
               {userLabel}
             </Link>
           )}
+          {/* Settings lists Account & security, Appearance (where a Classic
+              user can switch layouts) and the rest. */}
           <Link
-            href="/dashboard/account"
-            className={`${styles.accountBtn} ${isOn("/dashboard/account") ? styles.on : ""}`}
-            aria-label="Account & security"
-            title="Account & security"
+            href="/dashboard/settings"
+            className={`${styles.accountBtn} ${
+              isOn("/dashboard/settings") || isOn("/dashboard/account") ? styles.on : ""
+            }`}
+            aria-label="Settings"
+            title="Settings"
           >
-            <IconShield className={styles.accountIcon} />
+            <IconSettings className={styles.accountIcon} />
           </Link>
           <button type="button" className={styles.signOut} onClick={() => signOutTo("/login")}>
             Sign out
