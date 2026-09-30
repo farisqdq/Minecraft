@@ -178,12 +178,8 @@ export default function FilingCabinet({
     <AppShell
       openRepairs={openRepairs}
       userLabel={userLabel}
-      title={property ? "Filing cabinet" : "Filing cabinet"}
-      tagline={
-        property
-          ? `${property.name} · leases, receipts, notices and photos for this property`
-          : "Every lease, certificate, receipt and notice across your properties — scanned from your phone or uploaded."
-      }
+      title="Files"
+      tagline={property ? property.name : undefined}
       back={property ? { href: `/dashboard/properties/${property.id}`, label: property.name } : undefined}
       actions={
         <>

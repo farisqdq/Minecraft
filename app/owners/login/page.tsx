@@ -45,7 +45,7 @@ function OwnerLoginForm() {
           R
         </span>
         <h1>Owner portal</h1>
-        <p>How your properties are doing: rent roll, income and expenses, monthly statements.</p>
+        <p>Sign in to see your properties</p>
       </div>
       <form className="authCard" onSubmit={onSubmit}>
         {error && <div className="authError">{error}</div>}

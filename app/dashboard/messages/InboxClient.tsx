@@ -53,7 +53,6 @@ export default function InboxClient({
   return (
     <AppShell
       title="Messages"
-      tagline="Every conversation with a tenant, newest first. Replies go to their portal, by email and to their phone."
       userLabel={userLabel}
       openRepairs={openRepairs}
       actions={

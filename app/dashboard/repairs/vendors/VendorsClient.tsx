@@ -131,7 +131,6 @@ export default function VendorsClient({
     <AppShell
       openRepairs={openRepairs}
       title="Vendors"
-      tagline="Who you call to fix things — and what you've paid them."
       back={{ href: "/dashboard/repairs", label: "Repairs" }}
       actions={
         <button

@@ -113,7 +113,6 @@ export default function BackupClient({
     <AppShell
       openRepairs={openRepairs}
       title="Backup"
-      tagline="Download a copy of everything, or restore one back into the app."
     >
 
       {error && <div className={styles.errorBar}>{error}</div>}

@@ -221,7 +221,6 @@ export default function OwnersClient({
     <AppShell
       openRepairs={openRepairs}
       title="Property owners"
-      tagline="Give an owner or investor a read-only view of their properties: rent roll, income and expenses, monthly statements, open repairs, and the documents you choose."
       back={{ href: "/dashboard/team", label: "Team" }}
     >
       {companies.length === 0 && (

@@ -93,7 +93,7 @@ export default function ThreadClient({
   return (
     <AppShell
       title={thread.tenantName}
-      tagline={`${place}${tenantActive ? "" : " · moved out"}. Everything from your side is signed as the company, never with your name.`}
+      tagline={`${place}${tenantActive ? "" : " · moved out"}`}
       userLabel={userLabel}
       openRepairs={openRepairs}
       back={{ href: "/dashboard/messages", label: "Messages" }}

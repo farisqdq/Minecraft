@@ -246,7 +246,6 @@ export default function RepairsClient({
   return (
     <AppShell
       title="Repairs"
-      tagline="What your tenants have reported, oldest and most urgent first."
       userLabel={userLabel}
       openRepairs={openCount}
       actions={

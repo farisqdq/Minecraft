@@ -218,7 +218,6 @@ export default function TeamClient({
     <AppShell
       openRepairs={openRepairs}
       title="Team"
-      tagline="Each LLC has its own team — invite partners to one without giving access to the others."
       actions={
         <Link href="/dashboard/owners" className={styles.btn}>
           Property owners

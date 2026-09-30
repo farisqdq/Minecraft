@@ -29,7 +29,6 @@ export default function ExportClient({
     <AppShell
       openRepairs={openRepairs}
       title="Export"
-      tagline="Download a year of one LLC's ledger, ready for taxes."
     >
       {companies.length === 0 ? (
         <div className={styles.firstRun}>

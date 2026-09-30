@@ -71,7 +71,7 @@ function LoginForm() {
           R
         </span>
         <h1>Rent Roll</h1>
-        <p>Rent collected, repairs paid, and the profit left over.</p>
+        <p>Sign in to your account</p>
       </div>
       <form className="authCard" onSubmit={onSubmit}>
         {error && <div className="authError">{error}</div>}

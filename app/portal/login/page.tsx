@@ -49,7 +49,7 @@ function PortalLoginForm() {
           R
         </span>
         <h1>Tenant portal</h1>
-        <p>Your place, your lease, and anything that needs fixing.</p>
+        <p>Sign in to your tenant account</p>
       </div>
       <form className="authCard" onSubmit={onSubmit}>
         {error && <div className="authError">{error}</div>}

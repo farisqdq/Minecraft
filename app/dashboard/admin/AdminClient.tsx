@@ -246,7 +246,6 @@ export default function AdminClient({
     <AppShell
       openRepairs={openRepairs}
       title="Admin"
-      tagline="Every account and LLC on this site, and what's been done to them."
       actions={
         <button type="button" className={`${styles.btn} ${styles.accent}`} onClick={openCreate}>
           + Create an LLC

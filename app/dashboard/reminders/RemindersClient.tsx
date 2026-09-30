@@ -118,7 +118,6 @@ export default function RemindersClient({
       openRepairs={openRepairs}
       userLabel={userLabel}
       title="Reminders"
-      tagline="Rent due, rent late, leases ending, documents expiring and repair updates — sent for you, by email and phone notification."
     >
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
