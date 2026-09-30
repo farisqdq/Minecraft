@@ -18,7 +18,7 @@
 }
 
 .title {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 16px;
   font-weight: 600;
   color: var(--ink);
@@ -99,7 +99,7 @@
   color: var(--muted);
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
 }
 
 .plot {
@@ -247,7 +247,7 @@
   font-weight: 600;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
   white-space: nowrap;
 }
 
@@ -255,7 +255,7 @@
   font-size: 11px;
   color: var(--muted);
   margin-left: 6px;
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-body);
   font-weight: 400;
 }
 
@@ -272,7 +272,7 @@
 }
 
 .tableToggle:hover {
-  color: var(--gold);
+  color: var(--link);
 }
 
 .dataTableWrap {

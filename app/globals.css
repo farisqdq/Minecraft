@@ -76,9 +76,15 @@
   --font-num: "IBM Plex Mono", ui-monospace, monospace;
   --font-sans: var(--font-body);
   --radius-pill: 999px; /* pill buttons and chips; 8px in the new layouts */
+  --radius-chip: 999px; /* small tags and status chips; 6px in the new layouts */
   --radius-full: 999px; /* things that are round in every layout: dots, avatars */
   --focus: var(--gold);
   --link: var(--gold);
+  --link-soft: var(--gold-soft);
+  /* Paid, collected, money in: Classic's green whatever accent is picked. */
+  --good: var(--pal-classic);
+  --good-soft: var(--pal-classic-soft);
+  --on-good: var(--pal-classic-on);
   --accent-text: var(--accent);
   --scrim: rgba(24, 20, 14, 0.42);
   --viewer-bg: #0f0e0b;
@@ -121,6 +127,8 @@
 
   /* Accent swatches, light. Each mode redefines them; [data-accent] picks one. */
   --pal-classic: #2f6844; /* Classic's own green, for the Appearance page's swatch */
+  --pal-classic-soft: rgba(47, 104, 68, 0.1);
+  --pal-classic-on: #ffffff;
   --pal-indigo: #4f46e5;
   --pal-indigo-strong: #4338ca;
   --pal-indigo-soft: rgba(79, 70, 229, 0.09);
@@ -186,6 +194,8 @@
     --shadow-overlay: 0 24px 64px -20px rgba(0, 0, 0, 0.8);
 
     --pal-classic: #5fb383;
+    --pal-classic-soft: rgba(95, 179, 131, 0.14);
+    --pal-classic-on: #0d1f16;
     --pal-indigo: #4f46e5;
     --pal-indigo-strong: #6366f1;
     --pal-indigo-soft: rgba(129, 140, 248, 0.14);
@@ -251,6 +261,8 @@
   --shadow-overlay: 0 24px 64px -20px rgba(0, 0, 0, 0.8);
 
   --pal-classic: #5fb383;
+  --pal-classic-soft: rgba(95, 179, 131, 0.14);
+  --pal-classic-on: #0d1f16;
   --pal-indigo: #4f46e5;
   --pal-indigo-strong: #6366f1;
   --pal-indigo-soft: rgba(129, 140, 248, 0.14);
@@ -341,6 +353,10 @@
   --focus: var(--accent);
   --focus-ring: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent);
   --link: var(--accent-text);
+  --link-soft: var(--accent-soft);
+  --good: var(--success);
+  --good-soft: var(--success-soft);
+  --on-good: #ffffff;
 
   --chart-grid: rgba(24, 24, 27, 0.06);
   --chart-axis: rgba(24, 24, 27, 0.14);
@@ -359,6 +375,7 @@
   --radius: var(--radius-12);
   --radius-lg: var(--radius-12);
   --radius-pill: var(--radius-8);
+  --radius-chip: var(--radius-6);
 
   --font-body: var(--font-sans);
   --font-display: var(--font-sans);
@@ -397,6 +414,7 @@
     --neutral: #a1a1aa;
     --neutral-soft: rgba(161, 161, 170, 0.12);
     --neutral-line: rgba(161, 161, 170, 0.22);
+    --on-good: #052e16;
     --expense-strong: #f87171;
     --chart-grid: rgba(244, 244, 245, 0.06);
     --chart-axis: rgba(244, 244, 245, 0.14);
@@ -436,6 +454,7 @@
   --neutral: #a1a1aa;
   --neutral-soft: rgba(161, 161, 170, 0.12);
   --neutral-line: rgba(161, 161, 170, 0.22);
+  --on-good: #052e16;
   --expense-strong: #f87171;
   --chart-grid: rgba(244, 244, 245, 0.06);
   --chart-axis: rgba(244, 244, 245, 0.14);
