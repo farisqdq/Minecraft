@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { deviceFromUserAgent } from "@/lib/device";
-import { disablePush, enablePush, isStandalone, pushState, sendTestPush, type PushState } from "./push";
+import { disablePush, enablePush, isStandalone, pushState, sendTestPush, syncPush, type PushState } from "./push";
 import styles from "./install.module.css";
 
 /**
@@ -20,8 +20,13 @@ export default function PushSetup({ audience }: { audience: "user" | "tenant" })
     let cancelled = false;
     setIos(deviceFromUserAgent(navigator.userAgent, { touchPoints: navigator.maxTouchPoints }).kind === "ios");
     setStandalone(isStandalone());
-    pushState().then((s) => {
-      if (!cancelled) setState(s);
+    // Not just what the browser says: syncPush re-registers this device with
+    // the server (and renews it if it was made with an old key or had been
+    // removed), so "on" here means the server can actually reach it.
+    syncPush().then((r) => {
+      if (cancelled) return;
+      setState(r.state);
+      if (r.note) setMessage({ tone: r.state === "on" ? "good" : "bad", text: r.note });
     });
     return () => {
       cancelled = true;
@@ -98,12 +103,15 @@ export default function PushSetup({ audience }: { audience: "user" | "tenant" })
           </p>
           <div className={styles.actions}>
             <button type="button" className={styles.primary} onClick={test} disabled={busy}>
-              {busy ? "Sending…" : "Send test notification"}
+              {busy ? "Sending…" : "Send test to my devices"}
             </button>
             <button type="button" className={styles.quiet} onClick={turnOff} disabled={busy}>
               Turn off on this device
             </button>
           </div>
+          <p className={styles.note} style={{ marginTop: 8 }}>
+            The test goes only to devices signed in as you — not to anyone else&apos;s phone, even if they use this site too.
+          </p>
         </>
       )}
 

@@ -969,7 +969,11 @@ model PushSubscription {
   auth            String
   userAgent       String?
   createdAt       DateTime       @default(now())
+  /// The last time the push service accepted a message for this device.
   lastUsedAt      DateTime?
+  /// The most recent failure, in words, with the push service's status code (a23).
+  lastError       String?
+  lastErrorAt     DateTime?
 
   @@index([userId])
   @@index([tenantAccountId])
