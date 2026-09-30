@@ -41,9 +41,7 @@ import { initialsOf } from "@/lib/layouts/command-search";
 import { resolveCompany } from "@/lib/layouts/command-month";
 import CommandSearch from "./CommandSearch";
 import { setLlcSelection, useCommandPage, useLlcSelection, useShellCompanies } from "./context";
-import { geist } from "./font";
 import styles from "./shell.module.css";
-import "./command-tokens-temp.css";
 
 type Badge = "repairs" | "messages";
 type NavItem = {
@@ -147,14 +145,6 @@ export default function CommandShell({ title, titleAction, actions, back, userLa
     });
   }
 
-  // The font's class on <html> too, so dialogs and menus outside the shell's
-  // box get Geist as well.
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.add(geist.variable);
-    return () => root.classList.remove(geist.variable);
-  }, []);
-
   // Unread messages, exactly as the Classic shell fetches them.
   const [unreadMessages, setUnreadMessages] = useState(0);
   const refreshUnread = useCallback(async () => {
@@ -237,7 +227,7 @@ export default function CommandShell({ title, titleAction, actions, back, userLa
   };
 
   return (
-    <div className={`${styles.shell} ${geist.variable} ${rail ? styles.railMode : ""}`}>
+    <div className={`${styles.shell} ${rail ? styles.railMode : ""}`}>
       <aside className={styles.sidebar} aria-label="Sidebar">
         <div className={styles.sideTop}>
           <div className={styles.llcSlot}>
