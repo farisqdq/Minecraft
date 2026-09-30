@@ -1,0 +1,83 @@
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.titles {
+  min-width: 0;
+  flex: 1 1 280px;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin: 0 0 var(--space-2) -4px;
+  padding: 2px 6px 2px 2px;
+  border-radius: var(--radius-6);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  color: var(--muted);
+  text-decoration: none;
+  transition: color var(--fast), background var(--fast);
+}
+
+.back:hover {
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.title {
+  font-size: var(--text-3xl);
+  line-height: 1.25;
+  font-weight: 600;
+  letter-spacing: var(--tracking-title);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.subtitle {
+  margin: var(--space-1) 0 0;
+  font-size: var(--text-base);
+  color: var(--muted);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+@media (max-width: 720px) {
+  .header {
+    margin-bottom: var(--space-4);
+  }
+  .title {
+    font-size: var(--text-2xl);
+  }
+  /* Actions a page hides on a phone must not leave an empty row behind. */
+  .actions:empty {
+    display: none;
+  }
+}
