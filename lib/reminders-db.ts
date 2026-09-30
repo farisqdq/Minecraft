@@ -1,7 +1,8 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { emailConfigured, sendEmail } from "@/lib/email";
-import { pushConfigured, sendPush } from "@/lib/push";
+import { pushConfigured } from "@/lib/push";
+import { sendToDevices, type DeviceResult } from "@/lib/push-db";
 import type { Channel, Notification } from "@/lib/notify";
 import {
   DEFAULT_SETTINGS,
@@ -131,7 +132,15 @@ export async function landlordRecipients(companyId: string): Promise<Recipient[]
 
 export type Outcome = "sent" | "failed" | "skipped" | "duplicate";
 
-export type PushReport = { devices: number; sent: number; failed: number; gone: number; unconfigured: boolean };
+export type PushReport = {
+  devices: number;
+  sent: number;
+  failed: number;
+  gone: number;
+  unconfigured: boolean;
+  /** How each device went, with the push service's status code when one refused. */
+  results: DeviceResult[];
+};
 
 /** Push to every device someone has enabled, dropping the ones the push service says are gone. */
 export async function pushToDevices(
@@ -139,28 +148,17 @@ export async function pushToDevices(
   n: Notification
 ): Promise<PushReport> {
   const where = target.userId ? { userId: target.userId } : target.tenantAccountId ? { tenantAccountId: target.tenantAccountId } : null;
-  if (!where) return { devices: 0, sent: 0, failed: 0, gone: 0, unconfigured: !pushConfigured() };
-  const subs = await prisma.pushSubscription.findMany({ where });
-  const report: PushReport = { devices: subs.length, sent: 0, failed: 0, gone: 0, unconfigured: false };
-  for (const s of subs) {
-    const r = await sendPush(
-      { endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } },
-      { title: n.subject, body: n.short, url: n.url, tag: n.tag }
-    );
-    if (r.sent) {
-      report.sent += 1;
-      await prisma.pushSubscription.update({ where: { id: s.id }, data: { lastUsedAt: new Date() } }).catch(() => undefined);
-    } else if (r.reason === "gone") {
-      report.gone += 1;
-      await prisma.pushSubscription.delete({ where: { id: s.id } }).catch(() => undefined);
-    } else if (r.reason === "unconfigured") {
-      report.unconfigured = true;
-      break;
-    } else {
-      report.failed += 1;
-    }
-  }
-  return report;
+  if (!where) return { devices: 0, sent: 0, failed: 0, gone: 0, unconfigured: !pushConfigured(), results: [] };
+  const subs = await prisma.pushSubscription.findMany({ where, orderBy: { createdAt: "asc" } });
+  const results = await sendToDevices(subs, { title: n.subject, body: n.short, url: n.url, tag: n.tag });
+  return {
+    devices: subs.length,
+    sent: results.filter((r) => r.sent).length,
+    failed: results.filter((r) => !r.sent && !r.removed && !r.unconfigured).length,
+    gone: results.filter((r) => r.removed).length,
+    unconfigured: results.some((r) => r.unconfigured),
+    results,
+  };
 }
 
 const isUniqueClash = (err: unknown) =>
@@ -221,7 +219,10 @@ export async function deliver(opts: {
       detail = `${r.sent} of ${r.devices} device${r.devices === 1 ? "" : "s"}`;
     } else {
       status = "failed";
-      detail = r.gone === r.devices ? "every device had unsubscribed" : "the push service refused it";
+      detail =
+        r.gone === r.devices
+          ? "every device had unsubscribed"
+          : (r.results.find((x) => !x.sent && !x.removed)?.error ?? "the push service refused it");
     }
   }
   await prisma.reminderSent.update({ where: { id: claim.id }, data: { status, detail } });
