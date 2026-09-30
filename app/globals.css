@@ -1,76 +1,250 @@
+/* ==========================================================================
+   Design tokens — the ONE place colours, type, spacing, radii and elevation
+   are defined. Every CSS module reads these; none hard-codes a colour.
+   See app/components/ui/README.md for the rules of use.
+
+   Theme: light by default, dark when the OS asks for it. A `data-theme`
+   attribute on <html> ("light" | "dark") overrides the OS either way, so a
+   toggle can be added later without touching any module.
+
+   The older names (--accent, --expense, --gold, --radius…) are kept as the
+   same tokens they always were, so existing modules keep rendering; new
+   code should prefer the semantic names (--success, --danger, --warning…).
+   ========================================================================== */
+
 :root {
-  --bg: #f4f1e9;
-  --surface: #ffffff;
-  --surface-2: #faf8f3;
-  --surface-3: #f1ede4;
-  --ink: #1e1a14;
-  --ink-2: #4a443a;
-  --muted: #736e5e;
-  --line: rgba(33, 29, 22, 0.1);
-  --line-strong: rgba(33, 29, 22, 0.2);
-  --accent: #2f6844;
-  --accent-strong: #245236;
-  --accent-soft: rgba(47, 104, 68, 0.1);
-  --expense: #a6432d;
-  --expense-strong: #8a3524;
-  /* Text and icons that sit ON a filled accent/expense surface. The dark-mode
-     hues are light, so white on them would fail contrast — these flip. */
+  color-scheme: light;
+
+  /* ---- Neutral scale (zinc: true grey, no brown) ---- */
+  --gray-0: #ffffff;
+  --gray-50: #fafafa;
+  --gray-100: #f4f4f5;
+  --gray-150: #ececee;
+  --gray-200: #e4e4e7;
+  --gray-300: #d4d4d8;
+  --gray-400: #a1a1aa;
+  --gray-500: #71717a;
+  --gray-600: #52525b;
+  --gray-700: #3f3f46;
+  --gray-800: #27272a;
+  --gray-900: #18181b;
+  --gray-950: #09090b;
+
+  /* ---- Surfaces & text ---- */
+  --bg: #f7f7f8; /* the page behind cards */
+  --surface: #ffffff; /* cards, sheets, inputs */
+  --surface-2: #fafafa; /* subtle inset: table header, hover row */
+  --surface-3: #f4f4f5; /* hover fill for quiet controls */
+  --ink: #18181b; /* primary text */
+  --ink-2: #3f3f46; /* secondary text that still needs weight */
+  --muted: #71717a; /* labels, captions, zero amounts */
+  --faint: #a1a1aa; /* placeholders, disabled */
+  --line: #e4e4e7; /* card and table borders */
+  --line-strong: #d4d4d8; /* input borders, dividers that must show */
+
+  /* ---- Brand accent: primary buttons, links, focus, active nav ---- */
+  --accent: #4f46e5;
+  --accent-strong: #4338ca; /* hover / pressed */
+  --accent-soft: rgba(79, 70, 229, 0.08);
+  --accent-text: #4338ca; /* accent used as text on a surface */
   --on-accent: #ffffff;
-  --on-expense: #ffffff;
-  --expense-soft: rgba(166, 67, 45, 0.09);
-  --gold: #b8862e;
-  --gold-soft: rgba(184, 134, 46, 0.13);
+
+  /* ---- Status: only for signed changes and statuses, never plain totals ---- */
+  --success: #15803d;
+  --success-soft: #ecfdf3;
+  --success-line: #bbf7d0;
+  --warning: #b45309;
+  --warning-soft: #fffbeb;
+  --warning-line: #fde68a;
+  --danger: #dc2626;
+  --danger-text: #b91c1c;
+  --danger-soft: #fef2f2;
+  --danger-line: #fecaca;
+  --on-danger: #ffffff;
+  --neutral: #52525b;
+  --neutral-soft: #f4f4f5;
+  --neutral-line: #e4e4e7;
+
+  /* Legacy names, mapped onto the system above. */
+  --expense: var(--danger);
+  --expense-strong: #b91c1c;
+  --expense-soft: var(--danger-soft);
+  --on-expense: var(--on-danger);
+  --gold: var(--warning);
+  --gold-soft: var(--warning-soft);
+  --pos: var(--success);
+  --neg: var(--danger-text);
+
+  /* Focus: one ring everywhere. */
+  --focus: var(--accent);
+  --focus-ring: 0 0 0 3px rgba(79, 70, 229, 0.22);
 
   /* Chart chrome sits one step off the surface so data stays the loud thing. */
-  --chart-grid: rgba(33, 29, 22, 0.08);
-  --chart-axis: rgba(33, 29, 22, 0.16);
-  --chart-ghost: rgba(33, 29, 22, 0.14);
+  --chart-grid: rgba(24, 24, 27, 0.06);
+  --chart-axis: rgba(24, 24, 27, 0.14);
+  --chart-ghost: rgba(24, 24, 27, 0.1);
+  --chart-in: #4f46e5;
+  --chart-out: #a1a1aa;
 
-  /* Elevation: flat cards, lifted panels, floating overlays. */
-  --shadow-sm: 0 1px 2px rgba(33, 29, 22, 0.05);
-  --shadow: 0 1px 2px rgba(33, 29, 22, 0.05), 0 6px 16px -10px rgba(33, 29, 22, 0.16);
-  --shadow-lg: 0 2px 4px rgba(33, 29, 22, 0.06), 0 18px 40px -16px rgba(33, 29, 22, 0.28);
-  --shadow-overlay: 0 24px 64px -20px rgba(33, 29, 22, 0.45);
+  /* ---- Elevation (subtle) ---- */
+  --shadow-sm: 0 1px 2px rgba(16, 16, 20, 0.04);
+  --shadow-md: 0 1px 2px rgba(16, 16, 20, 0.04), 0 4px 12px -2px rgba(16, 16, 20, 0.06);
+  --shadow-lg: 0 2px 4px rgba(16, 16, 20, 0.04), 0 12px 32px -8px rgba(16, 16, 20, 0.14);
+  --shadow-overlay: 0 16px 48px -12px rgba(16, 16, 20, 0.28), 0 0 0 1px rgba(16, 16, 20, 0.04);
+  --shadow: var(--shadow-md);
+  --scrim: rgba(9, 9, 11, 0.4);
 
-  --radius-sm: 8px;
-  --radius: 14px;
-  --radius-lg: 20px;
+  /* ---- Radii ---- */
+  --radius-6: 6px; /* badges, small chips, checkbox-sized things */
+  --radius-8: 8px; /* buttons, inputs, menu items */
+  --radius-12: 12px; /* cards, dialogs, sheets */
+  --radius-full: 999px; /* only avatars, count badges and dots */
+  --radius-sm: var(--radius-8);
+  --radius: var(--radius-12);
+  --radius-lg: var(--radius-12);
+
+  /* ---- Spacing: 8px scale (with 4 and 12 for tight spots) ---- */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-12: 48px;
+  --space-16: 64px;
+
+  /* ---- Type ---- */
+  --font-sans: var(--font-inter), "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --text-xs: 12px;
+  --text-sm: 13px;
+  --text-base: 14px;
+  --text-md: 15px;
+  --text-lg: 16px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+  --text-3xl: 24px;
+  --text-kpi: 26px;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --tracking-tight: -0.011em;
+  --tracking-title: -0.02em;
+
+  /* ---- Controls & layout ---- */
+  --control-h: 36px;
+  --control-h-sm: 32px;
+  --tap: 44px;
+  --sidebar-w: 240px;
+  --sidebar-rail: 64px;
+  --content-max: 1400px;
+  --page-pad: 32px;
 
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --fast: 120ms var(--ease);
   --med: 220ms var(--ease);
 }
 
+/* Dark tokens. Written twice (OS preference, then explicit data-theme)
+   because CSS has no way to share one block between the two selectors. */
 @media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --bg: #0a0a0b;
+    --surface: #111113;
+    --surface-2: #18181b;
+    --surface-3: #1f1f23;
+    --ink: #f4f4f5;
+    --ink-2: #d4d4d8;
+    --muted: #a1a1aa;
+    --faint: #71717a;
+    --line: #232327;
+    --line-strong: #323238;
+    --accent: #6366f1;
+    --accent-strong: #4f46e5;
+    --accent-soft: rgba(129, 140, 248, 0.14);
+    --accent-text: #a5b4fc;
+    --on-accent: #ffffff;
+    --success: #4ade80;
+    --success-soft: rgba(74, 222, 128, 0.1);
+    --success-line: rgba(74, 222, 128, 0.25);
+    --warning: #fbbf24;
+    --warning-soft: rgba(251, 191, 36, 0.1);
+    --warning-line: rgba(251, 191, 36, 0.25);
+    --danger: #ef4444;
+    --danger-text: #f87171;
+    --danger-soft: rgba(248, 113, 113, 0.1);
+    --danger-line: rgba(248, 113, 113, 0.25);
+    --on-danger: #ffffff;
+    --neutral: #a1a1aa;
+    --neutral-soft: rgba(161, 161, 170, 0.12);
+    --neutral-line: rgba(161, 161, 170, 0.22);
+    --expense-strong: #f87171;
+    --focus: #818cf8;
+    --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.3);
+    --chart-grid: rgba(244, 244, 245, 0.06);
+    --chart-axis: rgba(244, 244, 245, 0.14);
+    --chart-ghost: rgba(244, 244, 245, 0.1);
+    --chart-in: #818cf8;
+    --chart-out: #52525b;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+    --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+    --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+    --shadow-overlay: 0 16px 48px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    --scrim: rgba(0, 0, 0, 0.6);
+  }
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #0a0a0b;
+  --surface: #111113;
+  --surface-2: #18181b;
+  --surface-3: #1f1f23;
+  --ink: #f4f4f5;
+  --ink-2: #d4d4d8;
+  --muted: #a1a1aa;
+  --faint: #71717a;
+  --line: #232327;
+  --line-strong: #323238;
+  --accent: #6366f1;
+  --accent-strong: #4f46e5;
+  --accent-soft: rgba(129, 140, 248, 0.14);
+  --accent-text: #a5b4fc;
+  --on-accent: #ffffff;
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.1);
+  --success-line: rgba(74, 222, 128, 0.25);
+  --warning: #fbbf24;
+  --warning-soft: rgba(251, 191, 36, 0.1);
+  --warning-line: rgba(251, 191, 36, 0.25);
+  --danger: #ef4444;
+  --danger-text: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.1);
+  --danger-line: rgba(248, 113, 113, 0.25);
+  --on-danger: #ffffff;
+  --neutral: #a1a1aa;
+  --neutral-soft: rgba(161, 161, 170, 0.12);
+  --neutral-line: rgba(161, 161, 170, 0.22);
+  --expense-strong: #f87171;
+  --focus: #818cf8;
+  --focus-ring: 0 0 0 3px rgba(129, 140, 248, 0.3);
+  --chart-grid: rgba(244, 244, 245, 0.06);
+  --chart-axis: rgba(244, 244, 245, 0.14);
+  --chart-ghost: rgba(244, 244, 245, 0.1);
+  --chart-in: #818cf8;
+  --chart-out: #52525b;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 1px 2px rgba(0, 0, 0, 0.5), 0 4px 12px -2px rgba(0, 0, 0, 0.5);
+  --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 12px 32px -8px rgba(0, 0, 0, 0.7);
+  --shadow-overlay: 0 16px 48px -12px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  --scrim: rgba(0, 0, 0, 0.6);
+}
+
+/* Phones: every control is a full thumb's height, pages get 16px gutters. */
+@media (max-width: 720px) {
   :root {
-    --bg: #131109;
-    --surface: #1d1a13;
-    --surface-2: #252118;
-    --surface-3: #2c2719;
-    --ink: #f0ebdf;
-    --ink-2: #c8c1b0;
-    --muted: #a49b85;
-    --line: rgba(237, 232, 220, 0.12);
-    --line-strong: rgba(237, 232, 220, 0.24);
-    --accent: #5fb383;
-    --accent-strong: #7cc79a;
-    --accent-soft: rgba(95, 179, 131, 0.14);
-    --expense: #e58868;
-    --expense-strong: #f0a389;
-    --on-accent: #0d1f16;
-    --on-expense: #2a0f07;
-    --expense-soft: rgba(229, 136, 104, 0.14);
-    --gold: #dcb45c;
-    --gold-soft: rgba(220, 180, 92, 0.16);
-
-    --chart-grid: rgba(237, 232, 220, 0.08);
-    --chart-axis: rgba(237, 232, 220, 0.18);
-    --chart-ghost: rgba(237, 232, 220, 0.16);
-
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 6px 16px -10px rgba(0, 0, 0, 0.6);
-    --shadow-lg: 0 2px 4px rgba(0, 0, 0, 0.5), 0 18px 40px -16px rgba(0, 0, 0, 0.7);
-    --shadow-overlay: 0 24px 64px -20px rgba(0, 0, 0, 0.8);
+    --control-h: 44px;
+    --control-h-sm: 40px;
+    --page-pad: 16px;
   }
 }
 
@@ -85,7 +259,7 @@
 }
 
 :focus-visible {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -103,19 +277,30 @@ body {
 body {
   background: var(--bg);
   color: var(--ink);
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: 1.5;
+  /* Figures line up in every column and never jitter as they change. */
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 h1,
 h2,
-h3 {
-  font-family: "Fraunces", Georgia, serif;
+h3,
+h4 {
+  font-family: var(--font-sans);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
   text-wrap: balance;
   margin: 0;
 }
 
 .num {
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: inherit;
   font-variant-numeric: tabular-nums;
 }
 
@@ -123,9 +308,23 @@ a {
   color: inherit;
 }
 
-button {
+button,
+input,
+select,
+textarea {
   font-family: inherit;
+}
+
+button {
   cursor: pointer;
+}
+
+::placeholder {
+  color: var(--faint);
+}
+
+::selection {
+  background: var(--accent-soft);
 }
 
 /* ---------- Shared auth page styles ---------- */
@@ -136,20 +335,10 @@ button {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 20px;
-  gap: 24px;
+  padding: var(--space-8) 20px;
+  gap: var(--space-6);
   position: relative;
   overflow: hidden;
-}
-
-/* A soft wash behind the card so the sign-in screen isn't a flat slab. */
-.authPage::before {
-  content: "";
-  position: absolute;
-  inset: -20% -10% auto -10%;
-  height: 60vh;
-  background: radial-gradient(60% 70% at 50% 0%, var(--accent-soft), transparent 70%);
-  pointer-events: none;
 }
 
 .authBrand {
@@ -158,32 +347,31 @@ button {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .authMark {
-  width: 46px;
-  height: 46px;
-  border-radius: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-8);
   background: var(--accent);
   color: var(--on-accent);
   display: grid;
   place-items: center;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
-  font-size: 21px;
-  font-weight: 600;
-  box-shadow: var(--shadow);
+  font-size: 18px;
+  font-weight: 700;
+  box-shadow: var(--shadow-sm);
 }
 
 .authBrand h1 {
-  font-size: 30px;
+  font-size: var(--text-3xl);
   font-weight: 600;
-  letter-spacing: -0.02em;
+  letter-spacing: var(--tracking-title);
 }
 
 .authBrand p {
   color: var(--muted);
-  font-size: 14px;
+  font-size: var(--text-base);
   margin: 4px 0 0;
   max-width: 34ch;
   line-height: 1.55;
@@ -191,80 +379,88 @@ button {
 
 .authCard {
   width: 100%;
-  max-width: 392px;
+  max-width: 400px;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
-  padding: 26px;
+  border-radius: var(--radius-12);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-6);
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--space-4);
   position: relative;
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: 6px;
 }
 
 .field label {
-  font-size: 12.5px;
-  color: var(--muted);
+  font-size: var(--text-sm);
+  color: var(--ink-2);
   font-weight: 500;
 }
 
 .field input {
   font-family: inherit;
-  font-size: 14px;
-  padding: 11px 12px;
-  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  height: var(--control-h);
+  padding: 0 12px;
+  border-radius: var(--radius-8);
   border: 1px solid var(--line-strong);
-  background: var(--surface-2);
+  background: var(--surface);
   color: var(--ink);
   width: 100%;
-  transition: border-color var(--fast), background var(--fast);
+  transition: border-color var(--fast), box-shadow var(--fast);
 }
 
 .fieldHint {
-  font-size: 12px;
+  font-size: var(--text-xs);
   color: var(--muted);
   line-height: 1.4;
 }
 
 .field input:hover {
-  border-color: var(--ink-2);
+  border-color: var(--gray-400);
 }
 
 .field input:focus,
 .field input:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 1px;
-  background: var(--surface);
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: var(--focus-ring);
 }
 
 .btn {
-  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: var(--control-h);
+  border-radius: var(--radius-8);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  padding: 11px 16px;
-  font-size: 14px;
+  padding: 0 14px;
+  font-size: var(--text-base);
   font-weight: 500;
   text-decoration: none;
+  box-shadow: var(--shadow-sm);
   transition: border-color var(--fast), background var(--fast), opacity var(--fast);
 }
 
 .btn:hover {
-  border-color: var(--ink);
+  background: var(--surface-2);
+  border-color: var(--gray-400);
 }
 
 .btn.primary {
   background: var(--accent);
   color: var(--on-accent);
   border-color: var(--accent);
-  font-weight: 600;
+  font-weight: 500;
 }
 
 .btn.primary:hover {
@@ -277,11 +473,17 @@ button {
   cursor: not-allowed;
 }
 
+.btnLink {
+  display: flex;
+  text-align: center;
+  text-decoration: none;
+}
+
 .authNote {
-  color: var(--muted);
-  font-size: 13.5px;
-  line-height: 1.6;
   margin: 0;
+  font-size: var(--text-base);
+  line-height: 1.55;
+  color: var(--ink);
   text-align: center;
 }
 
@@ -289,42 +491,30 @@ button {
   color: var(--ink);
 }
 
-.btnLink {
-  display: block;
-  text-align: center;
-  text-decoration: none;
-}
-
-.authNote {
-  margin: 0;
-  font-size: 14px;
-  line-height: 1.55;
-  color: var(--ink);
-}
 .authNote a {
-  color: var(--gold);
-  font-weight: 600;
+  color: var(--accent-text);
+  font-weight: 500;
 }
 
 .authError {
-  background: var(--expense-soft);
-  border: 1px solid var(--expense);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
   color: var(--ink);
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-8);
   padding: 10px 12px;
-  font-size: 13px;
+  font-size: var(--text-sm);
 }
 
 .authFoot {
   text-align: center;
-  font-size: 13.5px;
+  font-size: var(--text-sm);
   color: var(--muted);
   position: relative;
 }
 
 .authFoot a {
-  color: var(--gold);
-  font-weight: 600;
+  color: var(--accent-text);
+  font-weight: 500;
   text-decoration: none;
 }
 

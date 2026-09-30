@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { Inter } from "next/font/google";
 import Providers from "./providers";
 import "./globals.css";
 
@@ -6,6 +7,11 @@ import "./globals.css";
 // fresh nonce each time (see proxy.ts), and a page built once at deploy time
 // would ship scripts stamped with no nonce at all — which the policy refuses.
 export const dynamic = "force-dynamic";
+
+// One typeface, self-hosted by Next at build time: no third-party request at
+// runtime (font-src 'self' covers it), no flash of a serif. Exposed as a CSS
+// variable that --font-sans in globals.css builds on.
+const inter = Inter({ subsets: ["latin"], variable: "--font-inter", display: "swap" });
 
 export const metadata: Metadata = {
   title: "Rent Roll",
@@ -28,22 +34,14 @@ export const viewport: Viewport = {
   // those only resolve to anything once the viewport covers the notch area.
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f4f1e9" },
-    { media: "(prefers-color-scheme: dark)", color: "#131109" },
+    { media: "(prefers-color-scheme: light)", color: "#f7f7f8" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0b" },
   ],
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
-        />
-      </head>
+    <html lang="en" className={inter.variable}>
       <body>
         <Providers>{children}</Providers>
       </body>
