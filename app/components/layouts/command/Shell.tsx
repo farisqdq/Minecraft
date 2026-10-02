@@ -413,6 +413,14 @@ export default function CommandShell({ title, titleAction, actions, back, userLa
             </div>
             <div className={styles.sheetGroup}>
               <div className={styles.sheetLabel}>Settings</div>
+              {/* The same gear that opens Settings in every layout. */}
+              <Link
+                href="/dashboard/settings"
+                className={`${styles.navLink} ${styles.sheetLink} ${pathname === "/dashboard/settings" ? styles.on : ""}`}
+              >
+                <IconSettings size={18} className={styles.navIcon} />
+                <span className={styles.navLabel}>All settings</span>
+              </Link>
               {settings.map((s) => (
                 <Link
                   key={s.href}

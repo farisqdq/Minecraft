@@ -277,6 +277,15 @@ export default function BoardShell({ title, titleAction, actions, back, userLabe
         </div>
         <div className={styles.sheetHead}>Settings</div>
         <div className={styles.sheetList}>
+          {/* The same gear that opens Settings in every layout. */}
+          <Link
+            href="/dashboard/settings"
+            className={`${styles.sheetRow} ${pathname === "/dashboard/settings" ? styles.sheetOn : ""}`}
+            onClick={() => setMoreOpen(false)}
+          >
+            <IconSettings size={20} />
+            All settings
+          </Link>
           {settings.map(({ href, label, icon: Icon }) => (
             <Link
               key={label}
