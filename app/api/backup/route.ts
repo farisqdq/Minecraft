@@ -24,6 +24,8 @@ type TxnRow = {
   vendor: { name: string } | null;
   loanPayment: { loanId: string; month: string } | null;
   moveOut: { tenantId: string; tenant: { name: string } } | null;
+  bankRef: string | null;
+  bankText: string | null;
 };
 
 /** Position of each of a property's loans in its `loans` list, by id. */
@@ -56,6 +58,11 @@ function serializeTxns(txns: TxnRow[], key: FileKey, loanIndex: LoanIndex, tenan
     // along for anyone reading the file.
     moveOutTenant: t.moveOut ? (tenantIndex.get(t.moveOut.tenantId) ?? null) : null,
     moveOutOf: t.moveOut?.tenant.name ?? "",
+    // Bank import (a24): the statement line it came from, so a restored LLC
+    // still knows which lines it already has, and the bank's words, which
+    // the next import learns payees from.
+    bankRef: t.bankRef ?? "",
+    bankText: t.bankText ?? "",
     // Links to the stored files, not the files themselves — they stay in
     // blob storage and keep working as long as the app does.
     attachments: t.attachments.map((a) => ({

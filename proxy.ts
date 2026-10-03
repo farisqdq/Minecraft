@@ -27,6 +27,7 @@ const LANDLORD_AREA = [
   "/api/companies",
   "/api/documents",
   "/api/export",
+  "/api/import",
   "/api/invites",
   "/api/late-fees",
   "/api/messages",

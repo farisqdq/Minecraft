@@ -1,0 +1,563 @@
+/* Bank statement import. Built on the dashboard's tokens and components;
+   only what's particular to reviewing a statement lives here. */
+
+.companyField {
+  margin-bottom: 16px;
+  max-width: 420px;
+}
+
+/* ---------- Choosing the file ---------- */
+
+.drop {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 190px;
+  padding: 28px 20px;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  cursor: pointer;
+  text-align: center;
+  transition: border-color var(--fast), background var(--fast);
+}
+.drop:hover,
+.dragging {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.drop:focus-within {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+/* Visually hidden, still focusable and announced. */
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  overflow: hidden;
+}
+.dropIcon {
+  width: 34px;
+  height: 34px;
+  color: var(--accent);
+  margin-bottom: 8px;
+}
+.dropTitle {
+  font-weight: 600;
+  font-size: 15.5px;
+  color: var(--ink);
+}
+.dropSub {
+  font-size: 13px;
+  color: var(--muted);
+}
+.fileError {
+  margin: 14px 0 0;
+  padding: 10px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--expense-soft);
+  color: var(--expense-strong);
+  font-size: 13.5px;
+}
+.howTo {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+  margin-top: 18px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--ink-2);
+}
+.howTo p {
+  margin: 0;
+}
+.howTo strong {
+  color: var(--ink);
+}
+@media (max-width: 640px) {
+  .howTo {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+}
+
+/* ---------- The file, and how it was read ---------- */
+
+.fileCard {
+  padding: 16px 18px;
+}
+.fileHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fileName {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.fileName strong {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.fileName span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.fileActions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.inlineSelect {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  max-width: 220px;
+}
+.readAs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 12px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.readAs b {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+.link {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+.link:hover {
+  text-decoration: underline;
+}
+.flip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  color: var(--ink-2);
+  cursor: pointer;
+}
+.skippedLines {
+  margin-top: 10px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.skippedLines summary {
+  cursor: pointer;
+}
+.skippedLines ul {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+
+.picker {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.pickerGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+@media (max-width: 560px) {
+  .pickerGrid {
+    grid-template-columns: 1fr;
+  }
+}
+.sampleWrap {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+}
+.sample {
+  border-collapse: collapse;
+  font-size: 12px;
+  width: 100%;
+}
+.sample th,
+.sample td {
+  padding: 6px 10px;
+  text-align: left;
+  white-space: nowrap;
+  border-bottom: 1px solid var(--line);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sample th {
+  background: var(--surface-3);
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.sample tr:last-child td {
+  border-bottom: none;
+}
+
+.loading {
+  margin: 22px 0 0;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+
+/* ---------- Review ---------- */
+
+.filters {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--fast), color var(--fast), border-color var(--fast);
+}
+.filter:hover {
+  border-color: var(--ink);
+}
+.filterOn,
+.filterOn:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.filterCount {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  opacity: 0.75;
+}
+
+.lines {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(300px, 0.85fr);
+  gap: 10px 20px;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--line);
+}
+.line:first-child {
+  border-top: none;
+}
+.lineMain {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: baseline;
+  min-width: 0;
+}
+.lineDate {
+  font-size: 12.5px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.lineText {
+  min-width: 0;
+}
+.bankText {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  letter-spacing: 0.01em;
+}
+.why {
+  margin-top: 3px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+.why_sure {
+  color: var(--accent);
+}
+.why_guess {
+  color: var(--ink-2);
+}
+.why_touched {
+  color: var(--ink-2);
+}
+.whyLink {
+  font-weight: 600;
+  color: var(--accent);
+  white-space: nowrap;
+}
+.tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+.tagGuess {
+  background: var(--gold-soft);
+  color: var(--gold);
+}
+.lineAmt {
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+.in {
+  color: var(--accent);
+}
+.out {
+  color: var(--expense);
+}
+/* A skipped line steps back; its decision controls stay at full strength. */
+.skipped .lineMain {
+  opacity: 0.6;
+}
+
+.decide {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  min-width: 0;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--surface);
+  flex: none;
+}
+.seg button {
+  border: none;
+  background: none;
+  color: var(--muted);
+  padding: 6px 12px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--fast), color var(--fast);
+}
+.seg button:hover {
+  color: var(--ink);
+}
+.seg button.segOn {
+  background: var(--ink);
+  color: var(--bg);
+}
+.pick,
+.detail {
+  font: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  min-width: 0;
+}
+.pick {
+  flex: 1 1 140px;
+  max-width: 100%;
+}
+.detail {
+  flex: 1 1 120px;
+}
+.pick:focus,
+.detail:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.pickMissing {
+  border-color: var(--gold);
+  background: var(--gold-soft);
+}
+
+.offer {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 10px;
+  padding: 8px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.offer span {
+  flex: 1 1 220px;
+}
+
+.more {
+  display: flex;
+  justify-content: center;
+  margin-top: 14px;
+}
+
+/* The import button stays in reach however long the statement is. */
+.bar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 16px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+  padding: 12px 14px 12px 18px;
+  background: var(--surface);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+.barText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13.5px;
+  color: var(--ink-2);
+  min-width: 0;
+}
+.barText b {
+  font-variant-numeric: tabular-nums;
+}
+.barWarn {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 12.5px;
+  color: var(--gold);
+  text-align: left;
+  cursor: pointer;
+}
+.barWarn:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 860px) {
+  .line {
+    grid-template-columns: 1fr;
+  }
+}
+@media (max-width: 720px) {
+  /* Clear of the phone tab bar. */
+  .bar {
+    bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+  .bar > button {
+    flex: 1 1 100%;
+  }
+  .lineMain {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .lineDate {
+    grid-column: 1 / -1;
+    order: -1;
+  }
+  .bankText {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .flip {
+    margin-left: 0;
+  }
+}
+
+/* ---------- Done ---------- */
+
+.done {
+  text-align: center;
+  padding: 34px 22px 26px;
+}
+.done h2 {
+  margin: 12px 0 6px;
+  font-size: 20px;
+}
+.doneNote {
+  max-width: 520px;
+  margin: 10px auto 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+.doneActions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.doneMark {
+  width: 48px;
+  height: 48px;
+  margin: 0 auto;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+}
+.doneMark svg {
+  width: 26px;
+  height: 26px;
+}
+.doneLine {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin: 0 0 8px;
+  font-size: 14.5px;
+  color: var(--ink-2);
+}

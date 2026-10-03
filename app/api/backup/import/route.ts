@@ -9,6 +9,7 @@ import { normalizeKind } from "@/lib/documents";
 import { acceptBackupFile } from "@/lib/backup-files";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
 import { MAX_AMOUNT } from "@/lib/money";
+import { REF_PATTERN } from "@/lib/bank-csv";
 import { parseAssetInput, type AssetInput } from "@/lib/depreciation";
 import { parseSettings, settingsToRow, type ReminderSettingsDTO } from "@/lib/reminders";
 import { parseLateFeeMode, parsePolicy, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
@@ -49,6 +50,9 @@ type CleanTransaction = {
   moveOutTenant: number | null;
   /** The same by name, which is all backups before v15 carry. */
   moveOutOf: string;
+  /** Bank import (a24): the statement line it came from, and the bank's words. */
+  bankRef: string | null;
+  bankText: string | null;
 };
 type CleanMoveOut = {
   movedOutOn: Date;
@@ -343,6 +347,8 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         category: type === "expense" ? normalizeCategory(t.category) : null,
         attachments,
         vendorName: type === "expense" ? str(t.vendorName, 120) : "",
+        bankRef: typeof t.bankRef === "string" && REF_PATTERN.test(t.bankRef) ? t.bankRef : null,
+        bankText: str(t.bankText, 300) || null,
       });
     }
     return out;
@@ -977,6 +983,8 @@ export async function POST(req: Request) {
             (t.moveOutTenant !== null
               ? moveOutsByPosition.get(t.moveOutTenant)
               : t.moveOutOf && moveOutsByTenant.get(t.moveOutOf)) || null,
+          bankRef: t.bankRef,
+          bankText: t.bankText,
         },
       });
       created.transactions += 1;

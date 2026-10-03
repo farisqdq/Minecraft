@@ -333,6 +333,11 @@ model Transaction {
   // move-out takes it back out and the ledger can't delete it on its own.
   moveOutId          String?
   moveOut            MoveOut?          @relation(fields: [moveOutId], references: [id], onDelete: SetNull)
+  // Bank statement import (a24): the statement line this entry came from,
+  // so the same line is never booked twice, and the bank's words for it,
+  // which the next import learns from. Null on everything typed by hand.
+  bankRef            String?
+  bankText           String?
 
   @@index([propertyId])
   @@index([unitId])
@@ -340,6 +345,7 @@ model Transaction {
   @@index([vendorId])
   @@index([loanPaymentId])
   @@index([moveOutId])
+  @@index([bankRef])
 }
 
 // The end of a tenancy, and what happened to the security deposit.

@@ -557,6 +557,66 @@ from the current month. The property page shows the trail beside the rent
   would throw away the receipt attached to it, which is the one thing worth
   keeping.
 
+## Importing a bank statement
+
+Typing every rent payment and bill in by hand is most of the work of keeping
+books, and the bank already has all of it. **Import from bank** (on the
+overview, or `/dashboard/import`) takes the CSV that any bank or card
+account exports — Chase, Bank of America, Wells Fargo, Capital One and the
+rest each write a different file; the importer finds the header (or works
+without one, as Wells Fargo's has none), the date, description and amount
+columns, signed amounts or separate debit/credit columns, and US date
+formats. If it can't tell, it shows the first lines and asks which column is
+which. A card statement that prints charges as positive has a **Money in is
+shown as negative** switch.
+
+The file is read in the browser. The server sees each line's date, amount
+and description only to suggest what it is, and stores only the lines you
+choose to import — personal spending on the same account stays out of the
+books.
+
+Every line arrives with a suggestion and the reason for it:
+
+- **Your own past choices first.** A payee you filed before is filed the same
+  way ("You filed "LG&E" under Utilities for 12 Oak St on Oct 5"), and is
+  certain once the last two filings agree. The payee is the line without
+  the dates, reference numbers and card digits that change every month, so
+  "LG&E WEB PYMT 093026" and "LG&E WEB PYMT 102826" are the same payee — in
+  any bank's format. A line that names nobody ("MOBILE DEPOSIT", "CHECK
+  1051") is never followed on its words alone: only the same amount again,
+  and only as something to check.
+- **Rent:** a current tenant's full name on the line; their surname and their
+  rent to the cent; or an amount that is exactly one place's rent that month
+  (from the rent history) and nowhere else's.
+- **Expenses:** a recurring bill of exactly that amount not yet logged this
+  period (and linked to it, so the overview stops asking to "Log it"); a
+  vendor from the vendor book; or a category from the words — utilities,
+  insurers, property tax, hardware stores, trades, legal, bank fees.
+
+Three things are suggested as **Skip**, never import, because each would put
+a wrong number in the books: a line **already in the ledger** (the same
+amount within four days, typed in by hand — each ledger entry answers for
+one line, so two identical payments are still two); a **mortgage payment**
+(the loan's payment with or without escrow — record it from the loan so it's
+split into interest, escrow and principal); and a **security deposit** (a
+tenant's deposit amount near the start of their lease — money held isn't
+income). Transfers between your own accounts are skipped too. Anything can
+be overridden.
+
+**Worth a look** filters to the guesses and anything unmatched. Filing a
+line offers to file the other lines from the same payee the same way. The
+bar at the bottom totals what will be imported, and **Import** writes it all
+at once.
+
+Each imported entry keeps the bank's words (`bankText`) — that's what the
+next import learns from — and a stable id for its statement line
+(`bankRef`), so uploading the same file twice, or an export that overlaps
+last month's, never books a line twice; two imports landing at the same
+moment can't either. Imported entries are ordinary ledger entries: edit or
+delete them like any other. Backups carry both fields, so a restored LLC
+still knows which lines it has. The matching is `lib/bank-match.ts`, the CSV
+reading `lib/bank-csv.ts`, both pure and covered by tests.
+
 ## Viewing by month, year, or all time
 
 The dashboard opens on the current month: the totals, the charts, the
@@ -835,6 +895,10 @@ Tenants' portal logins are deliberately **not** in the file. It lands in your
 downloads and gets emailed around, and password hashes have no business in
 it. After a restore you invite them again from their card, and everything
 they reported is already there.
+
+Ledger entries that came from a bank statement keep their statement-line id
+and the bank's description, so a restored LLC won't import those lines again
+and still recognises the payees.
 
 Restoring only ever **adds**. Each LLC in the file comes back as a new LLC you
 own; if the name is already taken, the restored copy is renamed (e.g.

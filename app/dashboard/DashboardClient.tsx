@@ -1535,13 +1535,18 @@ export default function DashboardClient({
       userLabel={userLabel}
       actions={
         companies.length > 0 ? (
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.accent} ${styles.desktopOnly}`}
-            onClick={() => openRecord()}
-          >
-            + Record a transaction
-          </button>
+          <>
+            <Link href="/dashboard/import" className={styles.btn}>
+              Import from bank
+            </Link>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.accent} ${styles.desktopOnly}`}
+              onClick={() => openRecord()}
+            >
+              + Record a transaction
+            </button>
+          </>
         ) : undefined
       }
     >
@@ -2599,7 +2604,12 @@ export default function DashboardClient({
                   {search
                     ? `Nothing matches “${query.trim()}”. Search covers the property, description, note, category, date and amount.`
                     : allTime
-                      ? "No transactions yet — record a rent payment or expense to get started."
+                      ? (
+                        <>
+                          No transactions yet — record a rent payment or expense to get started, or{" "}
+                          <Link href="/dashboard/import">import a statement from your bank</Link>.
+                        </>
+                      )
                       : `Nothing recorded in ${periodLabel} yet.`}
                 </div>
               </div>
