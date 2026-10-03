@@ -541,8 +541,56 @@ paid" would have offered to collect the difference. Instead, each month is
 measured against whatever the rent was *that* month.
 
 Nothing is asked of you: edit the rent as usual and the change is recorded
-from the current month. The property page shows the trail beside the rent
+from the current month (two edits in one month leave one entry, the later).
+A raise agreed ahead of time goes in through **Renew lease**, from the month
+it starts — see *Renewing a lease*. The property page shows the trail beside the rent
 ("since Sep 2026 · $1,450 at first") so you can see what the app is using.
+
+### Renewing a lease
+
+A lease coming up for renewal is in **Needs attention** with a **Renew**
+button; any current tenant's card has **Renew lease** too. The form starts
+from their lease: another year on the end date, and the new rent from the
+month after the current lease ends. **+3%** and **+5%** fill in a raise
+rounded to $5, and the form says what it comes to ("+$75 a month · +$900 a
+year · +5.2%") and the date written notice should go out by — thirty days
+before the new rent starts, with a warning when that date has passed. (Many
+leases and local rules ask for at least that; check yours. Not legal
+advice.)
+
+The point is the rent, which used to have nowhere to go: a raise agreed in
+October for January could only be entered by editing the rent, which
+applies it from the current month — so either the tenant was charged three
+months early or someone had to remember to come back on January 1st. A
+renewal writes the new rent into the rent history **from the month it
+starts**. Every month is read from that history — the overview, late fees,
+statements, the calendar, bank-import matching — so January is charged the
+new rent and December the old, whenever anyone next opens the app. The
+place's current rent (what the property card shows) moves to the new figure
+when its month arrives: the daily job does it, and so does opening the
+overview, a property, the calendar or the owner portal, in case the job
+isn't set up. The property's rent trail shows what's coming ("$1,525 from
+Jan 2027 · since …").
+
+Each renewal is kept. The card shows it — "Renewed to Nov 30, 2027 · $1,525
+from Dec 2026" — with:
+
+- **Letter**: the renewal on letterhead, the old and new end date and rent,
+  when the new rent starts, and lines for both signatures; print it or save
+  it as a PDF.
+- **Send to Alan** (their first name): puts the notice in their Messages thread, which emails
+  and pushes them like any message, and records when — written notice with
+  a date on it.
+- **Undo**: the lease end goes back and the scheduled rent comes off. Only
+  the latest renewal, and only before its rent has started; after that,
+  changing the rent is an edit from the property page. Renewing again
+  replaces a raise that hasn't started; undoing the later renewal puts the
+  earlier one's raise back.
+
+Renewing never changes the lease start, so a tenant's statement starts
+where it always did. A raise from the current month is in force at once, as
+an edit to the rent would be. Backups carry each renewal and whether a rent
+change is still waiting for its month.
 
 ## Recording, correcting, and clearing a month
 

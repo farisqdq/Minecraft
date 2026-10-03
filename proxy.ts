@@ -33,6 +33,7 @@ const LANDLORD_AREA = [
   "/api/messages",
   "/api/properties",
   "/api/recurring",
+  "/api/renewals",
   "/api/requests",
   "/api/search",
   "/api/tenants",

@@ -7,6 +7,8 @@ export type RentChangeDTO = {
   /** The month the amount took effect, as YYYY-MM. */
   effectiveFrom: string;
   amount: number;
+  /** Written ahead of its month by a lease renewal (a25), and not yet today's rent. */
+  scheduled?: boolean;
 };
 
 /**
@@ -96,7 +98,41 @@ export async function recordRentChange(
     });
   }
 
+  // One row per place per month: a second change in the same month
+  // replaces the first rather than tying with it. A raise scheduled for this
+  // month that's overwritten by hand is in force now, so it's applied.
+  const sameMonth = await tx.rentChange.findFirst({
+    where: { propertyId, unitId, effectiveFrom: monthStart(month) },
+    orderBy: { createdAt: "desc" },
+  });
+  if (sameMonth) {
+    await tx.rentChange.update({
+      where: { id: sameMonth.id },
+      data: { amount: to, appliedAt: sameMonth.scheduledAt && !sameMonth.appliedAt ? new Date() : sameMonth.appliedAt },
+    });
+    return;
+  }
   await tx.rentChange.create({
     data: { propertyId, unitId, effectiveFrom: monthStart(month), amount: to, createdById: userId },
   });
+}
+
+/** A rent history row as the pages keep it. */
+export function serializeRentChange(c: {
+  id: string;
+  propertyId: string;
+  unitId: string | null;
+  effectiveFrom: Date;
+  amount: number;
+  scheduledAt?: Date | null;
+  appliedAt?: Date | null;
+}): RentChangeDTO {
+  return {
+    id: c.id,
+    propertyId: c.propertyId,
+    unitId: c.unitId,
+    effectiveFrom: monthKeyOf(c.effectiveFrom),
+    amount: c.amount,
+    scheduled: Boolean(c.scheduledAt && !c.appliedAt),
+  };
 }

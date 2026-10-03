@@ -3,6 +3,7 @@ import { timingSafeEqual } from "node:crypto";
 import { runReminders } from "@/lib/reminders-db";
 import { runOwnerStatements } from "@/lib/owners-db";
 import { runDailyLateFees } from "@/lib/late-fees-db";
+import { applyDueRentChanges } from "@/lib/renewals-db";
 import { siteOrigin } from "@/lib/site";
 
 /**
@@ -28,6 +29,13 @@ export async function GET(req: Request) {
   }
   const now = new Date();
   const origin = siteOrigin(req.url);
+  // Raises renewed ahead of time (a25) become today's rent in their month.
+  // The rent history already charges them from then; this moves the figure
+  // shown as current, before anything below reads it.
+  const rentRaises = await applyDueRentChanges().catch((err) => {
+    console.error("Rent raises", err);
+    return -1;
+  });
   // Late fees first, for every LLC whose policy is on (reminders or not),
   // so a rent-late reminder sent below can mention today's fee.
   const lateFees = await runDailyLateFees(now).catch((err) => {
@@ -41,6 +49,6 @@ export async function GET(req: Request) {
     console.error("Owner statements", err);
     return { error: "failed" };
   });
-  console.log("Reminders", JSON.stringify({ ...report, lateFees, owners }));
-  return NextResponse.json({ ...report, lateFees, owners });
+  console.log("Reminders", JSON.stringify({ ...report, lateFees, owners, rentRaises }));
+  return NextResponse.json({ ...report, lateFees, owners, rentRaises });
 }

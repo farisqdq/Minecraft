@@ -8,7 +8,8 @@ import { blobConfigured } from "@/lib/blob";
 import { fileLink } from "@/lib/file-links";
 import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
-import { monthKeyOf } from "@/lib/rent";
+import { serializeRentChange } from "@/lib/rent";
+import { applyDueRentChanges } from "@/lib/renewals-db";
 import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
 import { waivedLateFeesFor } from "@/lib/late-fee-waivers-db"; // a21
@@ -27,6 +28,8 @@ export default async function DashboardPage() {
     orderBy: { createdAt: "asc" },
   });
   const companyIds = memberships.map((m) => m.companyId);
+  // A raise renewed ahead of time becomes today's rent in its month (a25).
+  await applyDueRentChanges({ property: { companyId: { in: companyIds } } });
 
   const [properties, units, recurring, rentChanges, tenants, transactions, allNotices, openRequests] =
     await Promise.all([
@@ -161,13 +164,7 @@ export default async function DashboardPage() {
         month: r.month,
         active: r.active,
       }))}
-      initialRentChanges={rentChanges.map((c) => ({
-        id: c.id,
-        propertyId: c.propertyId,
-        unitId: c.unitId,
-        effectiveFrom: monthKeyOf(c.effectiveFrom),
-        amount: c.amount,
-      }))}
+      initialRentChanges={rentChanges.map(serializeRentChange)}
       initialTenants={tenants.map(serializeTenant)}
       initialLoans={loans}
       initialDeposits={deposits.map((d) => ({

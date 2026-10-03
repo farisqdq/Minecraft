@@ -14,6 +14,9 @@ import LoansPanel from "../../../components/LoansPanel";
 import DepreciationPanel from "../../../components/DepreciationPanel";
 import type { AssetDTO } from "@/lib/assets-db";
 import { MarkReturnedDialog, MoveOutDialog, MoveOutSummary } from "../../../components/MoveOut";
+import { RenewDialog } from "../../../components/RenewLease"; // lease renewals (a25)
+import type { RenewalDTO } from "@/lib/renewals-db";
+import { monthShort } from "@/lib/renewal";
 import type { MoveOutDTO } from "@/lib/move-outs-db";
 import { vacancyCost, vacantDays, vacantFor } from "@/lib/vacancy";
 import type { LoanDTO } from "@/lib/loans-db";
@@ -138,6 +141,7 @@ export default function PropertyManageClient({
   initialPortal,
   initialRequests,
   unreadMessages = {},
+  initialRenewals = {},
 }: {
   /** Repairs waiting on you, for the nav badge. */
   openRepairs?: number;
@@ -170,6 +174,8 @@ export default function PropertyManageClient({
   initialRequests: RequestDTO[];
   /** Messages from each tenant the team hasn't read, by tenant id. */
   unreadMessages?: Record<string, number>;
+  /** Each tenant's latest lease renewal (a25), by tenant id. */
+  initialRenewals?: Record<string, RenewalDTO>;
 }) {
   const router = useRouter();
 
@@ -533,6 +539,19 @@ export default function PropertyManageClient({
     return () => window.clearTimeout(timer);
   }, []);
   const [movingOut, setMovingOut] = useState<TenantDTO | null>(null);
+  // Lease renewals (a25): the tenant whose renewal form is open, and each
+  // tenant's latest renewal.
+  const [renewing, setRenewing] = useState<TenantDTO | null>(null);
+  const [renewals, setRenewals] = useState<Record<string, RenewalDTO>>(initialRenewals);
+  const [renewalBusy, setRenewalBusy] = useState("");
+  // "Renew" on the overview's lease alert lands here with ?renew=<tenant>.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("renew");
+    const t = id ? initialTenants.find((x) => x.id === id && x.active) : null;
+    if (t) setRenewing(t);
+    // Only on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [returningFor, setReturningFor] = useState("");
   const [statementFor, setStatementFor] = useState<TenantDTO | null>(null);
 
@@ -988,14 +1007,109 @@ export default function PropertyManageClient({
     });
   }
 
+  /** What a place rents for this month — the figure a renewal starts from. */
+  function currentRentAt(unitId: string | null) {
+    const unit = unitId ? units.find((u) => u.id === unitId) : null;
+    return rentForMonth(rentChanges, property.id, unitId, todayKey.slice(0, 7), unit ? unit.monthlyRent : property.monthlyRent);
+  }
+
+  async function sendRenewal(t: TenantDTO, r: RenewalDTO) {
+    setRenewalBusy(r.id);
+    try {
+      const res = await fetch(`/api/renewals/${r.id}/send`, { method: "POST" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        push(data.error || "Couldn't send the notice. Try again.");
+        return;
+      }
+      setRenewals((prev) => ({ ...prev, [t.id]: { ...r, sentAt: data.sentAt } }));
+      push(`Renewal notice sent to ${t.name}’s messages.`);
+    } finally {
+      setRenewalBusy("");
+    }
+  }
+
+  function undoRenewal(t: TenantDTO, r: RenewalDTO) {
+    setConfirming({
+      title: `Undo ${t.name}’s renewal?`,
+      body:
+        r.newRent !== r.previousRent
+          ? `The lease goes back to ending ${r.previousEnd ? formatDay(r.previousEnd) : "with no date"}, and the ${money(r.newRent)} rent from ${monthShort(r.rentFrom)} is taken off.`
+          : `The lease goes back to ending ${r.previousEnd ? formatDay(r.previousEnd) : "with no date"}.`,
+      confirmLabel: "Undo renewal",
+      danger: true,
+      onConfirm: async () => {
+        setRenewalBusy(r.id);
+        try {
+          const res = await fetch(`/api/renewals/${r.id}`, { method: "DELETE" });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) {
+            push(data.error || "Couldn't undo the renewal.");
+            return;
+          }
+          if (data.tenant) setTenants((prev) => prev.map((x) => (x.id === t.id ? data.tenant : x)));
+          setRentChanges((prev) => [
+            ...prev.filter((c) => !(c.propertyId === property.id && (c.unitId ?? null) === (t.unitId ?? null))),
+            ...(data.rentChanges as RentChangeDTO[]),
+          ]);
+          setRenewals((prev) => {
+            const next = { ...prev };
+            delete next[t.id];
+            return next;
+          });
+          push(`${t.name}’s renewal undone.`);
+          router.refresh();
+        } finally {
+          setRenewalBusy("");
+        }
+      },
+    });
+  }
+
+  /** A renewal on a tenant card: what changed, the letter, sending it, undo. */
+  function renewalLine(t: TenantDTO, r: RenewalDTO) {
+    const first = t.name.trim().split(/\s+/)[0] || t.name;
+    const busy = renewalBusy === r.id;
+    return (
+      <div className={styles.renewalLine}>
+        <span>
+          Renewed to <strong>{formatDay(r.newEnd)}</strong>
+          {r.newRent !== r.previousRent && (
+            <>
+              {" · "}
+              <strong className="num">{money(r.newRent)}</strong> from {monthShort(r.rentFrom)}
+            </>
+          )}
+          {r.sentAt && <> · notice sent {formatDay(r.sentAt.slice(0, 10))}</>}
+        </span>
+        <span className={styles.renewalLinks}>
+          <Link href={`/dashboard/renewals/${r.id}`}>Letter</Link>
+          <button type="button" disabled={busy} onClick={() => sendRenewal(t, r)}>
+            {r.sentAt ? "Send again" : `Send to ${first}`}
+          </button>
+          {r.undoable && (
+            <button type="button" disabled={busy} onClick={() => undoRenewal(t, r)}>
+              Undo
+            </button>
+          )}
+        </span>
+      </div>
+    );
+  }
+
   /**
    * The rent trail for a place, newest first. Only rendered when there is
    * one — most properties have never had a change, and an empty history is
    * not worth a line of chrome.
    */
   function RentTrail({ unitId }: { unitId: string | null }) {
-    const history = historyFor(rentChanges, property.id, unitId);
-    if (history.length === 0) return null;
+    const all = historyFor(rentChanges, property.id, unitId);
+    // A raise renewed ahead of time (a25) isn't today's rent yet: it's said
+    // as what's coming, and the trail of what has been starts after it.
+    const thisMonth = todayKey.slice(0, 7);
+    const coming = all.filter((c) => c.effectiveFrom > thisMonth).reverse();
+    const history = all.filter((c) => c.effectiveFrom <= thisMonth);
+    if (history.length === 0 && coming.length === 0) return null;
 
     const asMonth = (key: string) => {
       const [y, m] = key.split("-").map(Number);
@@ -1008,7 +1122,13 @@ export default function PropertyManageClient({
     // starts at "since when" and only names the older amounts.
     return (
       <div className={styles.note}>
-        since {asMonth(history[0].effectiveFrom)}
+        {coming.map((c) => (
+          <span key={c.id} className={styles.rentScheduled}>
+            {money(c.amount)} from {asMonth(c.effectiveFrom)}
+            {history.length > 0 ? " · " : ""}
+          </span>
+        ))}
+        {history.length > 0 && <>since {asMonth(history[0].effectiveFrom)}</>}
         {history.slice(1).map((c) => (
           <span key={c.id}>
             {" · "}
@@ -1380,6 +1500,8 @@ export default function PropertyManageClient({
                     );
                   })()}
 
+                  {t.active && renewals[t.id] && renewalLine(t, renewals[t.id])}
+
                   <div className={styles.propActions}>
                     {/* The commonest reason to be looking at a tenant: they
                         paid. Their unit and name fill themselves in. */}
@@ -1399,6 +1521,15 @@ export default function PropertyManageClient({
                     >
                       Edit
                     </button>
+                    {t.active && (
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                        onClick={() => setRenewing(t)}
+                      >
+                        Renew lease
+                      </button>
+                    )}
                     {t.active ? (
                       <button
                         type="button"
@@ -2421,6 +2552,35 @@ export default function PropertyManageClient({
           </div>
         </form>
       </Modal>
+
+      <RenewDialog
+        tenant={renewing}
+        currentRent={renewing ? currentRentAt(renewing.unitId) : 0}
+        place={renewing ? (renewing.unitId ? `${property.name} — ${unitLabel(renewing.unitId)}` : property.name) : ""}
+        today={todayKey}
+        onClose={() => setRenewing(null)}
+        onDone={(r) => {
+          const t = renewing;
+          setRenewing(null);
+          if (!t) return;
+          setRenewals((prev) => ({ ...prev, [t.id]: r.renewal }));
+          setTenants((prev) => prev.map((x) => (x.id === t.id ? { ...x, leaseEnd: r.renewal.newEnd } : x)));
+          // The place's whole rent history comes back; swap it in.
+          setRentChanges((prev) => [
+            ...prev.filter((c) => !(c.propertyId === property.id && (c.unitId ?? null) === (t.unitId ?? null))),
+            ...r.rentChanges,
+          ]);
+          if (t.unitId) setUnits((prev) => prev.map((u) => (u.id === t.unitId ? { ...u, monthlyRent: r.monthlyRent } : u)));
+          else setProperty((prev) => ({ ...prev, monthlyRent: r.monthlyRent }));
+          const { renewal } = r;
+          push(
+            renewal.newRent !== renewal.previousRent
+              ? `${t.name}’s lease renewed to ${formatDay(renewal.newEnd)}. Rent goes to ${money(renewal.newRent)} from ${monthShort(renewal.rentFrom)}.`
+              : `${t.name}’s lease renewed to ${formatDay(renewal.newEnd)}.`
+          );
+          router.refresh();
+        }}
+      />
 
       <MoveOutDialog
         tenant={movingOut}

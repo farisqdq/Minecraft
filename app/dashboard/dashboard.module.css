@@ -3866,3 +3866,123 @@ tr:hover .rowDel {
   color: var(--muted);
   font-style: italic;
 }
+
+/* ---------- Lease renewal ---------- */
+.renewChips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+.renewChip {
+  border: 1px solid var(--line-strong);
+  background: var(--surface);
+  color: var(--ink-2);
+  border-radius: 999px;
+  padding: 5px 11px;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--fast), border-color var(--fast), color var(--fast);
+}
+.renewChip:hover {
+  border-color: var(--ink);
+}
+.renewChip span {
+  font-weight: 500;
+  color: var(--muted);
+}
+.renewChipOn,
+.renewChipOn:hover {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--bg);
+}
+.renewChipOn span {
+  color: var(--bg);
+  opacity: 0.8;
+}
+.renewSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  color: var(--ink-2);
+  line-height: 1.5;
+}
+.renewSummary strong {
+  font-size: 14.5px;
+  color: var(--ink);
+}
+.renewWarn {
+  color: var(--gold);
+  font-weight: 550;
+}
+.renewNote {
+  font-family: inherit;
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  width: 100%;
+  resize: vertical;
+}
+.renewNote:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+/* The renewal on a tenant card: what it changed, and what to do with it. */
+.renewalLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-top: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 12.5px;
+  color: var(--ink-2);
+}
+.renewalLine strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+.renewalLinks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin-left: auto;
+}
+.renewalLinks a,
+.renewalLinks button {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+  text-decoration: none;
+}
+.renewalLinks a:hover,
+.renewalLinks button:hover {
+  text-decoration: underline;
+}
+.renewalLinks button[disabled] {
+  color: var(--muted);
+  cursor: default;
+  text-decoration: none;
+}
+.rentScheduled {
+  color: var(--accent);
+  font-weight: 600;
+}

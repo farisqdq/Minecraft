@@ -8,7 +8,8 @@ import { requireProperty } from "@/lib/access";
 import { serializeTenant } from "@/lib/tenants";
 import { unreadByTenantForProperty } from "@/lib/messages-db";
 import { isoDay } from "@/lib/lease";
-import { monthKeyOf } from "@/lib/rent";
+import { serializeRentChange } from "@/lib/rent";
+import { applyDueRentChanges, serializeRenewal } from "@/lib/renewals-db";
 import { documentsWhere } from "@/lib/documents-db";
 import { blobConfigured } from "@/lib/blob";
 import { fileLink } from "@/lib/file-links";
@@ -28,8 +29,13 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
 
   const { id } = await params;
 
-  const property = await requireProperty(userId, id);
-  if (!property) notFound();
+  const found = await requireProperty(userId, id);
+  if (!found) notFound();
+  // A raise renewed ahead of time becomes today's rent in its month (a25).
+  const property =
+    (await applyDueRentChanges({ propertyId: id })) > 0
+      ? ((await prisma.property.findUnique({ where: { id } })) ?? found)
+      : found;
 
   const membership = await prisma.companyMember.findUnique({
     where: { companyId_userId: { companyId: property.companyId, userId } },
@@ -83,6 +89,11 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   });
   // For the "Messages (n unread)" link on each tenant's card.
   const unreadMessages = await unreadByTenantForProperty(property.id);
+  // Each tenant's latest renewal (a25), for the line on their card.
+  const renewals = await prisma.leaseRenewal.findMany({
+    where: { tenant: { propertyId: property.id } },
+    orderBy: { createdAt: "asc" },
+  });
 
   return (
     <PropertyManageClient
@@ -153,13 +164,8 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
           },
         ])
       )}
-      rentChanges={rentChanges.map((c) => ({
-        id: c.id,
-        propertyId: c.propertyId,
-        unitId: c.unitId,
-        effectiveFrom: monthKeyOf(c.effectiveFrom),
-        amount: c.amount,
-      }))}
+      rentChanges={rentChanges.map(serializeRentChange)}
+      initialRenewals={Object.fromEntries(renewals.map((r) => [r.tenantId, serializeRenewal(r)]))}
       transactions={transactions.map((t) => ({
         id: t.id,
         unitId: t.unitId,

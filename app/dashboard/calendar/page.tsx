@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { openRepairCount } from "@/lib/requests";
 import { isoDay } from "@/lib/lease";
 import { monthKeyOf } from "@/lib/rent";
+import { applyDueRentChanges } from "@/lib/renewals-db";
 import { blobConfigured } from "@/lib/blob";
 import CalendarClient from "./CalendarClient";
 
@@ -18,6 +19,8 @@ export default async function CalendarPage() {
   });
   const companyIds = memberships.map((m) => m.companyId);
   const scope = { property: { companyId: { in: companyIds } } };
+  // A raise renewed ahead of time becomes today's rent in its month (a25).
+  await applyDueRentChanges(scope);
 
   const [properties, units, rentChanges, tenants, payments, rules, openRepairs] = await Promise.all([
     prisma.property.findMany({

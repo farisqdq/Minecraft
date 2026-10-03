@@ -139,9 +139,21 @@ type CleanWaiver = {
   unwaivedAt: Date | null;
   unwaivedByName: string;
 };
+type CleanRenewal = {
+  previousEnd: Date | null;
+  newEnd: Date;
+  previousRent: number;
+  newRent: number;
+  rentFrom: string;
+  note: string | null;
+  sentAt: Date | null;
+  createdAt: Date;
+};
 type CleanTenant = {
   /** Where it sat in the file's list, which is what the ledger points at. */
   at: number;
+  /** Lease renewals (a25). */
+  renewals: CleanRenewal[];
   moveOut: CleanMoveOut | null;
   notices: CleanNotice[];
   /** The conversation with them, and how far each side had read it. */
@@ -166,7 +178,7 @@ type CleanTenant = {
   pushReminders: boolean;
   lateFeeMode: string;
 };
-type CleanRentChange = { effectiveFrom: Date; amount: number };
+type CleanRentChange = { effectiveFrom: Date; amount: number; scheduledAt: Date | null };
 type CleanRequestUpdate = {
   authorName: string;
   body: string;
@@ -573,6 +585,26 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         });
       }
 
+      // Lease renewals (a25); older backups have none.
+      const renewals: CleanRenewal[] = [];
+      for (const rawR of (Array.isArray(t.renewals) ? t.renewals : []).slice(0, 200)) {
+        const r = (rawR ?? {}) as Record<string, unknown>;
+        const newEnd = day(r.newEnd);
+        const rentFrom = str(r.rentFrom, 7);
+        const newRent = Math.min(MAX_AMOUNT, num(r.newRent));
+        if (!newEnd || !/^\d{4}-(0[1-9]|1[0-2])$/.test(rentFrom) || newRent <= 0) continue;
+        renewals.push({
+          previousEnd: day(r.previousEnd),
+          newEnd,
+          previousRent: Math.min(MAX_AMOUNT, num(r.previousRent)),
+          newRent,
+          rentFrom,
+          note: str(r.note, 500) || null,
+          sentAt: stamp(r.sentAt),
+          createdAt: stamp(r.createdAt) ?? new Date(),
+        });
+      }
+
       let moveOut: CleanMoveOut | null = null;
       const mo = (t.moveOut ?? null) as Record<string, unknown> | null;
       const movedOutOn = mo ? day(mo.movedOutOn) : null;
@@ -612,6 +644,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         charges,
         rules,
         lateFeeWaivers, // a21
+        renewals, // a25
         openingBalance: num(t.openingBalance),
         balanceFrom: /^\d{4}-\d{2}$/.test(str(t.balanceFrom, 7)) ? str(t.balanceFrom, 7) : null,
         name,
@@ -642,7 +675,9 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
       // date is not a history entry at all.
       if (!effectiveFrom) continue;
       if (++rentChangeTotal > MAX_RENT_CHANGES) throw new Error("That backup is too large to import.");
-      out.push({ effectiveFrom, amount });
+      // A raise renewed ahead of time (a25) stays scheduled, so today's rent
+      // still moves to it when its month comes.
+      out.push({ effectiveFrom, amount, scheduledAt: c.scheduled === true ? new Date() : null });
     }
     return out;
   }
@@ -1048,7 +1083,7 @@ export async function POST(req: Request) {
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
-      const { notices, messages, messagesReadAt, charges, rules, moveOut, at, lateFeeWaivers, ...fields } = t;
+      const { notices, messages, messagesReadAt, charges, rules, moveOut, at, lateFeeWaivers, renewals, ...fields } = t;
       const row = await tx.tenant.create({
         data: { ...fields, propertyId, unitId, createdById: userId },
       });
@@ -1080,6 +1115,13 @@ export async function POST(req: Request) {
           });
         }
         created.rules += 1;
+      }
+      // Lease renewals (a25). Re-linked to the rent change each wrote once
+      // the place's rent history is back (linkRenewals).
+      if (renewals.length > 0) {
+        await tx.leaseRenewal.createMany({
+          data: renewals.map((r) => ({ ...r, tenantId: row.id, createdById: userId })),
+        });
       }
       // Late fee waivers (a21), before anything can work out a statement.
       if (lateFeeWaivers.length > 0) {
@@ -1239,6 +1281,24 @@ export async function POST(req: Request) {
     created.rentChanges += changes.length;
   }
 
+  /**
+   * Points each restored renewal (a25) that changed the rent at the rent
+   * history row it wrote — the one for its place, starting its month, at its
+   * figure — so undo and the card work as they did before the backup.
+   */
+  async function linkRenewals(tx: Tx, propertyId: string, unitId: string | null) {
+    const renewals = await tx.leaseRenewal.findMany({
+      where: { rentChangeId: null, tenant: { propertyId, unitId } },
+    });
+    for (const r of renewals) {
+      if (r.newRent === r.previousRent) continue;
+      const change = await tx.rentChange.findFirst({
+        where: { propertyId, unitId, effectiveFrom: new Date(`${r.rentFrom}-01T00:00:00.000Z`), amount: r.newRent },
+      });
+      if (change) await tx.leaseRenewal.update({ where: { id: r.id }, data: { rentChangeId: change.id } });
+    }
+  }
+
   // One row per round trip, and a large backup has thousands of rows: the
   // engine's five-second default would cut a real restore off halfway.
   await prisma.$transaction(async (tx) => {
@@ -1305,6 +1365,7 @@ export async function POST(req: Request) {
         await createTransactions(tx, prop.id, null, property.transactions, loanPayments);
         await createRecurring(tx, prop.id, null, property.recurringExpenses);
         await createRentChanges(tx, prop.id, null, property.rentChanges);
+        await linkRenewals(tx, prop.id, null);
         await createRequests(tx, prop.id, null, property.requests, propertyTenants);
         const everyTenant = new Map(propertyTenants);
 
@@ -1326,6 +1387,7 @@ export async function POST(req: Request) {
           await createTransactions(tx, prop.id, u.id, unit.transactions, loanPayments);
           await createRecurring(tx, prop.id, u.id, unit.recurringExpenses);
           await createRentChanges(tx, prop.id, u.id, unit.rentChanges);
+          await linkRenewals(tx, prop.id, u.id);
           await createRequests(tx, prop.id, u.id, unit.requests, unitTenants);
           for (const [name, id] of unitTenants) if (!everyTenant.has(name)) everyTenant.set(name, id);
         }

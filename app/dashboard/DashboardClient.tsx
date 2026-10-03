@@ -1994,10 +1994,10 @@ export default function DashboardClient({
                           </a>
                         )}
                         <Link
-                          href={`/dashboard/properties/${tenant.propertyId}`}
+                          href={`/dashboard/properties/${tenant.propertyId}?renew=${tenant.id}#tenant-${tenant.id}`}
                           className={`${styles.btn} ${styles.small}`}
                         >
-                          Open lease
+                          Renew
                         </Link>
                       </div>
                     </div>

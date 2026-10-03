@@ -51,6 +51,8 @@ model User {
   noticesSent         TenantNotice[]
   chargesRaised       TenantCharge[]
   chargeRules         TenantChargeRule[]
+  /// Lease renewals (a25).
+  leaseRenewals       LeaseRenewal[]
   vendorsAdded        Vendor[]
   documentsUploaded   Document[]
   loansAdded          Loan[]
@@ -181,20 +183,55 @@ model Unit {
 // written whenever the rent changes; months before the earliest row fall
 // back to whatever the property or unit currently says.
 model RentChange {
-  id            String   @id @default(cuid())
+  id            String         @id @default(cuid())
   propertyId    String
-  property      Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  property      Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   unitId        String?
-  unit          Unit?    @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unit          Unit?          @relation(fields: [unitId], references: [id], onDelete: Cascade)
   // Always the first day of the month the amount takes effect.
   effectiveFrom DateTime
   amount        Float
   createdById   String?
-  createdBy     User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
-  createdAt     DateTime @default(now())
+  createdBy     User?          @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt     DateTime       @default(now())
+  // Lease renewals (a25). A change written before its month began is
+  // "scheduled"; it is "applied" once the place's current rent has been set
+  // to it. Every month's rent is read from this table either way, so a
+  // scheduled raise is charged from its month even before it is applied —
+  // applying only moves the figure shown as today's rent.
+  scheduledAt   DateTime?
+  appliedAt     DateTime?
+  renewals      LeaseRenewal[]
 
   @@index([propertyId])
   @@index([unitId])
+}
+
+// A lease renewed (a25): what the lease and rent were, what they became, and
+// from when. Kept so the renewal letter can be printed again later, the
+// tenant's history reads true, and an undo knows exactly what to put back.
+model LeaseRenewal {
+  id           String      @id @default(cuid())
+  tenantId     String
+  tenant       Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  previousEnd  DateTime?
+  newEnd       DateTime
+  previousRent Float
+  newRent      Float
+  /// YYYY-MM: the first month charged at newRent.
+  rentFrom     String
+  /// The rent history row this renewal wrote, when the rent changed.
+  rentChangeId String?
+  rentChange   RentChange? @relation(fields: [rentChangeId], references: [id], onDelete: SetNull)
+  note         String?
+  /// When the notice went to the tenant's Messages thread.
+  sentAt       DateTime?
+  createdById  String?
+  createdBy    User?       @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt    DateTime    @default(now())
+
+  @@index([tenantId])
+  @@index([rentChangeId])
 }
 
 model Tenant {
@@ -218,17 +255,19 @@ model Tenant {
   createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
   createdAt   DateTime  @default(now())
 
-  account   TenantAccount?
-  invites   TenantInvite[]
-  requests  MaintenanceRequest[]
-  notices   TenantNotice[]
-  charges   TenantCharge[]
-  rules     TenantChargeRule[]
-  documents Document[]
-  moveOut   MoveOut?
-  thread    MessageThread?
+  account        TenantAccount?
+  invites        TenantInvite[]
+  requests       MaintenanceRequest[]
+  notices        TenantNotice[]
+  charges        TenantCharge[]
+  rules          TenantChargeRule[]
+  documents      Document[]
+  moveOut        MoveOut?
+  thread         MessageThread?
   /// Late fee waivers (a21).
   lateFeeWaivers LateFeeWaiver[]
+  /// Lease renewals (a25), oldest first.
+  renewals       LeaseRenewal[]
 
   // What they owed on the day you started keeping books here, and the first
   // month to charge rent for. Without these, a lease that began in 2023 and a

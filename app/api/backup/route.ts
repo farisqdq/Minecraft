@@ -191,6 +191,17 @@ type TenantRow = {
     accrueFrom: string;
     runs: { month: string; day: string; amount: number; ranAt: Date }[];
   }[];
+  /** Lease renewals (a25). */
+  renewals?: {
+    previousEnd: Date | null;
+    newEnd: Date;
+    previousRent: number;
+    newRent: number;
+    rentFrom: string;
+    note: string | null;
+    sentAt: Date | null;
+    createdAt: Date;
+  }[];
   /** Late fee waivers (a21). */
   lateFeeWaivers?: {
     month: string;
@@ -303,6 +314,18 @@ function serializeTenants(rows: TenantRow[], key: FileKey) {
     // Late fee waivers (a21): months whose late fee was let go, and any
     // taken back with the day — that day is what stops a restore billing
     // the waived days. Who did it goes by name; ids don't survive a restore.
+    // Lease renewals (a25): what each changed, so the letters and the
+    // card read the same after a restore.
+    renewals: (t.renewals ?? []).map((r) => ({
+      previousEnd: r.previousEnd ? r.previousEnd.toISOString().slice(0, 10) : "",
+      newEnd: r.newEnd.toISOString().slice(0, 10),
+      previousRent: r.previousRent,
+      newRent: r.newRent,
+      rentFrom: r.rentFrom,
+      note: r.note ?? "",
+      sentAt: r.sentAt ? r.sentAt.toISOString() : "",
+      createdAt: r.createdAt.toISOString(),
+    })),
     lateFeeWaivers: (t.lateFeeWaivers ?? []).map((w) => ({
       month: w.month,
       waivedByName: w.waivedByName,
@@ -412,10 +435,13 @@ const DOCUMENT_INCLUDE = {
   include: { tenant: { select: { name: true } }, vendor: { select: { name: true } } },
 } as const;
 
-function serializeRentChanges(rows: { effectiveFrom: Date; amount: number }[]) {
+function serializeRentChanges(rows: { effectiveFrom: Date; amount: number; scheduledAt?: Date | null; appliedAt?: Date | null }[]) {
   return rows.map((c) => ({
     effectiveFrom: c.effectiveFrom.toISOString().slice(0, 10),
     amount: c.amount,
+    // A raise renewed ahead of time that isn't today's rent yet (a25), so
+    // a restore still moves today's rent when its month comes.
+    scheduled: Boolean(c.scheduledAt && !c.appliedAt),
   }));
 }
 
@@ -524,6 +550,7 @@ export async function GET() {
               moveOut: { include: { deductions: { orderBy: { id: "asc" } } } },
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
               lateFeeWaivers: { orderBy: { month: "asc" } }, // a21
+              renewals: { orderBy: { createdAt: "asc" } }, // a25
             },
           },
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
@@ -552,6 +579,7 @@ export async function GET() {
                   moveOut: { include: { deductions: { orderBy: { id: "asc" } } } },
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
               lateFeeWaivers: { orderBy: { month: "asc" } }, // a21
+              renewals: { orderBy: { createdAt: "asc" } }, // a25
                 },
               },
               rentChanges: { orderBy: { effectiveFrom: "asc" } },

@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { applyDueRentChanges } from "@/lib/renewals-db";
 import { prisma } from "@/lib/prisma";
 import { requireOwnerSession } from "@/lib/owner-access";
 import { OPEN_STATUSES } from "@/lib/maintenance";
@@ -22,6 +23,8 @@ export default async function OwnerHome() {
   const me = await requireOwnerSession();
   if (!me) redirect("/owners/login");
   const ids = me.propertyIds;
+  // The asking rent shown is today's, including a raise renewed ahead of time (a25).
+  await applyDueRentChanges({ propertyId: { in: ids } });
   const now = new Date();
   const thisMonth = monthKeyOf(now);
 
