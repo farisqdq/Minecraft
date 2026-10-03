@@ -687,6 +687,27 @@ page back through earlier ones. The switcher next to them changes the unit:
 Whatever the period, "Needs attention" and the rent-roll meter always describe
 one month, because chasing rent is a monthly job.
 
+**The year ahead.** The cash-flow chart switches between **Past year** and
+**Year ahead**. The year ahead is a forecast, drawn hatched so it's never
+mistaken for the books, built from what the app already knows: each let
+place's rent from the rent history (so a raise renewed for January is in
+January), nothing for a place marked vacant; recurring bills in their months,
+a yearly one — property tax, insurance — in its one month; each mortgage's
+payment month by month until it's paid off, skipping months already paid
+ahead, the last one only what's left; and, for everything else, the average
+of what was spent in the last twelve months outside recurring bills and
+mortgage payments, labelled as such — a forecast that assumed nothing breaks
+would be a promise. Under the chart:
+
+- the **short month** (or the lowest one) and its biggest bill, so a $5,200
+  December tax bill is seen in October rather than met in December;
+- how much of the expected rent comes **after a lease ends** with no
+  renewal, naming whose, each a link straight to renewing them;
+- the monthly allowance for repairs and other spending, and how many
+  months it's averaged over.
+
+It follows the LLC chips like everything else on the overview.
+
 **Searching.** The ledger's search box deliberately looks across *every*
 month, not the period on screen — being told there's nothing in September
 when the invoice was in March is the opposite of useful. It matches the

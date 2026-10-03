@@ -34,6 +34,7 @@ import { MarkReturnedDialog } from "../components/MoveOut";
 import { vacancyCost, vacantDays, vacantFor } from "@/lib/vacancy";
 import AppShell from "../components/AppShell";
 import CashFlowChart from "../components/CashFlowChart";
+import { forecast as forecastAhead, otherSpending } from "@/lib/forecast";
 import CategoryBars from "../components/CategoryBars";
 import Sparkline from "../components/Sparkline";
 import Modal from "../components/Modal";
@@ -592,6 +593,29 @@ export default function DashboardClient({
     }
     return keys.map((k) => buckets.get(k)!);
   }, [visibleTransactions, barMonth, periodKind, selectedYear]);
+
+  // The year ahead (a forecast, not the books): the same chart, switched.
+  const [cashView, setCashView] = useState<"past" | "next">("past");
+  const ahead = useMemo(() => {
+    if (cashView !== "next") return null;
+    const other = otherSpending(visibleTransactions, thisMonth);
+    const result = forecastAhead({
+      from: shiftMonth(thisMonth, 1),
+      months: 12,
+      places: visibleTargets.map((t) => ({ propertyId: t.propertyId, unitId: t.unitId, rent: t.monthlyRent, vacant: t.vacant })),
+      tenants: tenants.filter((t) => visibleIds.has(t.propertyId)),
+      rentChanges,
+      bills: recurring.filter((r) => visibleIds.has(r.propertyId)),
+      loans: loans.filter((l) => visibleIds.has(l.propertyId)),
+      otherPerMonth: other.perMonth,
+    });
+    const horizonEnd = `${shiftMonth(thisMonth, 12)}-31`;
+    // Whose lease runs out before the year ahead does, soonest first.
+    const ending = tenants
+      .filter((t) => visibleIds.has(t.propertyId) && t.leaseEnd && t.leaseEnd <= horizonEnd)
+      .sort((a, b) => a.leaseEnd.localeCompare(b.leaseEnd));
+    return { ...result, other, ending };
+  }, [cashView, visibleTransactions, thisMonth, visibleTargets, tenants, visibleIds, rentChanges, recurring, loans]);
 
   const byCategory = useMemo(() => {
     const totals = new Map<string, number>();
@@ -1768,7 +1792,75 @@ export default function DashboardClient({
 
           <section className={styles.chartGrid} aria-label="Charts">
             <div className={styles.card}>
-              <CashFlowChart data={series} />
+              <CashFlowChart
+                data={
+                  ahead
+                    ? ahead.months.map((m) => ({ month: m.month, rent: m.rent, expense: m.out }))
+                    : series
+                }
+                projected={Boolean(ahead)}
+                controls={
+                  <div className={styles.periodToggle} role="group" aria-label="Cash flow">
+                    <button
+                      type="button"
+                      className={cashView === "past" ? styles.active : ""}
+                      aria-pressed={cashView === "past"}
+                      onClick={() => setCashView("past")}
+                    >
+                      Past year
+                    </button>
+                    <button
+                      type="button"
+                      className={cashView === "next" ? styles.active : ""}
+                      aria-pressed={cashView === "next"}
+                      onClick={() => setCashView("next")}
+                    >
+                      Year ahead
+                    </button>
+                  </div>
+                }
+                notes={
+                  ahead && (
+                    <ul className={styles.aheadNotes}>
+                      {ahead.lowest && (
+                        <li>
+                          {ahead.lowest.net < 0 ? "Short month" : "Lowest month"}: <b>{monthName(ahead.lowest.month)}</b>,{" "}
+                          <b className={`num ${ahead.lowest.net < 0 ? styles.neg : ""}`}>
+                            {ahead.lowest.net < 0 ? "−" : ""}
+                            {money(Math.abs(ahead.lowest.net))}
+                          </b>{" "}
+                          net
+                          {ahead.lowest.lines[0] &&
+                            ` — the biggest bill is ${ahead.lowest.lines[0].label}, ${money(ahead.lowest.lines[0].amount)}`}
+                          .
+                        </li>
+                      )}
+                      {ahead.atRisk > 0 && (
+                        <li>
+                          <b className="num">{money(ahead.atRisk)}</b> of it is rent after a lease ends with no renewal:{" "}
+                          {ahead.ending.slice(0, 3).map((t, i) => (
+                            <span key={t.id}>
+                              {i > 0 ? ", " : ""}
+                              <Link href={`/dashboard/properties/${t.propertyId}?renew=${t.id}#tenant-${t.id}`}>
+                                {t.name}
+                              </Link>{" "}
+                              ({formatDay(t.leaseEnd)})
+                            </span>
+                          ))}
+                          {ahead.ending.length > 3 ? ` and ${ahead.ending.length - 3} more` : ""}.
+                        </li>
+                      )}
+                      {ahead.other.perMonth > 0 && (
+                        <li>
+                          Includes <b className="num">{money(ahead.other.perMonth)}</b> a month for repairs and other
+                          spending — the average of the last {ahead.other.months}{" "}
+                          {ahead.other.months === 1 ? "month" : "months"}.
+                        </li>
+                      )}
+                    </ul>
+                  )
+                }
+              />
             </div>
             <div className={styles.card}>
               <CategoryBars

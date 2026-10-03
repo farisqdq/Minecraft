@@ -3986,3 +3986,29 @@ tr:hover .rowDel {
   color: var(--accent);
   font-weight: 600;
 }
+
+/* ---------- The year ahead ---------- */
+.aheadNotes {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 10px 0 0;
+  border-top: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.aheadNotes b {
+  color: var(--ink);
+  font-weight: 600;
+}
+.aheadNotes a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+.aheadNotes a:hover {
+  text-decoration: underline;
+}

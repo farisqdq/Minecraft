@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import styles from "./charts.module.css";
 
 export type CashFlowPoint = { month: string; rent: number; expense: number };
@@ -44,7 +44,24 @@ function monthParts(key: string) {
  * of rent. Hovering swaps the numbers in the readout above the plot rather
  * than floating a tooltip, which keeps marks unobscured on a phone.
  */
-export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
+export default function CashFlowChart({
+  data,
+  projected = false,
+  controls,
+  notes,
+}: {
+  data: CashFlowPoint[];
+  /**
+   * A forecast rather than the books: the bars are drawn hatched and
+   * everything is labelled as expected, so a projection is never mistaken
+   * for money that moved.
+   */
+  projected?: boolean;
+  /** Sits in the head beside the legend — the past/next switch. */
+  controls?: ReactNode;
+  /** Shown under the plot, above the table toggle. */
+  notes?: ReactNode;
+}) {
   const [hover, setHover] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
 
@@ -57,11 +74,14 @@ export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
         <figcaption className={styles.head}>
           <div>
             <div className={styles.title}>Cash flow</div>
-            <div className={styles.sub}>Last 12 months</div>
+            <div className={styles.sub}>{projected ? "Next 12 months" : "Last 12 months"}</div>
           </div>
+          {controls}
         </figcaption>
         <div className={styles.chartEmpty}>
-          Record a rent payment or an expense and this fills in month by month.
+          {projected
+            ? "Add rents, recurring bills or a mortgage and the year ahead fills in."
+            : "Record a rent payment or an expense and this fills in month by month."}
         </div>
       </figure>
     );
@@ -93,28 +113,33 @@ export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
   const last = monthParts(data[data.length - 1].month).full;
 
   return (
-    <figure className={styles.chart}>
+    <figure className={`${styles.chart} ${projected ? styles.projected : ""}`}>
       <figcaption className={styles.head}>
         <div>
-          <div className={styles.title}>Cash flow</div>
+          <div className={styles.title}>{projected ? "Cash flow ahead" : "Cash flow"}</div>
           <div className={styles.sub}>
             {first} – {last}
           </div>
         </div>
-        <div className={styles.legend}>
-          <span className={styles.legendItem}>
-            <i className={styles.swatch} style={{ background: "var(--accent)" }} />
-            Rent in
-          </span>
-          <span className={styles.legendItem}>
-            <i className={styles.swatch} style={{ background: "var(--expense)" }} />
-            Money out
-          </span>
+        <div className={styles.headSide}>
+          {controls}
+          <div className={styles.legend}>
+            <span className={styles.legendItem}>
+              <i className={`${styles.swatch} ${styles.swatchUp}`} />
+              {projected ? "Rent expected" : "Rent in"}
+            </span>
+            <span className={styles.legendItem}>
+              <i className={`${styles.swatch} ${styles.swatchDown}`} />
+              {projected ? "Going out" : "Money out"}
+            </span>
+          </div>
         </div>
       </figcaption>
 
       <div className={styles.readout} aria-live="polite">
-        <span className={styles.readoutMonth}>{shown ? monthParts(shown.month).full : "12-month total"}</span>
+        <span className={styles.readoutMonth}>
+          {shown ? monthParts(shown.month).full : projected ? "Next 12 months" : "12-month total"}
+        </span>
         <span>
           Rent<b className="num">{money.format(readoutRent)}</b>
         </span>
@@ -147,9 +172,9 @@ export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
           className={styles.plot}
           style={{ height: 176 }}
           role="img"
-          aria-label={`Cash flow from ${first} to ${last}. Rent collected ${money.format(
-            totalRent
-          )}, money out ${money.format(totalExpense)}, net ${money.format(totalRent - totalExpense)}.`}
+          aria-label={`${projected ? "Expected cash flow" : "Cash flow"} from ${first} to ${last}. ${
+            projected ? "Rent expected" : "Rent collected"
+          } ${money.format(totalRent)}, money out ${money.format(totalExpense)}, net ${money.format(totalRent - totalExpense)}.`}
         >
           {ticks.map((t) => (
             <span key={`g${t.pct}`} className={styles.gridline} style={{ top: `${t.pct}%` }} />
@@ -199,6 +224,8 @@ export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
         })}
       </div>
 
+      {notes}
+
       <button type="button" className={styles.tableToggle} onClick={() => setShowTable((v) => !v)}>
         {showTable ? "Hide the numbers" : "Show the numbers"}
       </button>
@@ -209,8 +236,8 @@ export default function CashFlowChart({ data }: { data: CashFlowPoint[] }) {
             <thead>
               <tr>
                 <th>Month</th>
-                <th>Rent in</th>
-                <th>Money out</th>
+                <th>{projected ? "Rent expected" : "Rent in"}</th>
+                <th>{projected ? "Going out" : "Money out"}</th>
                 <th>Net</th>
               </tr>
             </thead>
