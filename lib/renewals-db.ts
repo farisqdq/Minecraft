@@ -41,9 +41,9 @@ export function serializeRenewal(r: LeaseRenewal, thisMonth = monthKeyOf(new Dat
   };
 }
 
-type Place = { propertyId: string; unitId: string | null };
+export type Place = { propertyId: string; unitId: string | null };
 
-async function placeRent(tx: Prisma.TransactionClient, place: Place) {
+export async function placeRent(tx: Prisma.TransactionClient, place: Place) {
   if (place.unitId) {
     const unit = await tx.unit.findUnique({ where: { id: place.unitId }, select: { monthlyRent: true } });
     return unit?.monthlyRent ?? 0;
@@ -55,6 +55,42 @@ async function placeRent(tx: Prisma.TransactionClient, place: Place) {
 async function setPlaceRent(tx: Prisma.TransactionClient, place: Place, amount: number) {
   if (place.unitId) await tx.unit.update({ where: { id: place.unitId }, data: { monthlyRent: amount } });
   else await tx.property.update({ where: { id: place.propertyId }, data: { monthlyRent: amount } });
+}
+
+/**
+ * Writes a place's rent from a month into the rent history, the way a
+ * renewal does: a later month is scheduled (today's rent moves when it
+ * arrives), this month is in force at once. `backfill` is today's rent when
+ * the place has no history yet — written as "since forever" first, so the
+ * months already on the books keep the figure they were judged at.
+ * Returns the history row written.
+ */
+export async function writeRentFrom(
+  tx: Prisma.TransactionClient,
+  place: Place,
+  month: string,
+  amount: number,
+  userId: string,
+  backfill: number | null
+): Promise<string> {
+  const thisMonth = monthKeyOf(new Date());
+  if (backfill !== null) {
+    await tx.rentChange.create({
+      data: { ...place, effectiveFrom: new Date("1970-01-01T00:00:00.000Z"), amount: backfill, createdById: userId },
+    });
+  }
+  const scheduled = month > thisMonth;
+  const existing = await tx.rentChange.findFirst({ where: { ...place, effectiveFrom: monthStart(month) } });
+  const row = existing
+    ? await tx.rentChange.update({
+        where: { id: existing.id },
+        data: { amount, scheduledAt: scheduled ? new Date() : existing.scheduledAt, appliedAt: scheduled ? null : new Date() },
+      })
+    : await tx.rentChange.create({
+        data: { ...place, effectiveFrom: monthStart(month), amount, createdById: userId, scheduledAt: scheduled ? new Date() : null },
+      });
+  if (!scheduled) await setPlaceRent(tx, place, amount);
+  return row.id;
 }
 
 /**
@@ -90,34 +126,8 @@ export async function renewLease(
     const previousRent = rentForMonth(history, place.propertyId, place.unitId, thisMonth, current);
     const atStart = rentForMonth(history, place.propertyId, place.unitId, input.rentFrom, current);
 
-    let rentChangeId: string | null = null;
-    if (input.newRent !== atStart) {
-      if (history.length === 0) {
-        // The same backfill an edit to the rent writes: the months already
-        // on the books stay at what they were.
-        await tx.rentChange.create({
-          data: { ...place, effectiveFrom: new Date("1970-01-01T00:00:00.000Z"), amount: current, createdById: userId },
-        });
-      }
-      const scheduled = input.rentFrom > thisMonth;
-      const existing = await tx.rentChange.findFirst({ where: { ...place, effectiveFrom: monthStart(input.rentFrom) } });
-      const row = existing
-        ? await tx.rentChange.update({
-            where: { id: existing.id },
-            data: { amount: input.newRent, scheduledAt: scheduled ? new Date() : existing.scheduledAt, appliedAt: scheduled ? null : new Date() },
-          })
-        : await tx.rentChange.create({
-            data: {
-              ...place,
-              effectiveFrom: monthStart(input.rentFrom),
-              amount: input.newRent,
-              createdById: userId,
-              scheduledAt: scheduled ? new Date() : null,
-            },
-          });
-      rentChangeId = row.id;
-      if (!scheduled) await setPlaceRent(tx, place, input.newRent);
-    }
+    const rentChangeId =
+      input.newRent !== atStart ? await writeRentFrom(tx, place, input.rentFrom, input.newRent, userId, history.length === 0 ? current : null) : null;
 
     await tx.tenant.update({ where: { id: tenant.id }, data: { leaseEnd: new Date(`${input.newEnd}T00:00:00Z`) } });
     const renewal = await tx.leaseRenewal.create({

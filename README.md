@@ -309,6 +309,51 @@ they're current again. It's refused if someone else now lives there. The
 income and charges can't be deleted on their own from the ledger or the
 statement, for the same reason as a mortgage payment's parts.
 
+### Listing an empty place, and applications
+
+A vacancy is the costliest line on a rent roll, and the app used to stop at
+saying what one was costing. Now an empty place in **Needs attention** has
+**List it**, and a property with an empty place shows **For rent** above
+its tenants.
+
+A listing is the headline, rent, deposit, the date it's free, beds, baths,
+square feet, pets, a description, and photos picked from the property's
+filing cabinet (anything filed there as a Photo — upload or scan it first).
+It gets a link, `/rent/<code>`, to paste wherever you advertise. The code is
+ten random characters, so the page is seen by the people it's sent to; it
+asks search engines not to index it.
+
+The page shows the place and an application: name, email, phone, move-in
+date, how many people, pets, monthly income and its source, where they live
+now and their current landlord, a note, and a box confirming it's true and
+that references may be contacted. It asks nothing a fair-housing rule
+forbids — no age, family status, religion, origin or disability — and no
+Social Security number or date of birth, which have no business in a web
+form; screening, if any, is a separate step of your own. An Equal Housing
+Opportunity line closes the page.
+
+Every application lands in **Listings** (`/dashboard/listings`), emails and
+pushes the LLC's team once, and shows on the overview as the vacancy's
+application count. Each one shows income as a multiple of the rent ("4.2×
+rent"), with call and email buttons. **Reviewing**, **Decline** and
+**Approve…** move it along. Approving asks for the lease dates (from the
+later of today, the date it's free and the move-in they asked for, for a
+year), deposit and due day, then makes them the tenant — exactly as adding
+one by hand does, so the vacancy ends — and writes the listing's rent into
+the rent history from the month the lease starts if it differs from what the
+place was asking. The listing closes; its page then says it's taken, and its
+photos stop being served. Other applicants are left for you to answer.
+
+The public form is throttled: six applications from one address in a
+quarter of an hour, then a pause; a hidden field catches bots, which are told
+it worked and stored nothing. Photos are served only while the listing is
+open, only if the listing names them, of that property, and only as images.
+
+Applications are not in backups — they are strangers' personal details, and
+a backup file gets emailed around; an approved applicant is in the backup as
+a tenant. Owners can delete an application, or a listing with all of its
+applications, for good.
+
 ## The tenant portal
 
 A tenant can be given a login of their own at `/portal`. From their card on a

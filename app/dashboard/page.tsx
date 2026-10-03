@@ -10,6 +10,7 @@ import { serializeTenant } from "@/lib/tenants";
 import { isoDay } from "@/lib/lease";
 import { serializeRentChange } from "@/lib/rent";
 import { applyDueRentChanges } from "@/lib/renewals-db";
+import { listingsWhere } from "@/lib/listings-db";
 import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
 import { waivedLateFeesFor } from "@/lib/late-fee-waivers-db"; // a21
@@ -93,6 +94,8 @@ export default async function DashboardPage() {
   for (const r of lateFeeRows) lateFees[`${r.tenantId}|${r.month}`] = Math.round((r._sum.amount ?? 0) * 100) / 100;
 
   const loans = await loansWhere({ property: { companyId: { in: companyIds } }, active: true });
+  // Open listings (a27), so an empty place can say it's listed and who applied.
+  const listings = await listingsWhere({ companyId: { in: companyIds }, open: true });
   const deposits = await prisma.moveOut.findMany({
     where: { returnedOn: null, deposit: { gt: 0 }, tenant: { property: { companyId: { in: companyIds } } } },
     include: { ...moveOutInclude, tenant: { select: { name: true, propertyId: true } } },
@@ -167,6 +170,7 @@ export default async function DashboardPage() {
       initialRentChanges={rentChanges.map(serializeRentChange)}
       initialTenants={tenants.map(serializeTenant)}
       initialLoans={loans}
+      initialListings={listings}
       initialDeposits={deposits.map((d) => ({
         ...serializeMoveOut(d),
         tenantName: d.tenant.name,

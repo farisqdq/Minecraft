@@ -17,6 +17,8 @@ import { MarkReturnedDialog, MoveOutDialog, MoveOutSummary } from "../../../comp
 import { RenewDialog } from "../../../components/RenewLease"; // lease renewals (a25)
 import type { RenewalDTO } from "@/lib/renewals-db";
 import { monthShort } from "@/lib/renewal";
+import ListingForm, { type ListingPlace } from "../../../components/ListingForm"; // listings (a27)
+import type { ListingDTO } from "@/lib/listings-db";
 import type { MoveOutDTO } from "@/lib/move-outs-db";
 import { vacancyCost, vacantDays, vacantFor } from "@/lib/vacancy";
 import type { LoanDTO } from "@/lib/loans-db";
@@ -142,6 +144,7 @@ export default function PropertyManageClient({
   initialRequests,
   unreadMessages = {},
   initialRenewals = {},
+  initialListings = [],
 }: {
   /** Repairs waiting on you, for the nav badge. */
   openRepairs?: number;
@@ -176,6 +179,8 @@ export default function PropertyManageClient({
   unreadMessages?: Record<string, number>;
   /** Each tenant's latest lease renewal (a25), by tenant id. */
   initialRenewals?: Record<string, RenewalDTO>;
+  /** Listings for this property's places (a27), open first. */
+  initialListings?: ListingDTO[];
 }) {
   const router = useRouter();
 
@@ -551,6 +556,14 @@ export default function PropertyManageClient({
     if (t) setRenewing(t);
     // Only on arrival.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  // Listings (a27): what's up for rent here, and the form for a new one.
+  const [listings, setListings] = useState<ListingDTO[]>(initialListings);
+  const [listingFor, setListingFor] = useState<{ listing: ListingDTO | null; unitId: string | null } | null>(null);
+  // "List it" on the overview lands here with ?list=<unit id, or "whole">.
+  useEffect(() => {
+    const want = new URLSearchParams(window.location.search).get("list");
+    if (want) setListingFor({ listing: null, unitId: want === "whole" ? null : want });
   }, []);
   const [returningFor, setReturningFor] = useState("");
   const [statementFor, setStatementFor] = useState<TenantDTO | null>(null);
@@ -1007,6 +1020,15 @@ export default function PropertyManageClient({
     });
   }
 
+  /** Where a listing can be for (a27): the house, or each unit — with what it's asking. */
+  const listingPlaces: (ListingPlace & { vacant: boolean })[] =
+    units.length === 0
+      ? [{ unitId: null, label: property.name, rent: property.monthlyRent, vacant: property.vacant }]
+      : units.map((u) => ({ unitId: u.id, label: `${property.name} — ${u.name}`, rent: u.monthlyRent, vacant: u.vacant }));
+  const propertyPhotos = initialDocuments
+    .filter((d) => d.kind === "Photo" && d.propertyId === property.id)
+    .map((d) => ({ id: d.id, url: d.url, title: d.title }));
+
   /** What a place rents for this month — the figure a renewal starts from. */
   function currentRentAt(unitId: string | null) {
     const unit = unitId ? units.find((u) => u.id === unitId) : null;
@@ -1125,10 +1147,13 @@ export default function PropertyManageClient({
         {coming.map((c) => (
           <span key={c.id} className={styles.rentScheduled}>
             {money(c.amount)} from {asMonth(c.effectiveFrom)}
-            {history.length > 0 ? " · " : ""}
+            {history.length > 1 ? " · " : ""}
           </span>
         ))}
-        {history.length > 0 && <>since {asMonth(history[0].effectiveFrom)}</>}
+        {/* A lone backfilled row is just "what it always was": nothing to say. */}
+        {history.length > 0 && !(history.length === 1 && asMonth(history[0].effectiveFrom) === "at first") && (
+          <>since {asMonth(history[0].effectiveFrom)}</>
+        )}
         {history.slice(1).map((c) => (
           <span key={c.id}>
             {" · "}
@@ -1290,6 +1315,84 @@ export default function PropertyManageClient({
       {transactions.length > 0 && (
         <section className={styles.card} style={{ marginTop: 12 }} aria-label="Cash flow">
           <CashFlowChart data={series} />
+        </section>
+      )}
+
+      {(listings.length > 0 || listingPlaces.some((p) => p.vacant)) && (
+        <section className={styles.block}>
+          <div className={styles.blockHead}>
+            <h2>For rent</h2>
+            <Link className={styles.portalLink} href="/dashboard/listings">
+              All listings →
+            </Link>
+          </div>
+          {listings.length === 0 ? (
+            <div className={`${styles.formCard} ${styles.forRentEmpty}`}>
+              <span>
+                {listingPlaces.filter((p) => p.vacant).map((p) => p.label).join(", ")}{" "}
+                {listingPlaces.filter((p) => p.vacant).length === 1 ? "is" : "are"} empty. A listing gives you a link to share and
+                takes applications.
+              </span>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                onClick={() => setListingFor({ listing: null, unitId: listingPlaces.find((p) => p.vacant)?.unitId ?? null })}
+              >
+                List for rent
+              </button>
+            </div>
+          ) : (
+            <div className={styles.formCard}>
+              <ul className={styles.forRentList}>
+                {listings.map((l) => (
+                  <li key={l.id}>
+                    <div>
+                      <span className={styles.forRentPlace}>{l.unitId ? unitLabel(l.unitId) : property.name}</span>{" "}
+                      <span className={`${styles.pill} ${l.open ? styles.paid : styles.vacant}`}>{l.open ? "Open" : "Closed"}</span>
+                      <div className={styles.note}>
+                        {l.headline} · {money(l.rent)} a month ·{" "}
+                        <Link href={`/dashboard/listings#listing-${l.id}`}>
+                          {l.total === 0
+                            ? "no applications yet"
+                            : `${l.total} ${l.total === 1 ? "application" : "applications"}${l.waiting ? `, ${l.waiting} waiting` : ""}`}
+                        </Link>
+                      </div>
+                    </div>
+                    <div className={styles.forRentActions}>
+                      {l.open && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small}`}
+                          onClick={async () => {
+                            const url = `${window.location.origin}/rent/${l.code}`;
+                            try {
+                              await navigator.clipboard.writeText(url);
+                              push("Link copied — paste it wherever you advertise.");
+                            } catch {
+                              push(url);
+                            }
+                          }}
+                        >
+                          Copy link
+                        </button>
+                      )}
+                      <button type="button" className={`${styles.btn} ${styles.small} ${styles.quiet}`} onClick={() => setListingFor({ listing: l, unitId: l.unitId })}>
+                        Edit
+                      </button>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                className={`${styles.btn} ${styles.small}`}
+                style={{ marginTop: 10 }}
+                onClick={() => setListingFor({ listing: null, unitId: listingPlaces.find((p) => p.vacant)?.unitId ?? null })}
+              >
+                + List another place
+              </button>
+            </div>
+          )}
         </section>
       )}
 
@@ -2552,6 +2655,22 @@ export default function PropertyManageClient({
           </div>
         </form>
       </Modal>
+
+      <ListingForm
+        open={Boolean(listingFor)}
+        propertyId={property.id}
+        listing={listingFor?.listing ?? null}
+        places={listingPlaces}
+        defaultUnitId={listingFor?.unitId ?? null}
+        photos={propertyPhotos}
+        onClose={() => setListingFor(null)}
+        onSaved={(l) => {
+          const editing = Boolean(listingFor?.listing);
+          setListingFor(null);
+          setListings((prev) => (editing ? prev.map((x) => (x.id === l.id ? l : x)) : [l, ...prev]));
+          push(editing ? "Listing saved." : "Listed. Copy the link and share it wherever you advertise.");
+        }}
+      />
 
       <RenewDialog
         tenant={renewing}

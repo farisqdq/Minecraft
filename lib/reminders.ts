@@ -20,6 +20,7 @@ export type ReminderKind =
   | "maintenance"
   | "message"
   | "owner-statement"
+  | "application"
   | "test";
 
 export const KIND_LABEL: Record<ReminderKind, string> = {
@@ -30,6 +31,7 @@ export const KIND_LABEL: Record<ReminderKind, string> = {
   maintenance: "Repair update",
   message: "New message",
   "owner-statement": "Owner statement",
+  application: "New application",
   test: "Test",
 };
 
@@ -281,6 +283,7 @@ export const reminderKey = {
     `doc-expiry:${documentId}:${expiresOn}:${threshold}`,
   maintenance: (updateId: string) => `maintenance:${updateId}`,
   message: (messageId: string) => `message:${messageId}`,
+  application: (applicationId: string) => `application:${applicationId}`,
   test: (userId: string, at: number) => `test:${userId}:${at}`,
 };
 

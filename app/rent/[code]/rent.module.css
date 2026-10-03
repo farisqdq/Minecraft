@@ -1,0 +1,326 @@
+/* The public listing page (a27). Its own look, built on the app's tokens:
+   this is the one page strangers see, so it reads like a listing, not an
+   app screen. */
+
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--ink);
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 16px 56px;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.company {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.photos {
+  display: grid;
+  grid-template-columns: 2fr 1fr 1fr;
+  grid-template-rows: 160px 160px;
+  gap: 6px;
+  border-radius: var(--radius);
+  overflow: hidden;
+  margin-bottom: 20px;
+}
+.photos img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  background: var(--surface-3);
+}
+.photos .hero {
+  grid-row: 1 / span 2;
+}
+.photos.single {
+  grid-template-columns: 1fr;
+  grid-template-rows: 320px;
+}
+.photos.single .hero {
+  grid-row: auto;
+}
+/* One to three extra photos stack beside the cover, filling its height. */
+.photos.side {
+  grid-template-columns: 2fr 1fr;
+  grid-template-rows: repeat(var(--rows), 1fr);
+  height: 326px;
+}
+.photos.side .hero {
+  grid-row: 1 / -1;
+}
+.morePhotos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px;
+  margin: 0 0 20px;
+}
+.morePhotos img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  display: block;
+}
+
+.head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.head h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 28px;
+  line-height: 1.15;
+  margin: 0;
+}
+.place {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+.rent {
+  text-align: right;
+  flex: none;
+}
+.rent b {
+  display: block;
+  font-size: 26px;
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.rent span {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.facts {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 16px 0;
+  padding: 0;
+}
+.facts li {
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.description {
+  white-space: pre-wrap;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--ink-2);
+  margin: 0 0 16px;
+}
+.contact {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.contact a {
+  color: var(--accent);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.apply {
+  margin-top: 28px;
+  padding: 22px 20px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+.apply h2 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 22px;
+  margin: 0;
+}
+.applyLede {
+  margin: 4px 0 16px;
+  font-size: 13.5px;
+  color: var(--muted);
+}
+.form fieldset {
+  border: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 12px;
+}
+.form legend {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+  min-width: 0;
+}
+.form .wide {
+  grid-column: 1 / -1;
+}
+.form > label.wide {
+  margin-bottom: 14px;
+}
+.form input,
+.form textarea {
+  font: inherit;
+  font-size: 15px;
+  padding: 10px 11px;
+  border-radius: 9px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink);
+  width: 100%;
+}
+.form textarea {
+  resize: vertical;
+}
+.form input:focus,
+.form textarea:focus {
+  outline: 2px solid var(--gold);
+  outline-offset: 1px;
+}
+.hint {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+}
+.consent {
+  flex-direction: row !important;
+  align-items: flex-start;
+  gap: 10px !important;
+  margin: 4px 0 16px;
+  font-weight: 400 !important;
+  line-height: 1.45;
+}
+.consent input {
+  width: 18px !important;
+  height: 18px;
+  margin-top: 2px;
+  flex: none;
+}
+.submit {
+  width: 100%;
+  border: none;
+  border-radius: 10px;
+  padding: 13px 16px;
+  font: inherit;
+  font-size: 15.5px;
+  font-weight: 600;
+  background: var(--accent);
+  color: var(--on-accent);
+  cursor: pointer;
+}
+.submit:hover {
+  background: var(--accent-strong);
+}
+.submit[disabled] {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.error {
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--expense-soft);
+  color: var(--expense-strong);
+  font-size: 13.5px;
+}
+/* Off-screen for people, there for bots. */
+.trap {
+  position: absolute;
+  left: -10000px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+}
+.thanks {
+  text-align: center;
+  padding: 18px 0 6px;
+}
+.thanks p {
+  color: var(--ink-2);
+  margin: 8px 0 0;
+}
+.closed {
+  text-align: center;
+  padding: 80px 12px;
+}
+.closed h1 {
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 24px;
+}
+.closed p {
+  color: var(--muted);
+}
+.foot {
+  margin-top: 28px;
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.foot span {
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+@media (max-width: 560px) {
+  .photos {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: 200px 100px;
+  }
+  .photos .hero,
+  .photos.side .hero {
+    grid-column: 1 / -1;
+    grid-row: 1;
+  }
+  .photos.side {
+    grid-template-columns: repeat(min(var(--rows), 2), 1fr);
+    grid-template-rows: 200px 100px;
+    height: auto;
+  }
+  .photos img:nth-child(n + 4) {
+    display: none;
+  }
+  .head {
+    flex-direction: column;
+    gap: 8px;
+  }
+  .rent {
+    text-align: left;
+  }
+  .head h1 {
+    font-size: 24px;
+  }
+  .form fieldset {
+    grid-template-columns: 1fr;
+  }
+}

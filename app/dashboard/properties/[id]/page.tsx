@@ -10,6 +10,7 @@ import { unreadByTenantForProperty } from "@/lib/messages-db";
 import { isoDay } from "@/lib/lease";
 import { serializeRentChange } from "@/lib/rent";
 import { applyDueRentChanges, serializeRenewal } from "@/lib/renewals-db";
+import { listingsWhere } from "@/lib/listings-db";
 import { documentsWhere } from "@/lib/documents-db";
 import { blobConfigured } from "@/lib/blob";
 import { fileLink } from "@/lib/file-links";
@@ -89,6 +90,8 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   });
   // For the "Messages (n unread)" link on each tenant's card.
   const unreadMessages = await unreadByTenantForProperty(property.id);
+  // Listings for this property's empty places (a27).
+  const listings = await listingsWhere({ propertyId: property.id });
   // Each tenant's latest renewal (a25), for the line on their card.
   const renewals = await prisma.leaseRenewal.findMany({
     where: { tenant: { propertyId: property.id } },
@@ -166,6 +169,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       )}
       rentChanges={rentChanges.map(serializeRentChange)}
       initialRenewals={Object.fromEntries(renewals.map((r) => [r.tenantId, serializeRenewal(r)]))}
+      initialListings={listings}
       transactions={transactions.map((t) => ({
         id: t.id,
         unitId: t.unitId,

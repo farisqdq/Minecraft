@@ -112,3 +112,17 @@ export async function requireAsset(userId: string, assetId: string, role: Role =
   const membership = await requireCompany(userId, asset.property.companyId, role);
   return membership ? asset : null;
 }
+
+/** A listing the user can reach through one of their company teams (a27). */
+export async function requireListing(userId: string, listingId: string, role: Role = "member") {
+  const listing = await prisma.listing.findUnique({ where: { id: listingId } });
+  if (!listing) return null;
+  return (await requireCompany(userId, listing.companyId, role)) ? listing : null;
+}
+
+/** An application to one of the user's companies' listings (a27). */
+export async function requireApplication(userId: string, applicationId: string, role: Role = "member") {
+  const app = await prisma.rentalApplication.findUnique({ where: { id: applicationId }, include: { listing: true } });
+  if (!app) return null;
+  return (await requireCompany(userId, app.listing.companyId, role)) ? app : null;
+}

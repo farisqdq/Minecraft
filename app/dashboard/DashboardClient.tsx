@@ -35,6 +35,7 @@ import { vacancyCost, vacantDays, vacantFor } from "@/lib/vacancy";
 import AppShell from "../components/AppShell";
 import CashFlowChart from "../components/CashFlowChart";
 import { forecast as forecastAhead, otherSpending } from "@/lib/forecast";
+import type { ListingDTO } from "@/lib/listings-db";
 import CategoryBars from "../components/CategoryBars";
 import Sparkline from "../components/Sparkline";
 import Modal from "../components/Modal";
@@ -235,6 +236,7 @@ export default function DashboardClient({
   initialTenants,
   initialTransactions,
   initialLoans,
+  initialListings = [],
   initialDeposits,
 }: {
   /** Repairs waiting on you, for the nav badge. */
@@ -265,6 +267,8 @@ export default function DashboardClient({
   initialTransactions: Transaction[];
   /** Open mortgages, with their payments, so a due one can be logged split. */
   initialLoans: LoanDTO[];
+  /** Open listings (a27): an empty place says it's listed, and who has applied. */
+  initialListings?: ListingDTO[];
   /** Deposits still to go back to someone who moved out, with who and where. */
   initialDeposits: (MoveOutDTO & { tenantName: string; propertyId: string })[];
 }) {
@@ -1541,7 +1545,16 @@ export default function DashboardClient({
     })
     .sort((a, b) => b.days - a.days);
 
+  // Listings (a27): each vacancy row says whether its place is listed; any
+  // listing with people waiting that isn't on an empty place gets a row too.
+  const listingFor = (t: { propertyId: string; unitId: string | null }) =>
+    initialListings.find((l) => l.propertyId === t.propertyId && (l.unitId ?? null) === (t.unitId ?? null));
+  const listingAlerts = initialListings.filter(
+    (l) => l.waiting > 0 && visibleIds.has(l.propertyId) && !vacancies.some((v) => listingFor(v.target)?.id === l.id)
+  );
+
   const attentionCount =
+    listingAlerts.length +
     vacancies.length +
     depositAlerts.length +
     repairAlerts.length +
@@ -2168,11 +2181,47 @@ export default function DashboardClient({
                         {v.lost > 0 ? `\u2212${moneyRound(v.lost)}` : ""}
                       </span>
                       <div className={styles.attnActions}>
+                        {(() => {
+                          const listed = listingFor(v.target);
+                          return listed ? (
+                            <Link href={`/dashboard/listings#listing-${listed.id}`} className={`${styles.btn} ${styles.small} ${listed.waiting ? styles.primary : ""}`}>
+                              {listed.waiting
+                                ? `${listed.waiting} ${listed.waiting === 1 ? "application" : "applications"}`
+                                : "Listed"}
+                            </Link>
+                          ) : (
+                            <Link
+                              href={`/dashboard/properties/${v.target.propertyId}?list=${v.target.unitId ?? "whole"}`}
+                              className={`${styles.btn} ${styles.small}`}
+                            >
+                              List it
+                            </Link>
+                          );
+                        })()}
                         <Link
                           href={`/dashboard/properties/${v.target.propertyId}`}
-                          className={`${styles.btn} ${styles.small}`}
+                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                         >
                           Add a tenant
+                        </Link>
+                      </div>
+                    </div>
+                  ))}
+
+                  {listingAlerts.map((l) => (
+                    <div key={`ls-${l.id}`} className={styles.attnRow}>
+                      <div className={styles.attnMain}>
+                        <div className={styles.attnLabel}>
+                          {targetLabel({ propertyId: l.propertyId, unitId: l.unitId })}{" "}
+                          <span className={`${styles.pill} ${styles.owed}`}>
+                            {l.waiting} {l.waiting === 1 ? "application" : "applications"}
+                          </span>
+                        </div>
+                        <div className={styles.attnSub}>{l.headline} · {money(l.rent)} a month</div>
+                      </div>
+                      <div className={styles.attnActions}>
+                        <Link href={`/dashboard/listings#listing-${l.id}`} className={`${styles.btn} ${styles.small} ${styles.primary}`}>
+                          Review
                         </Link>
                       </div>
                     </div>
