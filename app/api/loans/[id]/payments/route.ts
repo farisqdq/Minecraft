@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireLoan } from "@/lib/access";
 import { parsePaymentInput } from "@/lib/loans";
-import { serializeLedgerEntry, serializePayment, shortMonth } from "@/lib/loans-db";
+import { recordLoanPayment, serializeLedgerEntry, serializePayment, shortMonth } from "@/lib/loans-db";
 
 /**
  * Records one month's mortgage payment.
@@ -36,48 +36,8 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     );
   }
 
-  const date = new Date(`${p.date}T00:00:00.000Z`);
-  const note = `${shortMonth(p.month)} payment`;
-  const lines = [
-    { amount: p.interest, category: "Mortgage Interest", detail: `${loan.lender} · interest` },
-    { amount: p.escrowTax, category: "Property Tax", detail: `${loan.lender} · escrow for property tax` },
-    { amount: p.escrowInsurance, category: "Insurance", detail: `${loan.lender} · escrow for insurance` },
-  ].filter((l) => l.amount > 0);
-
   try {
-    const result = await prisma.$transaction(async (tx) => {
-      const payment = await tx.loanPayment.create({
-        data: {
-          loanId: id,
-          month: p.month,
-          date,
-          principal: p.principal,
-          interest: p.interest,
-          escrow: Math.round((p.escrowTax + p.escrowInsurance) * 100) / 100,
-          createdById: userId,
-        },
-      });
-      const entries = [];
-      for (const line of lines) {
-        entries.push(
-          await tx.transaction.create({
-            data: {
-              propertyId: loan.propertyId,
-              unitId: null,
-              createdById: userId,
-              type: "expense",
-              date,
-              amount: line.amount,
-              category: line.category,
-              detail: line.detail,
-              note,
-              loanPaymentId: payment.id,
-            },
-          })
-        );
-      }
-      return { payment, entries };
-    });
+    const result = await prisma.$transaction((tx) => recordLoanPayment(tx, loan, p, userId));
 
     return NextResponse.json(
       {

@@ -141,22 +141,65 @@ test("a recurring bill already logged this month isn't matched again", () => {
   assert.equal(s.recurringExpenseId, null);
 });
 
-test("a mortgage payment is never filed as one expense", () => {
-  const c = ctx({ loans: [{ id: "l1", propertyId: "oak", lender: "Rocket", payment: 1102.34, escrow: 310, active: true }] });
-  const [whole, pi] = suggestAll([row("2026-09-01", -1412.34, "ROCKET MORTGAGE"), row("2026-09-01", -1102.34, "ROCKET MTG")], c);
-  for (const s of [whole, pi]) {
-    assert.equal(s.action, "skip");
-    assert.equal(s.status, "mortgage");
-    assert.match(s.why, /Record it from the loan/);
-  }
+const rocket = (over: object = {}) => ({
+  id: "l1",
+  propertyId: "oak",
+  lender: "Rocket Mortgage",
+  active: true,
+  balance: 180000,
+  balanceAsOf: "2026-08",
+  rate: 6.5,
+  payment: 1102.34,
+  escrowTax: 200,
+  escrowInsurance: 110,
+  dueDay: 1,
+  payments: [] as { month: string; principal: number; interest: number; escrow: number }[],
+  ...over,
+});
+
+test("a mortgage payment is recorded on its loan, split, never filed as one expense", () => {
+  const c = ctx({ loans: [rocket()] });
+  const [whole] = suggestAll([row("2026-08-01", -1412.34, "ACH DEBIT RKT MTG 0042")], c);
+  assert.deepEqual([whole.action, whole.status, whole.loanId, whole.loanMonth], ["loan", "mortgage", "l1", "2026-08"]);
+  // $180,000 at 6.5%: $975 interest, the rest of $1,102.34 principal, $310 escrow.
+  assert.deepEqual(whole.split, { principal: 127.34, interest: 975, escrowTax: 200, escrowInsurance: 110 });
+  assert.match(whole.why, /The Rocket Mortgage payment on 12 Oak St — recorded on the loan, split into interest, escrow and principal/);
+  // Principal and interest alone (escrow paid another way) splits without escrow.
+  const [pi] = suggestAll([row("2026-08-01", -1102.34, "RKT MTG")], c);
+  assert.deepEqual(pi.split, { principal: 127.34, interest: 975, escrowTax: 0, escrowInsurance: 0 });
+});
+
+test("two months in one statement split from the balance the first one left", () => {
+  const c = ctx({ loans: [rocket()] });
+  const out = suggestAll([row("2026-09-01", -1412.34, "RKT MTG"), row("2026-08-01", -1412.34, "RKT MTG")], c);
+  const [sep, aug] = out;
+  assert.deepEqual([aug.loanMonth, sep.loanMonth], ["2026-08", "2026-09"]);
+  assert.ok(sep.split!.interest < aug.split!.interest);
+  assert.equal(Math.round((sep.split!.interest + sep.split!.principal) * 100), 110234);
+});
+
+test("a month already recorded, or before the loan's books, isn't recorded again", () => {
+  const c = ctx({ loans: [rocket({ payments: [{ month: "2026-08", principal: 127.34, interest: 975, escrow: 310 }] })] });
+  const [done, before] = suggestAll([row("2026-08-02", -1412.34, "RKT MTG"), row("2026-07-01", -1412.34, "RKT MTG")], c);
+  assert.deepEqual([done.action, done.status], ["skip", "recorded"]);
+  assert.match(done.why, /Aug 2026 Rocket Mortgage payment is already recorded/);
+  assert.deepEqual([before.action, before.status], ["skip", "mortgage"]);
+  assert.match(before.why, /before this loan's books begin/);
+});
+
+test("the lender's name with an amount that doesn't fit is left for the loan's own form", () => {
+  const c = ctx({ loans: [rocket()] });
+  const [s] = suggestAll([row("2026-08-01", -1500, "ROCKET MORTGAGE PAYMENT")], c);
+  assert.deepEqual([s.action, s.status, s.split ?? null], ["skip", "mortgage", null]);
+  assert.match(s.why, /isn't the payment on file/);
 });
 
 test("even a learned payee can't turn a mortgage payment into one expense", () => {
   const c = ctx({
-    loans: [{ id: "l1", propertyId: "oak", lender: "Rocket", payment: 1102.34, escrow: 310, active: true }],
+    loans: [rocket()],
     learned: [{ bankText: "ROCKET MORTGAGE", type: "expense", date: "2026-08-01", amount: 1412.34, propertyId: "oak", unitId: null, category: "Mortgage Interest", detail: "", vendorId: null }],
   });
-  assert.equal(suggestAll([row("2026-09-01", -1412.34, "ROCKET MORTGAGE")], c)[0].status, "mortgage");
+  assert.equal(suggestAll([row("2026-09-01", -1412.34, "ROCKET MORTGAGE")], c)[0].action, "loan");
 });
 
 test("a security deposit is not income, but a deposit equal to the rent is read as rent", () => {

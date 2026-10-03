@@ -18,7 +18,7 @@ type Line = BankRow & { ref: string };
 
 /** What will happen to one line. Starts as the suggestion; edits mark it touched. */
 type Decision = {
-  action: "rent" | "expense" | "skip";
+  action: "rent" | "expense" | "loan" | "skip";
   /** "propertyId|unitId", or "" when not chosen. */
   place: string;
   category: string;
@@ -29,6 +29,9 @@ type Decision = {
   touched: boolean;
 };
 
+const shortMonthLabel = (month: string) =>
+  new Date(`${month}-01T00:00:00Z`).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+
 type Filter = "all" | "import" | "check" | "skip";
 
 /** A bank file larger than this is a mistake — a year of a busy account is a few hundred KB. */
@@ -38,6 +41,7 @@ const PAGE = 100;
 const STATUS_LABEL: Partial<Record<Suggestion["status"], string>> = {
   duplicate: "In the ledger",
   imported: "Imported",
+  recorded: "Recorded",
   mortgage: "Mortgage",
   deposit: "Deposit",
   transfer: "Transfer",
@@ -61,7 +65,8 @@ function decisionFrom(sg: Suggestion): Decision {
   };
 }
 
-function complete(d: Decision) {
+function complete(d: Decision, sg?: Suggestion) {
+  if (d.action === "loan") return Boolean(sg?.loanId && sg.split);
   if (d.action === "rent") return Boolean(d.place);
   if (d.action === "expense") return Boolean(d.place && d.category);
   return true;
@@ -69,7 +74,7 @@ function complete(d: Decision) {
 
 /** Whether a line wants a person's eye before importing. */
 function needsLook(d: Decision, sg: Suggestion | undefined) {
-  if (d.action !== "skip" && !complete(d)) return true;
+  if (d.action !== "skip" && !complete(d, sg)) return true;
   if (d.touched || !sg) return false;
   if (sg.confidence === "guess") return true;
   return d.action === "skip" && sg.confidence === "none" && sg.status === "new";
@@ -126,7 +131,16 @@ export default function ImportClient({
   const [shown, setShown] = useState(PAGE);
   const [offer, setOffer] = useState<{ from: string; refs: string[]; key: string } | null>(null);
   const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<{ created: number; alreadyImported: number; rent: number; rentTotal: number; expense: number; expenseTotal: number } | null>(null);
+  const [result, setResult] = useState<{
+    created: number;
+    alreadyImported: number;
+    rent: number;
+    rentTotal: number;
+    expense: number;
+    expenseTotal: number;
+    loan: number;
+    loanTotal: number;
+  } | null>(null);
 
   async function analyze(forLines: Line[], forCompany: string) {
     const run = ++analysis.current;
@@ -253,7 +267,7 @@ export default function ImportClient({
         if (other.status === "duplicate" || other.status === "imported") return false;
         return d.action !== next.action || d.place !== next.place || d.category !== next.category;
       });
-      setOffer(refs.length > 0 && next.action !== "skip" ? { from: ref, refs, key: payeeLabel(line.text) } : null);
+      setOffer(refs.length > 0 && next.action !== "skip" && next.action !== "loan" ? { from: ref, refs, key: payeeLabel(line.text) } : null);
     }
   }
 
@@ -292,6 +306,8 @@ export default function ImportClient({
     let rentTotal = 0;
     let expense = 0;
     let expenseTotal = 0;
+    let loan = 0;
+    let loanTotal = 0;
     let incomplete = 0;
     for (const l of lines) {
       const d = decisions[l.ref];
@@ -302,11 +318,14 @@ export default function ImportClient({
         continue;
       }
       toImport++;
-      if (!complete(d)) {
+      if (!complete(d, suggestions?.[l.ref])) {
         incomplete++;
         continue;
       }
-      if (d.action === "rent") {
+      if (d.action === "loan") {
+        loan++;
+        loanTotal += Math.abs(l.amount);
+      } else if (d.action === "rent") {
         rent++;
         rentTotal += Math.abs(l.amount);
       } else {
@@ -314,7 +333,7 @@ export default function ImportClient({
         expenseTotal += Math.abs(l.amount);
       }
     }
-    return { toImport, check, skip, rent, rentTotal, expense, expenseTotal, incomplete, ready: rent + expense };
+    return { toImport, check, skip, rent, rentTotal, expense, expenseTotal, loan, loanTotal, incomplete, ready: rent + expense + loan };
   }, [lines, decisions, suggestions]);
 
   const visible = useMemo(
@@ -337,10 +356,14 @@ export default function ImportClient({
     const rows = lines
       .filter((l) => {
         const d = decisions[l.ref];
-        return d && d.action !== "skip" && complete(d);
+        return d && d.action !== "skip" && complete(d, suggestions?.[l.ref]);
       })
       .map((l) => {
         const d = decisions[l.ref];
+        if (d.action === "loan") {
+          const sg = suggestions![l.ref];
+          return { ref: l.ref, date: l.date, amount: Math.abs(l.amount), type: "loan", loanId: sg.loanId, month: sg.loanMonth, bankText: l.text };
+        }
         const place = placeByKey.get(d.place)!;
         return {
           ref: l.ref,
@@ -375,6 +398,8 @@ export default function ImportClient({
         rentTotal: counts.rentTotal,
         expense: counts.expense,
         expenseTotal: counts.expenseTotal,
+        loan: counts.loan,
+        loanTotal: counts.loanTotal,
       });
       window.scrollTo({ top: 0, behavior: "smooth" });
     } catch {
@@ -429,6 +454,12 @@ export default function ImportClient({
                 <span>
                   {result.expense} {result.expense === 1 ? "expense" : "expenses"} ·{" "}
                   <strong className={s.out}>{money(result.expenseTotal)}</strong>
+                </span>
+              )}
+              {result.loan > 0 && (
+                <span>
+                  {result.loan} mortgage {result.loan === 1 ? "payment" : "payments"} ·{" "}
+                  <strong className={s.out}>{money(result.loanTotal)}</strong>
                 </span>
               )}
             </p>
@@ -680,6 +711,13 @@ export default function ImportClient({
                           <b className={s.out}>−{money(counts.expenseTotal)}</b>
                         </>
                       )}
+                      {(counts.rent > 0 || counts.expense > 0) && counts.loan > 0 && " · "}
+                      {counts.loan > 0 && (
+                        <>
+                          {counts.loan} mortgage {counts.loan === 1 ? "payment" : "payments"}{" "}
+                          <b className={s.out}>−{money(counts.loanTotal)}</b>
+                        </>
+                      )}
                     </span>
                   )}
                   {counts.incomplete > 0 && (
@@ -726,7 +764,9 @@ function LineRow({
 }) {
   if (!d || !sg) return null;
   const moneyIn = line.amount > 0;
-  const kind = moneyIn ? "rent" : "expense";
+  // A mortgage payment that splits here is recorded on its loan, never as one expense.
+  const mortgage = !moneyIn && Boolean(sg.loanId && sg.split);
+  const kind = moneyIn ? "rent" : mortgage ? "loan" : "expense";
   const statusLabel = STATUS_LABEL[sg.status];
   const tone =
     d.touched ? "touched" : statusLabel ? "status" : sg.confidence === "sure" ? "sure" : sg.confidence === "guess" ? "guess" : "none";
@@ -744,7 +784,7 @@ function LineRow({
             {statusLabel && !d.touched && <span className={s.tag}>{statusLabel}</span>}
             {!statusLabel && sg.confidence === "guess" && !d.touched && <span className={`${s.tag} ${s.tagGuess}`}>Check</span>}
             {d.touched ? "Your choice" : sg.why || "Nothing on file matches — choose what this is, or leave it skipped"}
-            {sg.status === "mortgage" && sg.propertyId && !d.touched && (
+            {sg.status === "mortgage" && !sg.split && sg.propertyId && !d.touched && (
               <>
                 {" "}
                 <Link href={`/dashboard/properties/${sg.propertyId}`} className={s.whyLink}>
@@ -769,7 +809,7 @@ function LineRow({
             className={d.action === kind ? s.segOn : ""}
             onClick={() => onDecide({ action: kind })}
           >
-            {moneyIn ? "Rent" : "Expense"}
+            {moneyIn ? "Rent" : mortgage ? "Mortgage" : "Expense"}
           </button>
           <button
             type="button"
@@ -781,7 +821,14 @@ function LineRow({
             Skip
           </button>
         </div>
-        {d.action !== "skip" && (
+        {d.action === "loan" && sg.split && sg.loanMonth && (
+          <span className={s.split}>
+            {shortMonthLabel(sg.loanMonth)} payment · {money(sg.split.interest)} interest
+            {sg.split.escrowTax + sg.split.escrowInsurance > 0 && ` · ${money(sg.split.escrowTax + sg.split.escrowInsurance)} escrow`} ·{" "}
+            {money(sg.split.principal)} principal
+          </span>
+        )}
+        {(d.action === "rent" || d.action === "expense") && (
           <>
             <select
               aria-label={moneyIn ? "Rent for" : "Property"}

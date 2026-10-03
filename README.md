@@ -641,12 +641,21 @@ Every line arrives with a suggestion and the reason for it:
   vendor from the vendor book; or a category from the words — utilities,
   insurers, property tax, hardware stores, trades, legal, bank fees.
 
-Three things are suggested as **Skip**, never import, because each would put
-a wrong number in the books: a line **already in the ledger** (the same
-amount within four days, typed in by hand — each ledger entry answers for
-one line, so two identical payments are still two); a **mortgage payment**
-(the loan's payment with or without escrow — record it from the loan so it's
-split into interest, escrow and principal); and a **security deposit** (a
+A **mortgage payment** — the loan's payment to the cent, with or without
+escrow — is never filed as one expense. It's recorded on its loan exactly as
+the loan's own form records it: the month it pays (the one whose due date is
+nearest, so a payment sent August 28th for a loan due on the 1st is
+September's), split from the balance at the time into interest, escrow for
+tax and insurance, and principal, with interest and escrow in the ledger
+under their own Schedule E lines. Two months in one statement split in
+order. A month the loan already has, or one before its books begin, is
+skipped; a line with the lender's name but an amount that doesn't fit is
+left for the loan's form and the lender's own figures.
+
+Two things are suggested as **Skip**, never import, because each would put a
+wrong number in the books: a line **already in the ledger** (the same amount
+within four days, typed in by hand — each ledger entry answers for one line,
+so two identical payments are still two); and a **security deposit** (a
 tenant's deposit amount near the start of their lease — money held isn't
 income). Transfers between your own accounts are skipped too. Anything can
 be overridden.

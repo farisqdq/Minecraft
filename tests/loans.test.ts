@@ -1,6 +1,8 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
+  loanMonthFor,
+  splitForAmount,
   interestFor,
   splitPayment,
   currentBalance,
@@ -260,4 +262,25 @@ test("a payment of nothing, or of negative money, is refused", () => {
   assert.equal(parsePaymentInput(zero, terms, []).ok, false);
   assert.equal(parsePaymentInput({ month: "2026-01", interest: "-1" }, terms, []).ok, false);
   assert.equal(parsePaymentInput({ month: "Jan" }, terms, []).ok, false);
+});
+
+test("a payment belongs to the month whose due date is nearest", () => {
+  assert.equal(loanMonthFor("2026-09-01", 1), "2026-09");
+  assert.equal(loanMonthFor("2026-08-28", 1), "2026-09");
+  assert.equal(loanMonthFor("2026-09-10", 1), "2026-09");
+  assert.equal(loanMonthFor("2026-09-16", 1), "2026-09");
+  assert.equal(loanMonthFor("2026-09-17", 1), "2026-10");
+  assert.equal(loanMonthFor("2026-12-30", 1), "2027-01");
+  assert.equal(loanMonthFor("2026-01-03", 1), "2026-01");
+  assert.equal(loanMonthFor("2026-03-02", 28), "2026-02");
+});
+
+test("a bank amount is split only when it is the whole payment, or principal and interest alone", () => {
+  const terms = { balance: 180000, balanceAsOf: "2026-08", rate: 6.5, payment: 1102.34, escrowTax: 200, escrowInsurance: 110, dueDay: 1 };
+  const s = suggestPayment(terms, [], "2026-08");
+  const whole = splitForAmount(-1412.34, terms, [], "2026-08");
+  assert.deepEqual(whole, { principal: s.principal, interest: s.interest, escrowTax: 200, escrowInsurance: 110 });
+  assert.equal(Math.round((whole!.principal + whole!.interest + whole!.escrowTax + whole!.escrowInsurance) * 100), 141234);
+  assert.deepEqual(splitForAmount(1102.34, terms, [], "2026-08"), { principal: s.principal, interest: s.interest, escrowTax: 0, escrowInsurance: 0 });
+  assert.equal(splitForAmount(1500, terms, [], "2026-08"), null);
 });

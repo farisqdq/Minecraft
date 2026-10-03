@@ -13,6 +13,8 @@ import { normalizeCategory } from "./categories";
 import { validAmount } from "./money";
 import { REF_PATTERN } from "./bank-csv";
 import { suggestAll, type ImportRow, type MatchContext, type Suggestion } from "./bank-match";
+import { splitForAmount, type LoanPaymentLike } from "./loans";
+import { recordLoanPayment } from "./loans-db";
 
 /** One upload's worth. A year of a busy account is well under this. */
 export const MAX_IMPORT_ROWS = 3000;
@@ -69,14 +71,17 @@ export async function matchContext(companyId: string, rows: ImportRow[]): Promis
     // What earlier imports were filed as. The newest few thousand are
     // plenty to remember every payee an LLC deals with.
     prisma.transaction.findMany({
-      where: { ...inCompany, bankText: { not: null } },
+      // Not a mortgage payment's parts: those are split by the loan, and
+      // learning "interest" from them would file the next whole payment as
+      // interest if the loan were ever switched off.
+      where: { ...inCompany, bankText: { not: null }, loanPaymentId: null },
       orderBy: { date: "desc" },
       take: 5000,
       select: { bankText: true, type: true, date: true, amount: true, propertyId: true, unitId: true, category: true, detail: true, vendorId: true },
     }),
     prisma.vendor.findMany({ where: { companyId }, select: { id: true, name: true } }),
     prisma.recurringExpense.findMany({ where: inCompany }),
-    prisma.loan.findMany({ where: { ...inCompany, active: true } }),
+    prisma.loan.findMany({ where: { ...inCompany, active: true }, include: { payments: { orderBy: { month: "asc" } } } }),
   ]);
 
   const day = (d: Date) => d.toISOString().slice(0, 10);
@@ -149,9 +154,15 @@ export async function matchContext(companyId: string, rows: ImportRow[]): Promis
       id: l.id,
       propertyId: l.propertyId,
       lender: l.lender,
-      payment: l.payment,
-      escrow: Math.round((l.escrowTax + l.escrowInsurance) * 100) / 100,
       active: l.active,
+      balance: l.balance,
+      balanceAsOf: l.balanceAsOf,
+      rate: l.rate,
+      payment: l.payment,
+      escrowTax: l.escrowTax,
+      escrowInsurance: l.escrowInsurance,
+      dueDay: l.dueDay,
+      payments: l.payments.map((p) => ({ month: p.month, principal: p.principal, interest: p.interest, escrow: p.escrow })),
     })),
   };
 }
@@ -191,12 +202,15 @@ export async function importChoices(
   if (!Array.isArray(raw) || raw.length === 0) return { ok: false, error: "Nothing chosen to import." };
   if (raw.length > MAX_IMPORT_ROWS) return { ok: false, error: `At most ${MAX_IMPORT_ROWS} lines at a time.` };
 
-  const [properties, units, vendors, recurring] = await Promise.all([
+  const [properties, units, vendors, recurring, loans] = await Promise.all([
     prisma.property.findMany({ where: { companyId }, select: { id: true } }),
     prisma.unit.findMany({ where: { property: { companyId } }, select: { id: true, propertyId: true } }),
     prisma.vendor.findMany({ where: { companyId }, select: { id: true } }),
     prisma.recurringExpense.findMany({ where: { property: { companyId } }, select: { id: true, propertyId: true } }),
+    prisma.loan.findMany({ where: { property: { companyId } } }),
   ]);
+  const loansById = new Map(loans.map((l) => [l.id, l]));
+  const loanChoices: { ref: string; date: string; amount: number; loanId: string; month: string; bankText: string }[] = [];
   const propertyIds = new Set(properties.map((p) => p.id));
   const unitProperty = new Map(units.map((u) => [u.id, u.propertyId]));
   const vendorIds = new Set(vendors.map((v) => v.id));
@@ -206,6 +220,20 @@ export async function importChoices(
   const seen = new Set<string>();
   for (const r of raw) {
     const o = (r ?? {}) as Record<string, unknown>;
+    if (o.type === "loan") {
+      // A mortgage payment: the split is worked out again here, from the
+      // loan's own terms, rather than taken from the browser.
+      const amount = Number(o.amount);
+      const month = typeof o.month === "string" ? o.month : "";
+      if (typeof o.ref !== "string" || !REF_PATTERN.test(o.ref) || !validDay(o.date) || !validAmount(amount) || !/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+        return { ok: false, error: "Some lines couldn't be read. Upload the file again." };
+      }
+      if (typeof o.loanId !== "string" || !loansById.has(o.loanId)) return { ok: false, error: "A mortgage line points at a loan that isn't in this LLC." };
+      if (seen.has(o.ref)) continue;
+      seen.add(o.ref);
+      loanChoices.push({ ref: o.ref, date: o.date, amount: Math.round(amount * 100) / 100, loanId: o.loanId, month, bankText: str(o.bankText, 300) });
+      continue;
+    }
     const type = o.type === "expense" ? "expense" : o.type === "rent" ? "rent" : null;
     const amount = Number(o.amount);
     const propertyId = typeof o.propertyId === "string" ? o.propertyId : "";
@@ -248,11 +276,38 @@ export async function importChoices(
   const write = () =>
     prisma.$transaction(async (tx) => {
     const existing = await tx.transaction.findMany({
-      where: { property: { companyId }, bankRef: { in: choices.map((c) => c.ref) } },
+      where: { property: { companyId }, bankRef: { in: [...choices, ...loanChoices].map((c) => c.ref) } },
       select: { bankRef: true },
     });
     const done = new Set(existing.map((t) => t.bankRef));
     const fresh = choices.filter((c) => !done.has(c.ref));
+
+    // Mortgage payments in month order, each split from the balance the
+    // one before it left. A month the loan already has is passed over, as
+    // a line already imported is: the unique (loan, month) index would
+    // refuse it anyway.
+    let loanCreated = 0;
+    let loanSkipped = 0;
+    const paid = new Map<string, LoanPaymentLike[]>();
+    for (const c of [...loanChoices].sort((a, b) => a.month.localeCompare(b.month))) {
+      if (done.has(c.ref)) {
+        loanSkipped += 1;
+        continue;
+      }
+      const loan = loansById.get(c.loanId)!;
+      if (!paid.has(loan.id)) paid.set(loan.id, await tx.loanPayment.findMany({ where: { loanId: loan.id } }));
+      const payments = paid.get(loan.id)!;
+      if (payments.some((p) => p.month === c.month)) {
+        loanSkipped += 1;
+        continue;
+      }
+      if (c.month < loan.balanceAsOf) throw new ImportRefused(`A ${loan.lender} line is for a month before that loan's books begin.`);
+      const split = splitForAmount(c.amount, loan, payments, c.month);
+      if (!split) throw new ImportRefused(`A ${loan.lender} line doesn't match that loan's payment. Record it from the loan with the lender's figures.`);
+      await recordLoanPayment(tx, loan, { month: c.month, date: c.date, ...split }, userId, { ref: c.ref, text: c.bankText });
+      payments.push({ month: c.month, ...split, escrow: split.escrowTax + split.escrowInsurance });
+      loanCreated += 1;
+    }
     if (fresh.length > 0) {
       await tx.transaction.createMany({
         data: fresh.map((c) => ({
@@ -272,12 +327,20 @@ export async function importChoices(
         })),
       });
     }
-    return { ok: true as const, created: fresh.length, alreadyImported: choices.length - fresh.length };
+    return {
+      ok: true as const,
+      created: fresh.length + loanCreated,
+      alreadyImported: choices.length - fresh.length + loanSkipped,
+    };
     }, { isolationLevel: "Serializable" });
   try {
     return await write();
   } catch (e) {
+    if (e instanceof ImportRefused) return { ok: false, error: e.message };
     if ((e as { code?: string })?.code !== "P2034") throw e;
     return write();
   }
 }
+
+/** A line refused partway through the write; the transaction rolls back and nothing is saved. */
+class ImportRefused extends Error {}

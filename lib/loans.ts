@@ -232,6 +232,53 @@ export function dueDateOf(month: string, dueDay: number): string {
   return `${month}-${String(day).padStart(2, "0")}`;
 }
 
+/**
+ * Which month's payment a payment made on `date` is: the month whose due
+ * date is nearest. A payment sent August 28th for a loan due on the 1st is
+ * September's; one sent September 10th is September's, late. On an exact
+ * tie the earlier month wins — late is commoner than very early.
+ */
+export function loanMonthFor(date: string, dueDay: number): string {
+  const here = date.slice(0, 7);
+  const day = (iso: string) => Date.parse(`${iso}T00:00:00Z`);
+  const [y, m] = here.split("-").map(Number);
+  const prev = m === 1 ? `${y - 1}-12` : `${y}-${String(m - 1).padStart(2, "0")}`;
+  let best = prev;
+  let bestGap = Infinity;
+  for (const month of [prev, here, nextMonth(here)]) {
+    const gap = Math.abs(day(dueDateOf(month, dueDay)) - day(date));
+    if (gap < bestGap) {
+      best = month;
+      bestGap = gap;
+    }
+  }
+  return best;
+}
+
+/**
+ * The split for a payment of exactly `amount` in `month`: the suggested
+ * one when the amount is the whole payment, the same without escrow when
+ * the amount is principal and interest only (escrow paid separately).
+ * Anything else is null — the lender's own figures are needed, and the
+ * loan's form on the property page takes them.
+ */
+export function splitForAmount(
+  amount: number,
+  terms: LoanTerms,
+  payments: LoanPaymentLike[],
+  month: string
+): { principal: number; interest: number; escrowTax: number; escrowInsurance: number } | null {
+  const s = suggestPayment(terms, payments, month);
+  const want = toCents(Math.abs(amount));
+  const pi = toCents(s.principal) + toCents(s.interest);
+  if (pi <= 0) return null;
+  if (want === pi + toCents(s.escrowTax) + toCents(s.escrowInsurance)) {
+    return { principal: s.principal, interest: s.interest, escrowTax: s.escrowTax, escrowInsurance: s.escrowInsurance };
+  }
+  if (want === pi) return { principal: s.principal, interest: s.interest, escrowTax: 0, escrowInsurance: 0 };
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Input
 

@@ -26,6 +26,7 @@
 import { rentForMonth, type RentChangeDTO } from "./rent.ts";
 import { rentNote } from "./quick-record.ts";
 import { money } from "./money.ts";
+import { loanMonthFor, splitForAmount, type LoanPaymentLike, type LoanTerms } from "./loans.ts";
 
 export type ImportRow = { ref: string; date: string; amount: number; text: string };
 
@@ -92,16 +93,17 @@ export type RecurringLite = {
   active: boolean;
 };
 
-export type LoanLite = {
+export type LoanLite = LoanTerms & {
   id: string;
   propertyId: string;
   lender: string;
-  /** Principal and interest. */
-  payment: number;
-  /** Escrow, monthly. */
-  escrow: number;
   active: boolean;
+  /** Payments recorded so far, for the balance each split starts from. */
+  payments: LoanPaymentLike[];
 };
+
+/** How one mortgage payment divides, as the loan's own form records it. */
+export type LoanSplit = { principal: number; interest: number; escrowTax: number; escrowInsurance: number };
 
 export type MatchContext = {
   properties: { id: string; name: string }[];
@@ -123,13 +125,17 @@ export type Status =
   | "imported"
   /** The same amount is in the ledger within a few days. */
   | "duplicate"
+  /** A mortgage payment: recorded on its loan, or — when it can't be split here — left for the loan's form. */
   | "mortgage"
+  /** The loan already has that month's payment. */
+  | "recorded"
   | "deposit"
   | "transfer";
 
 export type Suggestion = {
   ref: string;
-  action: "rent" | "expense" | "skip";
+  /** "loan": recorded as a mortgage payment on `loanId`, split into interest, escrow and principal. */
+  action: "rent" | "expense" | "loan" | "skip";
   /** sure: from your own past choice or something exact. guess: worth a look. none: nothing to go on. */
   confidence: "sure" | "guess" | "none";
   status: Status;
@@ -142,6 +148,10 @@ export type Suggestion = {
   recurringExpenseId: string | null;
   why: string;
   duplicateOf?: { id: string; date: string; amount: number; detail: string };
+  /** For a mortgage payment: the loan, the month it pays, and how it splits. */
+  loanId?: string;
+  loanMonth?: string;
+  split?: LoanSplit | null;
 };
 
 /** How far apart a bank date and a typed-in date can be and still be the same money. */
@@ -251,6 +261,11 @@ export function categoryFromWords(text: string): string | null {
 
 /** Money moving between the landlord's own accounts — neither income nor an expense. */
 const TRANSFER = /\b(TRANSFER|XFER|TFR)\b|\bPAYMENT THANK YOU\b|\b(CREDIT CARD|CARD) (PAYMENT|PYMT)\b|\bCRCARDPMT\b|\bAUTOPAY PAYMENT\b/;
+
+function monthShortLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, 1)).toLocaleDateString("en-US", { month: "short", year: "numeric", timeZone: "UTC" });
+}
 
 function dayNumber(iso: string): number {
   return Math.floor(Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10)) / 86_400_000);
@@ -552,24 +567,62 @@ export function suggestAll(rows: ImportRow[], ctx: MatchContext): Suggestion[] {
     return s;
   }
 
+  // Mortgage payments first, oldest line first: each month's split starts
+  // from the balance the month before left, including a month paid earlier
+  // in this same statement.
+  const mortgages = new Map<string, Suggestion>();
+  const paid = new Map(ctx.loans.map((l) => [l.id, [...l.payments]]));
+  for (const row of [...rows].filter((r) => r.amount < 0).sort((a, b) => a.date.localeCompare(b.date))) {
+    const s = mortgageSuggestion(row, paid);
+    if (s) mortgages.set(row.ref, s);
+  }
+
+  /**
+   * A line that is a mortgage payment — the loan's payment to the cent, with
+   * or without escrow, or the lender's name on it. Comes before anything
+   * learned: filing one as a single expense is the mistake loans exist to
+   * stop.
+   */
+  function mortgageSuggestion(row: ImportRow, paidSoFar: Map<string, LoanPaymentLike[]>): Suggestion | null {
+    const amount = cents(row.amount);
+    const words = wordsOf(row.text);
+    const live = ctx.loans.filter((l) => l.active);
+    const loan =
+      live.find((l) => cents(l.payment + l.escrowTax + l.escrowInsurance) === amount || cents(l.payment) === amount) ??
+      live.find((l) => l.lender && fullNameIn(l.lender, words));
+    if (!loan) return null;
+    const lender = loan.lender || "mortgage";
+    const where = propertyName.get(loan.propertyId) ?? "a property";
+    const month = loanMonthFor(row.date, loan.dueDay);
+    const base = { ...blank(row.ref), status: "mortgage" as const, propertyId: loan.propertyId, loanId: loan.id, loanMonth: month };
+    const payments = paidSoFar.get(loan.id) ?? [];
+    if (month < loan.balanceAsOf) {
+      return { ...base, confidence: "sure", why: `A ${lender} payment from before this loan's books begin — it's already in the starting balance.` };
+    }
+    if (payments.some((p) => p.month === month)) {
+      return { ...base, status: "recorded", confidence: "sure", why: `The ${monthShortLabel(month)} ${lender} payment is already recorded.` };
+    }
+    const split = splitForAmount(row.amount, loan, payments, month);
+    if (!split) {
+      return {
+        ...base,
+        why: `${lender}'s name is on it, but ${money(Math.abs(row.amount))} isn't the payment on file. Record it from the loan on ${where} with the lender's figures.`,
+      };
+    }
+    payments.push({ month, ...split, escrow: split.escrowTax + split.escrowInsurance });
+    const escrow = split.escrowTax + split.escrowInsurance;
+    return {
+      ...base,
+      action: "loan",
+      confidence: "sure",
+      split,
+      why: `The ${lender} payment on ${where} — recorded on the loan, split into interest${escrow > 0 ? ", escrow" : ""} and principal`,
+    };
+  }
+
   const out: Suggestion[] = rows.map((row) => {
     const amount = cents(row.amount);
-    if (row.amount < 0) {
-      // A mortgage payment, whole or without escrow, comes before anything
-      // learned: filing one as a single expense is the mistake loans exist to stop.
-      const loan = ctx.loans.find(
-        (l) => l.active && (cents(l.payment + l.escrow) === amount || cents(l.payment) === amount)
-      );
-      if (loan) {
-        return {
-          ...blank(row.ref),
-          status: "mortgage" as const,
-          propertyId: loan.propertyId,
-          why: `Same as the ${loan.lender || "mortgage"} payment on ${propertyName.get(loan.propertyId) ?? "a property"}. Record it from the loan on the property page, so it's split into interest, escrow and principal.`,
-        };
-      }
-      return expenseSuggestion(row);
-    }
+    if (row.amount < 0) return mortgages.get(row.ref) ?? expenseSuggestion(row);
 
     const s = rentSuggestion(row);
     // A deposit is held, not earned. Only when it can't also be the rent.
