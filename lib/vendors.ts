@@ -26,6 +26,8 @@ export type VendorDTO = {
   companyId: string;
   name: string;
   trade: Trade;
+  /** From their W-9 (a26); null until set. Decides whether they get a 1099-NEC. */
+  taxClass: "individual" | "partnership" | "corporation" | null;
   phone: string;
   email: string;
   note: string;

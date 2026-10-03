@@ -5,6 +5,7 @@ import { getCurrentUser } from "@/lib/session";
 import { BACKUP_FORMAT } from "../route";
 import { normalizeCategory } from "@/lib/categories";
 import { normalizeTrade } from "@/lib/vendors";
+import { normalizeTaxClass } from "@/lib/tax1099";
 import { normalizeKind } from "@/lib/documents";
 import { acceptBackupFile } from "@/lib/backup-files";
 import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "@/lib/maintenance";
@@ -252,6 +253,8 @@ type CleanPropertyOwner = {
 type CleanVendor = {
   name: string;
   trade: string;
+  /** From their W-9 (a26). */
+  taxClass: string | null;
   phone: string | null;
   email: string | null;
   note: string | null;
@@ -862,6 +865,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
       vendors.push({
         name: vName,
         trade: normalizeTrade(v.trade),
+        taxClass: normalizeTaxClass(v.taxClass),
         phone: str(v.phone, 40) || null,
         email: str(v.email, 200) || null,
         note: str(v.note, 500) || null,

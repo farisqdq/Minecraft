@@ -791,6 +791,28 @@ per property too, and a schedule of each asset's basis, class, year's
 deduction and total taken — the running figure an accountant carries forward
 and needs again at a sale.
 
+**1099-NEC review.** Below the tax export, the same LLC and year show who
+the LLC owes a 1099-NEC: each vendor from the vendor book paid that year,
+from the expenses that name them, with the total, whether their W-9 is in
+the filing cabinet, and a status —
+
+- **1099 due**: an individual, single-member LLC or partnership paid over
+  the year's threshold — **$600** for payments in 2025 and earlier,
+  **$2,000** from 2026 under the 2025 tax law;
+- **Check**: over the threshold, but their tax class isn't set — it's on
+  their W-9, which also has the tax ID the form needs;
+- **Exempt**: a corporation — except an attorney, whose legal fees (filed
+  under Legal & Professional) are reportable even as a corporation;
+- **Under**: paid less than the threshold.
+
+Each vendor's **tax class** is set on their card in the vendor book, from
+their W-9 (no tax ID is stored — it stays on the W-9). The deadline is
+January 31st, or the Monday after when that's a weekend, and the page says
+which. **Download 1099 review (CSV)** gives the accountant the list. What
+the app can't know is said rather than guessed: payments made by card or
+PayPal are reported by the processor on a 1099-K and should be left out,
+and this isn't tax advice. Backups carry the tax class.
+
 Text going into the CSV is escaped so a note can't become a live formula in
 whoever's spreadsheet opens it. Amounts are left alone, so the columns still
 add up.

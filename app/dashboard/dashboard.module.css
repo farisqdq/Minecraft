@@ -4012,3 +4012,50 @@ tr:hover .rowDel {
 .aheadNotes a:hover {
   text-decoration: underline;
 }
+
+/* ---------- 1099-NEC review (a26) ---------- */
+.necSummary {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.necList {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.necList li {
+  padding: 10px 0;
+  border-top: 1px solid var(--line);
+}
+.necList li:first-child {
+  border-top: none;
+}
+.necMain {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.necName {
+  font-weight: 600;
+  font-size: 14px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.necAmt {
+  margin-left: auto;
+  font-weight: 600;
+  font-size: 14px;
+  white-space: nowrap;
+}
+.necWhy {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.necQuiet .necName,
+.necQuiet .necAmt {
+  color: var(--muted);
+}

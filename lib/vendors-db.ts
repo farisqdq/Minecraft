@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { normalizeTrade, phoneProblem, type VendorDTO } from "@/lib/vendors";
 import { emailProblem } from "@/lib/portal";
+import { normalizeTaxClass } from "@/lib/tax1099";
 
 /**
  * Every vendor in the books of the given companies, with what you've used
@@ -49,6 +50,7 @@ export async function vendorsForCompanies(companyIds: string[], now = new Date()
       companyId: v.companyId,
       name: v.name,
       trade: normalizeTrade(v.trade),
+      taxClass: normalizeTaxClass(v.taxClass),
       phone: v.phone ?? "",
       email: v.email ?? "",
       note: v.note ?? "",
@@ -77,6 +79,8 @@ export function readVendor(body: Record<string, unknown> | null) {
     data: {
       name,
       trade: normalizeTrade(body?.trade),
+      // Absent from the request leaves it as it is; "" clears it.
+      ...(body && "taxClass" in body ? { taxClass: normalizeTaxClass(body.taxClass) } : {}),
       phone: phone || null,
       email: email || null,
       note: note || null,

@@ -518,6 +518,9 @@ model Vendor {
   // One of lib/vendors.ts TRADES, so the book can be grouped and a repair's
   // category can suggest the right person.
   trade       String   @default("General")
+  // From their W-9 (a26): "individual", "partnership" or "corporation" —
+  // whether they get a 1099-NEC. Null until someone sets it.
+  taxClass    String?
   phone       String?
   email       String?
   note        String?

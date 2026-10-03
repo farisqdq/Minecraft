@@ -1,6 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { money } from "@/lib/money";
+import { formatDay } from "@/lib/lease";
+import type { Row1099 } from "@/lib/tax1099";
 import AppShell from "../../components/AppShell";
 import styles from "../dashboard.module.css";
 
@@ -19,6 +23,29 @@ export default function ExportClient({
   const currentYear = new Date().getFullYear();
   const [companyId, setCompanyId] = useState(companies[0]?.id ?? "");
   const [year, setYear] = useState(currentYear);
+
+  // The 1099-NEC review for the same LLC and year (a26).
+  const [nec, setNec] = useState<{ year: number; threshold: number; due: string; rows: Row1099[] } | null>(null);
+  const [necError, setNecError] = useState("");
+  useEffect(() => {
+    if (!companyId) return;
+    let live = true;
+    setNecError("");
+    fetch(`/api/export/1099?companyId=${encodeURIComponent(companyId)}&year=${year}`)
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        if (!live) return;
+        if (!res.ok) setNecError(data.error || "Couldn't load the 1099 review.");
+        else setNec(data);
+      })
+      .catch(() => live && setNecError("Couldn't reach the server."));
+    return () => {
+      live = false;
+    };
+  }, [companyId, year]);
+  const necRows = nec && nec.year === year ? nec.rows : null;
+  const toFile = necRows?.filter((r) => r.status === "file").length ?? 0;
+  const toCheck = necRows?.filter((r) => r.status === "check").length ?? 0;
 
   const startYear = earliestYear ?? currentYear;
   const years: number[] = [];
@@ -77,6 +104,73 @@ export default function ExportClient({
               </a>
             </div>
           </div>
+        </section>
+      )}
+
+      {companies.length > 0 && (
+        <section className={styles.block}>
+          <div className={styles.blockHead}>
+            <h2>1099-NEC · {year}</h2>
+            {nec && nec.year === year && (
+              <span className={styles.count}>
+                Due {formatDay(nec.due)} · over {money(nec.threshold)}
+              </span>
+            )}
+          </div>
+          <p className={styles.helpText} style={{ marginTop: 0 }}>
+            The LLC files a 1099-NEC for each person or partnership it paid {nec ? money(nec.threshold) : "the threshold"} or
+            more for services in {year} — from the expenses that name someone in the{" "}
+            <Link href="/dashboard/repairs/vendors">vendor book</Link>. Corporations are exempt, except for legal services.
+            Payments made by card or PayPal are reported by the processor on a 1099-K, so leave those out. Not tax advice.
+          </p>
+          {necError && <div className={styles.errorBar}>{necError}</div>}
+          {necRows && necRows.length === 0 && (
+            <div className={`${styles.formCard} ${styles.emptyState}`}>
+              No payments to anyone in the vendor book in {year}. An expense counts here when it names its vendor —
+              recording a repair&apos;s cost does that, and the bank import fills it in when it recognises one.
+            </div>
+          )}
+          {necRows && necRows.length > 0 && (
+            <div className={styles.formCard}>
+              <p className={styles.necSummary}>
+                {toFile > 0 ? `${toFile} to file` : "Nothing to file"}
+                {toCheck > 0 && ` · ${toCheck} to check — set their tax class from their W-9`}
+              </p>
+              <ul className={styles.necList}>
+                {necRows.map((r) => (
+                  <li key={r.vendorId} className={r.status === "below" || r.status === "exempt" ? styles.necQuiet : ""}>
+                    <div className={styles.necMain}>
+                      <span className={styles.necName}>{r.name}</span>
+                      <span
+                        className={`${styles.pill} ${
+                          r.status === "file" ? styles.owed : r.status === "check" ? styles.bill : r.status === "exempt" ? styles.paid : styles.vacant
+                        }`}
+                      >
+                        {r.status === "file" ? "1099 due" : r.status === "check" ? "Check" : r.status === "exempt" ? "Exempt" : "Under"}
+                      </span>
+                      <span className={`${styles.necAmt} num`}>{money(r.total)}</span>
+                    </div>
+                    <div className={styles.necWhy}>
+                      {r.status !== "below" && <span>{r.w9 ? "W-9 on file" : "No W-9 on file"} · </span>}
+                      {r.why}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <div className={styles.formFoot} style={{ justifyContent: "flex-start" }}>
+                <a
+                  className={styles.btn}
+                  href={`/api/export/1099?companyId=${encodeURIComponent(companyId)}&year=${year}&format=csv`}
+                  download
+                >
+                  Download 1099 review (CSV)
+                </a>
+                <Link className={`${styles.btn} ${styles.quiet}`} href="/dashboard/repairs/vendors">
+                  Open the vendor book
+                </Link>
+              </div>
+            </div>
+          )}
         </section>
       )}
     </AppShell>

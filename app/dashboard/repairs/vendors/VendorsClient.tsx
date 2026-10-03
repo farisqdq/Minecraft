@@ -12,10 +12,11 @@ import { formatDay, formatPhone, smsHref, telHref } from "@/lib/lease";
 import { TRADES, type VendorDTO } from "@/lib/vendors";
 import DocumentsPanel from "../../../components/DocumentsPanel";
 import type { DocumentDTO } from "@/lib/documents";
+import { TAX_CLASSES, TAX_CLASS_LABEL, threshold1099 } from "@/lib/tax1099";
 
 type Company = { id: string; name: string };
 
-const EMPTY = { id: "", companyId: "", name: "", trade: "General", phone: "", email: "", note: "" };
+const EMPTY = { id: "", companyId: "", name: "", trade: "General", taxClass: "", phone: "", email: "", note: "" };
 
 export default function VendorsClient({
   companies,
@@ -74,7 +75,7 @@ export default function VendorsClient({
     setError("");
     setForm(
       v
-        ? { id: v.id, companyId: v.companyId, name: v.name, trade: v.trade, phone: v.phone, email: v.email, note: v.note }
+        ? { id: v.id, companyId: v.companyId, name: v.name, trade: v.trade, taxClass: v.taxClass ?? "", phone: v.phone, email: v.email, note: v.note }
         : { ...EMPTY, companyId: company || companies[0]?.id || "" }
     );
     setOpen(true);
@@ -248,6 +249,13 @@ export default function VendorsClient({
                   </div>
 
                   {v.note && <div className={styles.note}>{v.note}</div>}
+                  <div className={styles.note}>
+                    {v.taxClass === "corporation"
+                      ? "Corporation — no 1099-NEC, except for legal services"
+                      : v.taxClass
+                        ? `${v.taxClass === "individual" ? "Individual or single-member LLC" : "Partnership"} — gets a 1099-NEC when paid ${money(threshold1099(Number(serverToday.slice(0, 4))))} or more in a year`
+                        : "Tax class not set — it's on their W-9"}
+                  </div>
 
                   <div className={styles.propActions}>
                     <button
@@ -332,6 +340,20 @@ export default function VendorsClient({
                 {TRADES.map((t) => (
                   <option key={t} value={t}>
                     {t}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={`${styles.field} ${styles.span4}`}>
+              <label htmlFor="v-tax">Tax class, from their W-9</label>
+              <select
+                id="v-tax"
+                value={form.taxClass}
+                onChange={(e) => setForm((f) => ({ ...f, taxClass: e.target.value }))}
+              >
+                {(["", ...TAX_CLASSES] as const).map((c) => (
+                  <option key={c} value={c}>
+                    {TAX_CLASS_LABEL[c]}
                   </option>
                 ))}
               </select>

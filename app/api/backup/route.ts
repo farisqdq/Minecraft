@@ -608,6 +608,7 @@ export async function GET() {
       vendors: c.vendors.map((v) => ({
         name: v.name,
         trade: v.trade,
+        taxClass: v.taxClass ?? "", // a26
         phone: v.phone ?? "",
         email: v.email ?? "",
         note: v.note ?? "",
