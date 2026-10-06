@@ -236,7 +236,7 @@
   margin-top: 6px;
   min-height: 28px;
   padding: 3px 9px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
   color: var(--ink-2);

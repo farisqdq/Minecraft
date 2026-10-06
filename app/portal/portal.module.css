@@ -13,9 +13,9 @@
   align-items: center;
   gap: 12px;
   padding: 0 20px;
-  height: 58px;
+  height: 56px;
   border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .brand {
@@ -23,8 +23,8 @@
   align-items: center;
   gap: 9px;
   color: var(--ink);
-  font-family: "Fraunces", Georgia, serif;
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -33,12 +33,13 @@
 .mark {
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--on-accent);
   display: grid;
   place-items: center;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   font-weight: 600;
   flex: none;
@@ -65,7 +66,7 @@
   place-items: center;
   width: 36px;
   height: 36px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   text-decoration: none;
   flex: none;
@@ -94,7 +95,7 @@
   padding: 0 5px;
   border-radius: 999px;
   background: var(--expense);
-  color: #fff;
+  color: var(--on-expense);
   font-size: 10px;
   font-weight: 700;
   line-height: 17px;
@@ -104,16 +105,18 @@
 .signOut {
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12.5px;
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  height: 32px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .signOut:hover {
-  border-color: var(--ink);
+  background: var(--surface-3);
+  color: var(--ink);
 }
 
 .main {
@@ -125,9 +128,9 @@
 }
 
 .head h1 {
-  font-size: clamp(26px, 5vw, 34px);
+  font-size: clamp(24px, 5vw, 28px);
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
 }
 
 .head p {
@@ -203,17 +206,17 @@
   display: inline-flex;
   align-items: center;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
   font-size: 13px;
   font-weight: 500;
   color: var(--ink);
   text-decoration: none;
-  min-height: 38px;
+  min-height: 36px;
 }
 
 .contactBtn:hover {
-  border-color: var(--ink);
+  background: var(--surface-3);
 }
 
 .soon {
@@ -251,16 +254,17 @@
 .cardAction {
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 7px 14px;
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  padding: 6px 12px;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 500;
   white-space: nowrap;
 }
 
 .cardAction:hover {
-  border-color: var(--ink);
+  background: var(--surface-3);
+  color: var(--ink);
 }
 
 /* The 911 line. Red edge so the eye lands on it before the form does. */
@@ -309,7 +313,8 @@
 .field textarea {
   font-family: inherit;
   font-size: 14px;
-  padding: 10px 12px;
+  padding: 9px 12px;
+  min-height: 38px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--surface-2);
@@ -321,7 +326,7 @@
 .field input:focus,
 .field select:focus,
 .field textarea:focus {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
   background: var(--surface);
 }
@@ -339,13 +344,13 @@
   gap: 6px;
   padding: 4px;
   background: var(--surface-3);
-  border-radius: 999px;
+  border-radius: var(--radius);
 }
 
 .urgencyRow button {
   border: 0;
   background: none;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   padding: 9px 12px;
   font-size: 13px;
   font-weight: 500;
@@ -601,7 +606,7 @@
 }
 
 .replyRow input:focus {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
   background: var(--surface);
 }
@@ -637,7 +642,7 @@
   flex-direction: column;
   gap: 3px;
   padding: 11px 13px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   border: 1px solid var(--line);
 }
@@ -753,7 +758,7 @@
 }
 
 .docList a:hover {
-  color: var(--gold);
+  color: var(--accent);
 }
 
 /* ---------- Reminder preferences ---------- */

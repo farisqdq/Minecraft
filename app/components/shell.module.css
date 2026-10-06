@@ -14,30 +14,20 @@
   z-index: 40;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
   padding: 0 20px;
-  height: 58px;
-  background: color-mix(in srgb, var(--bg) 86%, transparent);
-  backdrop-filter: saturate(1.6) blur(12px);
-  -webkit-backdrop-filter: saturate(1.6) blur(12px);
+  height: 56px;
+  background: var(--surface);
   border-bottom: 1px solid var(--line);
-}
-
-/* color-mix is widely supported now, but an old engine that drops the whole
-   declaration would leave the bar transparent over scrolling content. */
-@supports not (background: color-mix(in srgb, red 50%, transparent)) {
-  .bar {
-    background: var(--bg);
-  }
 }
 
 .barInner {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 18px;
+  gap: 12px;
   width: 100%;
-  max-width: 1120px;
+  max-width: 1280px;
   margin: 0 auto;
 }
 
@@ -47,24 +37,25 @@
   gap: 9px;
   text-decoration: none;
   color: var(--ink);
-  font-family: "Fraunces", Georgia, serif;
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
+  flex: none;
 }
 
 .mark {
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--on-accent);
   display: grid;
   place-items: center;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   flex: none;
 }
 
@@ -73,18 +64,20 @@
   align-items: center;
   gap: 2px;
   margin-left: 8px;
+  min-width: 0;
 }
 
 .navLink {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 7px 12px;
-  border-radius: 999px;
+  gap: 6px;
+  padding: 6px 9px;
+  border-radius: var(--radius-sm);
   text-decoration: none;
-  color: var(--muted);
-  font-size: 13.5px;
+  color: var(--ink-2);
+  font-size: 13px;
   font-weight: 500;
+  white-space: nowrap;
   transition: color var(--fast), background var(--fast);
 }
 
@@ -95,43 +88,49 @@
 
 .navLink.on {
   color: var(--ink);
-  background: var(--surface);
-  box-shadow: var(--shadow-sm);
+  background: var(--surface-3);
 }
 
 .navIcon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
   flex: none;
 }
 
 .spacer {
   flex: 1;
+  min-width: 0;
 }
 
 .who {
   font-size: 12.5px;
   color: var(--muted);
-  max-width: 200px;
+  max-width: 160px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .signOut {
+  flex: none;
+  height: 32px;
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12.5px;
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
-  transition: border-color var(--fast);
+  cursor: pointer;
+  transition: border-color var(--fast), background var(--fast), color var(--fast);
 }
 
 .signOut:hover {
-  border-color: var(--ink);
+  background: var(--surface-3);
+  color: var(--ink);
 }
 
 /* ---------- Property search ---------- */
@@ -141,31 +140,33 @@
   position: relative;
   display: flex;
   align-items: center;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
 }
 
 .searchField {
   display: flex;
   align-items: center;
   gap: 7px;
-  width: 196px;
-  height: 34px;
-  padding: 0 7px 0 11px;
+  width: 184px;
+  height: 32px;
+  padding: 0 6px 0 10px;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  background: var(--surface);
-  transition: width var(--fast), border-color var(--fast), box-shadow var(--fast);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  transition: width var(--fast), border-color var(--fast), box-shadow var(--fast), background var(--fast);
 }
 
 .search:focus-within .searchField {
-  width: 264px;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent-soft);
+  width: 240px;
+  background: var(--surface);
+  border-color: var(--focus);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--focus) 22%, transparent);
 }
 
 .searchIcon {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
   flex: none;
   color: var(--muted);
 }
@@ -194,13 +195,14 @@
 
 .searchHint {
   flex: none;
-  min-width: 17px;
+  min-width: 18px;
   text-align: center;
-  padding: 1px 4px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
+  padding: 1px 5px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
   color: var(--muted);
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
   font-size: 10.5px;
   line-height: 14px;
 }
@@ -214,7 +216,7 @@
   width: 20px;
   height: 20px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 4px;
   background: var(--surface-3);
   color: var(--muted);
   font-size: 14px;
@@ -233,7 +235,7 @@
   width: 34px;
   height: 34px;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   background: var(--surface);
   color: var(--ink);
   place-items: center;
@@ -258,18 +260,18 @@
 
 .results {
   position: absolute;
-  top: calc(100% + 10px);
+  top: calc(100% + 8px);
   right: 0;
   z-index: 60;
   width: min(340px, 84vw);
   max-height: min(60vh, 380px);
   overflow-y: auto;
   margin: 0;
-  padding: 6px;
+  padding: 4px;
   list-style: none;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: 14px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-lg);
 }
 
@@ -281,7 +283,7 @@
   text-align: left;
   padding: 8px 10px;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: none;
 }
 
@@ -312,13 +314,12 @@
   line-height: 1.4;
 }
 
-
 .main {
   flex: 1;
   width: 100%;
   max-width: 1120px;
   margin: 0 auto;
-  padding: 26px 20px 80px;
+  padding: 28px 20px 80px;
 }
 
 .pageHead {
@@ -327,7 +328,7 @@
   justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 
 .back {
@@ -335,14 +336,15 @@
   align-items: center;
   gap: 5px;
   font-size: 12.5px;
-  font-weight: 600;
+  font-weight: 500;
   color: var(--muted);
   text-decoration: none;
   margin-bottom: 8px;
+  transition: color var(--fast);
 }
 
 .back:hover {
-  color: var(--gold);
+  color: var(--ink);
 }
 
 .titleRow {
@@ -356,38 +358,40 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 30px;
-  padding: 0 12px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--muted);
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--ink-2);
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 12.5px;
+  font-weight: 500;
   cursor: pointer;
+  transition: background var(--fast), color var(--fast);
 }
 
 .titleEdit:hover {
   color: var(--ink);
-  border-color: var(--muted);
+  background: var(--surface-3);
 }
 
 .titleEdit svg {
-  width: 14px;
-  height: 14px;
+  width: 13px;
+  height: 13px;
 }
 
 .pageHead h1 {
-  font-size: clamp(26px, 4vw, 34px);
+  font-size: clamp(24px, 3.4vw, 28px);
   font-weight: 600;
-  letter-spacing: -0.015em;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
 }
 
 .tagline {
   color: var(--muted);
   font-size: 14px;
-  margin-top: 5px;
+  margin: 4px 0 0;
   max-width: 62ch;
   line-height: 1.5;
 }
@@ -418,38 +422,43 @@
   initial-value: 0px;
 }
 
-/* A laptop screen: seven sections, the search box and the account controls
-   only fit the bar with the person's name and some padding given up; on a
-   small laptop the sections go down to their icons (the tab bar's, so they
-   read the same), with the name as a tooltip. */
-@media (max-width: 1180px) and (min-width: 721px) {
+/* Tighter bar on laptops: the search shrinks, then the name goes. */
+@media (max-width: 1500px) and (min-width: 721px) {
+  .who {
+    display: none;
+  }
+}
+
+@media (max-width: 1240px) and (min-width: 721px) {
+  .bar,
+  .barInner {
+    gap: 8px;
+  }
+  .searchField {
+    width: 140px;
+  }
+  .search:focus-within .searchField {
+    width: 190px;
+  }
+}
+
+/* Small laptops: sections go down to their icons (name as tooltip). */
+@media (max-width: 1100px) and (min-width: 721px) {
   .navLabel {
     display: none;
   }
   .navLink {
-    padding: 8px;
+    padding: 7px 8px;
   }
   .navIcon {
-    width: 19px;
-    height: 19px;
-  }
-}
-
-@media (max-width: 1340px) and (min-width: 721px) {
-  .bar,
-  .barInner {
-    gap: 12px;
-  }
-  .who {
-    display: none;
-  }
-  .navLink {
-    padding-left: 9px;
-    padding-right: 9px;
-    gap: 6px;
+    width: 18px;
+    height: 18px;
   }
   .searchField {
-    width: 150px;
+    width: 120px;
+  }
+  .searchHint {
+    display: none;
   }
 }
 
@@ -478,7 +487,7 @@
     height: 52px;
     gap: 8px;
     padding: 0 12px 0 16px;
-    background: var(--bg);
+    background: var(--surface);
     border-bottom: 1px solid var(--line);
   }
 
@@ -531,9 +540,7 @@
     z-index: 45;
     display: block;
     padding: 6px 0 calc(6px + env(safe-area-inset-bottom));
-    background: color-mix(in srgb, var(--bg) 92%, transparent);
-    backdrop-filter: saturate(1.6) blur(14px);
-    -webkit-backdrop-filter: saturate(1.6) blur(14px);
+    background: var(--surface);
     border-top: 1px solid var(--line);
     transform: translateY(0);
     /* Coming back: a short ease-out, so it arrives quickly and settles. */
@@ -549,7 +556,7 @@
 
   @supports not (background: color-mix(in srgb, red 50%, transparent)) {
     .tabBar {
-      background: var(--bg);
+      background: var(--surface);
     }
   }
 
@@ -611,11 +618,11 @@
     justify-content: center;
     gap: 3px;
     padding: 6px 4px;
-    border-radius: 12px;
+    border-radius: var(--radius);
     text-decoration: none;
     color: var(--muted);
     font-size: 10.5px;
-    font-weight: 600;
+    font-weight: 500;
     white-space: nowrap;
     min-height: 48px;
     scroll-snap-align: start;
@@ -628,7 +635,8 @@
 
   .tab.on {
     color: var(--accent);
-    background: var(--accent-soft);
+    background: none;
+    font-weight: 600;
   }
 
   /* While the bar is away, a pill at the bottom edge brings it back. The
@@ -667,7 +675,7 @@
     width: 52px;
     height: 18px;
     border-radius: 999px;
-    background: color-mix(in srgb, var(--bg) 88%, transparent);
+    background: var(--surface);
     border: 1px solid var(--line-strong);
     box-shadow: var(--shadow-sm);
     backdrop-filter: blur(10px);
@@ -687,7 +695,7 @@
   }
 
   .tabHandle:focus-visible .tabHandlePill {
-    outline: 2px solid var(--gold);
+    outline: 2px solid var(--focus);
     outline-offset: 2px;
   }
 
@@ -729,7 +737,7 @@
   padding: 0 5px;
   border-radius: 999px;
   background: var(--expense);
-  color: #fff;
+  color: var(--on-expense);
   font-size: 10.5px;
   font-weight: 700;
   line-height: 18px;
@@ -751,7 +759,7 @@
   padding: 0 4px;
   border-radius: 999px;
   background: var(--expense);
-  color: #fff;
+  color: var(--on-expense);
   font-size: 9.5px;
   font-weight: 700;
   line-height: 15px;
@@ -779,8 +787,8 @@
 }
 
 .accountIcon {
-  width: 17px;
-  height: 17px;
+  width: 16px;
+  height: 16px;
 }
 
 a.who:hover {
@@ -788,18 +796,16 @@ a.who:hover {
   text-decoration: underline;
 }
 
-/* Nine sections (an admin's Admin tab on top of the rest) don't fit a
-   laptop or small-desktop bar with labels; they go to icons earlier, the name
-   still a tooltip. */
-@media (max-width: 1760px) and (min-width: 721px) {
+/* An admin's ninth section: icons only until there is clear room. */
+@media (max-width: 1360px) and (min-width: 721px) {
   .navCrowded .navLabel {
     display: none;
   }
   .navCrowded .navLink {
-    padding: 8px;
+    padding: 7px 8px;
   }
   .navCrowded .navIcon {
-    width: 19px;
-    height: 19px;
+    width: 18px;
+    height: 18px;
   }
 }

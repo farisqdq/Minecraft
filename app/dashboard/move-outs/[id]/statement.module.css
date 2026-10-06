@@ -35,7 +35,7 @@
   max-width: 720px;
   margin: 0 auto;
   background: #fff;
-  color: #1e1a14;
+  color: #0f172a;
   border-radius: 6px;
   box-shadow: var(--shadow-lg);
   padding: 56px 64px;
@@ -55,7 +55,7 @@
   flex-direction: column;
 }
 .dated {
-  color: #736e5e;
+  color: #64748b;
 }
 .to {
   margin-top: 32px;
@@ -63,13 +63,13 @@
 .blank {
   display: inline-block;
   min-width: 240px;
-  border-bottom: 1px solid #c9c2b2;
-  color: #b0a893;
+  border-bottom: 1px solid #cbd5e1;
+  color: #94a3b8;
   font-size: 12px;
 }
 
 .sheet h1 {
-  font-family: "Fraunces", Georgia, serif;
+  font-family: var(--font-display);
   font-size: 22px;
   margin: 36px 0 8px;
 }
@@ -84,7 +84,7 @@
 }
 .items td {
   padding: 9px 0;
-  border-bottom: 1px solid #ebe6da;
+  border-bottom: 1px solid #e2e8f0;
 }
 .amt {
   text-align: right;
@@ -96,7 +96,7 @@
   padding-left: 16px !important;
 }
 .total td {
-  border-top: 2px solid #1e1a14;
+  border-top: 2px solid #0f172a;
   border-bottom: 0;
   font-weight: 700;
   font-size: 16px;
@@ -108,10 +108,10 @@
 .sign {
   margin-top: 56px;
   padding-top: 8px;
-  border-top: 1px solid #1e1a14;
+  border-top: 1px solid #0f172a;
   width: 260px;
   font-size: 13px;
-  color: #4a443a;
+  color: #334155;
 }
 
 @media (max-width: 600px) {

@@ -56,8 +56,8 @@
 
 .bubble {
   padding: 10px 13px;
-  border-radius: 16px;
-  border-bottom-left-radius: 5px;
+  border-radius: var(--radius);
+  border-bottom-left-radius: 4px;
   background: var(--surface-2);
   border: 1px solid var(--line);
   font-size: 14px;
@@ -68,10 +68,10 @@
 }
 
 .mine .bubble {
-  border-bottom-left-radius: 16px;
-  border-bottom-right-radius: 5px;
-  background: var(--accent-soft);
-  border-color: transparent;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface));
+  border-color: color-mix(in srgb, var(--accent) 18%, transparent);
 }
 
 /* One you haven't read yet keeps an edge until you have. */
@@ -94,7 +94,7 @@
   width: 108px;
   height: 108px;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: var(--radius);
   border: 1px solid var(--line);
   background: var(--surface-3);
 }
@@ -105,7 +105,7 @@
   gap: 8px;
   max-width: 100%;
   padding: 8px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
@@ -166,7 +166,7 @@
 }
 
 .composer textarea:focus {
-  outline: 2px solid var(--gold);
+  outline: 2px solid var(--focus);
   outline-offset: 1px;
   background: var(--surface);
 }
@@ -236,7 +236,7 @@
   gap: 6px;
   min-height: 40px;
   padding: 0 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
@@ -246,7 +246,7 @@
 }
 
 .attach:hover {
-  border-color: var(--ink);
+  background: var(--surface-3);
 }
 
 .attach[aria-disabled="true"] {
@@ -267,14 +267,20 @@
 
 .send {
   margin-left: auto;
-  min-height: 40px;
-  padding: 0 18px;
+  min-height: 36px;
+  padding: 0 16px;
+  cursor: pointer;
   border-radius: var(--radius-sm);
   border: 1px solid var(--accent);
   background: var(--accent);
   color: var(--on-accent);
   font-size: 14px;
   font-weight: 600;
+}
+
+.send:hover:not([disabled]) {
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
 }
 
 .send[disabled] {

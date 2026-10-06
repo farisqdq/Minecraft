@@ -13,9 +13,9 @@
   align-items: center;
   gap: 12px;
   padding: 0 20px;
-  height: 58px;
+  height: 56px;
   border-bottom: 1px solid var(--line);
-  background: var(--bg);
+  background: var(--surface);
 }
 
 .brand {
@@ -23,8 +23,8 @@
   align-items: center;
   gap: 9px;
   color: var(--ink);
-  font-family: "Fraunces", Georgia, serif;
-  font-size: 17px;
+  font-family: var(--font-display);
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -34,19 +34,20 @@
 .mark {
   width: 24px;
   height: 24px;
-  border-radius: 7px;
+  border-radius: var(--radius-sm);
   background: var(--accent);
   color: var(--on-accent);
   display: grid;
   place-items: center;
-  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
   font-size: 12px;
   font-weight: 600;
   flex: none;
 }
 
 .brandTag {
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-sans);
   font-size: 11px;
   font-weight: 600;
   color: var(--muted);
@@ -71,16 +72,18 @@
 .signOut {
   border: 1px solid var(--line-strong);
   background: var(--surface);
-  color: var(--ink);
-  border-radius: 999px;
-  padding: 6px 14px;
-  font-size: 12.5px;
+  color: var(--ink-2);
+  border-radius: var(--radius-sm);
+  padding: 0 12px;
+  height: 32px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
 }
 
 .signOut:hover {
-  border-color: var(--ink);
+  background: var(--surface-3);
+  color: var(--ink);
 }
 
 /* The tabs: four things an owner ever wants, in a row that fits a phone. */
@@ -101,7 +104,7 @@
 
 .tab {
   padding: 8px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 500;
   color: var(--muted);
@@ -361,7 +364,7 @@
   flex-direction: column;
   gap: 3px;
   padding: 10px 12px;
-  border-radius: 12px;
+  border-radius: var(--radius);
   background: var(--surface-2);
   border: 1px solid var(--line);
 }
@@ -398,26 +401,28 @@
   border: 1px solid var(--line-strong);
   background: var(--surface);
   color: var(--ink);
-  border-radius: 999px;
-  padding: 9px 16px;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
   font-size: 13px;
-  font-weight: 600;
+  font-weight: 500;
   text-decoration: none;
-  min-height: 40px;
+  min-height: 36px;
   white-space: nowrap;
 }
 
 .btn:hover {
-  border-color: var(--ink);
+  background: var(--surface-3);
 }
 
 .btnPrimary {
+  font-weight: 600;
   background: var(--accent);
   border-color: var(--accent);
   color: var(--on-accent);
 }
 
 .btnPrimary:hover {
+  color: var(--on-accent);
   background: var(--accent-strong);
   border-color: var(--accent-strong);
 }

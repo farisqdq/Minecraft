@@ -98,7 +98,7 @@
 
 .primary {
   background: var(--accent, #2f6844);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .primary[disabled] {
