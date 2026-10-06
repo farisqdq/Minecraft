@@ -15,7 +15,7 @@ import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
 import { waivedLateFeesFor } from "@/lib/late-fee-waivers-db"; // a21
 import { policyDTO } from "@/lib/statements";
-import DashboardClient from "./DashboardClient";
+import DashboardSwitch from "../components/layouts/DashboardSwitch";
 
 export default async function DashboardPage() {
   const me = await getCurrentUser();
@@ -103,7 +103,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <DashboardClient
+    <DashboardSwitch
       openRepairs={openRepairs}
       initialRepairs={openRequests.map(serializeRequestForLandlord)}
       expiringDocs={await expiringDocuments(companyIds, new Date(Date.now() + (SOON_DAYS + 1) * 86_400_000))}

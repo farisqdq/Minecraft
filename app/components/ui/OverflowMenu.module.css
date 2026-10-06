@@ -1,0 +1,121 @@
+.wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.trigger {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--muted);
+  transition: background var(--fast), color var(--fast), border-color var(--fast);
+}
+
+.trigger:hover,
+.trigger[aria-expanded="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  z-index: 50;
+  min-width: 184px;
+  max-width: min(280px, calc(100vw - 32px));
+  padding: var(--space-1);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-8);
+  box-shadow: var(--shadow-lg);
+}
+
+.end {
+  right: 0;
+}
+
+.start {
+  left: 0;
+}
+
+.up {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-6);
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.item svg {
+  color: var(--muted);
+  flex: none;
+}
+
+.item:hover,
+.item:focus-visible {
+  background: var(--surface-3);
+  outline: none;
+}
+
+.item[aria-disabled="true"] {
+  color: var(--faint);
+  cursor: not-allowed;
+  background: transparent;
+}
+
+.danger,
+.danger svg {
+  color: var(--danger-text);
+}
+
+.danger:hover,
+.danger:focus-visible {
+  background: var(--danger-soft);
+}
+
+.header {
+  padding: var(--space-2) 10px;
+  margin-bottom: var(--space-1);
+  border-bottom: 1px solid var(--line);
+  font-size: var(--text-xs);
+  color: var(--muted);
+  overflow-wrap: anywhere;
+}
+
+.sep {
+  height: 1px;
+  margin: var(--space-1) calc(-1 * var(--space-1));
+  background: var(--line);
+}
+
+@media (max-width: 720px) {
+  .trigger {
+    width: 44px;
+    height: 44px;
+  }
+  .item {
+    min-height: 44px;
+    font-size: var(--text-base);
+  }
+}

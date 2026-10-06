@@ -35,6 +35,12 @@ model User {
   /// Runs the site: sees every account and LLC, and can change them. Granted
   /// by another admin, or by being on ADMIN_EMAILS (see lib/admin.ts).
   isAdmin           Boolean   @default(false)
+  /// Appearance, chosen per person on Settings > Appearance (a24). The
+  /// defaults are today's app exactly, so nobody's view changes until they
+  /// pick something. Values are checked by lib/appearance.ts.
+  uiLayout          String    @default("classic")
+  uiTheme           String    @default("system")
+  uiAccent          String?
 
   memberships         CompanyMember[]
   invitesSent         Invite[]              @relation("InviteSender")
@@ -325,6 +331,8 @@ model TenantAccount {
   lastLoginAt    DateTime?
   /// As on User: bump it and every session for this login ends.
   sessionVersion Int       @default(0)
+  /// Light, dark or match the device (a24); the portal has one layout.
+  uiTheme        String    @default("system")
 
   pushSubscriptions PushSubscription[]
 }
@@ -1142,6 +1150,8 @@ model PropertyOwner {
   sessionVersion Int       @default(0)
   /// Whether to email them when a month's statement is ready.
   monthlyEmail   Boolean   @default(false)
+  /// Light, dark or match the device (a24); the owner portal has one layout.
+  uiTheme        String    @default("system")
   createdAt      DateTime  @default(now())
   lastLoginAt    DateTime?
 

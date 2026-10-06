@@ -4,6 +4,8 @@ import { emailConfigured } from "@/lib/email";
 import OwnerShell from "../OwnerShell";
 import OwnerAccountClient from "./AccountClient";
 import styles from "../owners.module.css";
+import ModeChoice from "../../components/appearance/ModeChoice";
+import { getRequestAppearance } from "@/lib/appearance-server";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +38,8 @@ export default async function OwnerAccountPage() {
       </section>
 
       <OwnerAccountClient monthlyEmail={me.monthlyEmail} emailReady={emailConfigured()} />
+
+      <ModeChoice initial={(await getRequestAppearance()).theme} endpoint="/api/owners/appearance" className={styles.card} />
     </OwnerShell>
   );
 }

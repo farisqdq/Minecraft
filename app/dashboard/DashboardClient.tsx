@@ -38,6 +38,7 @@ import { forecast as forecastAhead, otherSpending } from "@/lib/forecast";
 import type { ListingDTO } from "@/lib/listings-db";
 import CategoryBars from "../components/CategoryBars";
 import Sparkline from "../components/Sparkline";
+import { comparable } from "@/lib/kpi-rules";
 import Modal from "../components/Modal";
 import { FileActions, FileLink, ThumbWithActions } from "../components/FileViewer";
 import ConfirmDialog, { type ConfirmRequest } from "../components/ConfirmDialog";
@@ -1469,8 +1470,17 @@ export default function DashboardClient({
     });
   }
 
-  const deltaFor = (current: number, prior: number | undefined, upIsGood: boolean) => {
+  const deltaFor = (current: number, prior: number | undefined, upIsGood: boolean, priorEmpty = false) => {
     if (prior === undefined || previous === null) return null;
+    // An empty previous period isn't a baseline: "↑ $37,112 vs Aug" when
+    // August had nothing is noise.
+    if (!comparable(prior, priorEmpty)) {
+      return (
+        <span className={styles.delta}>
+          <span className={styles.deltaNote}>No data for {previous.label}</span>
+        </span>
+      );
+    }
     const change = current - prior;
     if (Math.abs(change) < 0.005) {
       return (
@@ -1764,7 +1774,7 @@ export default function DashboardClient({
                 {money(Math.abs(overall.net))}
               </div>
               <div className={styles.kpiFoot}>
-                {deltaFor(overall.net, previous?.net, true) ?? (
+                {deltaFor(overall.net, previous?.net, true, !!previous && !comparable(previous.rent) && !comparable(previous.expense)) ?? (
                   <span className={styles.delta}>
                     <span className={styles.deltaNote}>
                       {overall.net >= 0 ? "in the black to date" : "in the red to date"}

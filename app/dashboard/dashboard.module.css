@@ -670,7 +670,7 @@
   color: var(--muted);
 }
 .propRow .v.pos {
-  color: var(--accent);
+  color: var(--good);
 }
 .propRow .v.neg {
   color: var(--expense);
@@ -690,7 +690,7 @@
   transition: width var(--med);
 }
 .bar > span.barFull {
-  background: var(--accent);
+  background: var(--good);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1252,7 +1252,7 @@
   font-weight: 500;
 }
 .ledger td.amt.pos {
-  color: var(--accent);
+  color: var(--good);
 }
 .ledger td.amt.neg {
   color: var(--expense);
@@ -1271,8 +1271,8 @@
   color: var(--ink-2);
 }
 .tag.rent {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--good-soft);
+  color: var(--good);
 }
 .tag.expense {
   background: var(--expense-soft);
@@ -1346,7 +1346,7 @@ tr:hover .rowDel {
 }
 
 .kpiValue.pos {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .kpiValue.neg {
@@ -1373,7 +1373,7 @@ tr:hover .rowDel {
 }
 
 .delta.good {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .delta.bad {
@@ -1443,7 +1443,7 @@ tr:hover .rowDel {
 }
 
 .bigBar > span.barFull {
-  background: var(--accent);
+  background: var(--good);
 }
 
 .collectMeta {
@@ -1566,8 +1566,8 @@ tr:hover .rowDel {
 }
 
 .pill.paid {
-  background: var(--accent-soft);
-  color: var(--accent);
+  background: var(--good-soft);
+  color: var(--good);
 }
 
 .pill.vacant {
@@ -1592,8 +1592,8 @@ tr:hover .rowDel {
   width: 20px;
   height: 20px;
   border-radius: 50%;
-  background: var(--accent);
-  color: var(--on-accent);
+  background: var(--good);
+  color: var(--on-good);
   display: grid;
   place-items: center;
   font-size: 13px;
@@ -1637,7 +1637,7 @@ tr:hover .rowDel {
 }
 
 .figureValue.pos {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .figureValue.neg {
@@ -2612,7 +2612,7 @@ tr:hover .rowDel {
    colours a figure that has no other class on it, so they need to stand
    alone too — same colours, lower specificity, nothing else changes. */
 .pos {
-  color: var(--accent);
+  color: var(--good);
 }
 
 .neg {
@@ -3092,7 +3092,7 @@ tr:hover .rowDel {
   box-shadow: inset 3px 0 0 var(--gold);
 }
 .calDay.cal_paid {
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--good);
 }
 
 .calToday .calNum {
@@ -3139,7 +3139,7 @@ tr:hover .rowDel {
 .calIn {
   font-size: 11.5px;
   font-weight: 600;
-  color: var(--accent);
+  color: var(--good);
   max-width: 100%;
   overflow: hidden;
   white-space: nowrap;

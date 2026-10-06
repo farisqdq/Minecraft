@@ -27,7 +27,7 @@
   align-self: center;
   margin: 6px 0 2px;
   padding: 3px 10px;
-  border-radius: 999px;
+  border-radius: var(--radius-chip);
   background: var(--surface-3);
   color: var(--muted);
   font-size: 11px;
@@ -182,7 +182,7 @@
   align-items: center;
   gap: 6px;
   padding: 4px 6px 4px 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--line);
   background: var(--surface-2);
   font-size: 12px;

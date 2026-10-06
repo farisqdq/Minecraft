@@ -1,0 +1,633 @@
+/* The Ledger layout's frame. Tokens only — light, dark and accents follow. */
+
+.shell {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+}
+
+/* ---------- Top bar ---------- */
+
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  backdrop-filter: saturate(1.4) blur(12px);
+  -webkit-backdrop-filter: saturate(1.4) blur(12px);
+  border-bottom: 1px solid var(--line);
+  padding-top: env(safe-area-inset-top);
+}
+
+.barInner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  max-width: 1200px;
+  height: 56px;
+  margin: 0 auto;
+  padding: 0 var(--space-6);
+}
+
+.brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+  color: var(--ink);
+  font-weight: 600;
+  font-size: var(--text-md);
+  letter-spacing: var(--tracking-tight);
+  flex: none;
+  margin-right: var(--space-2);
+}
+
+.mark {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: var(--radius-6);
+  background: var(--ink);
+  color: var(--bg);
+  font-size: var(--text-sm);
+  font-weight: 700;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+}
+
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: var(--text-base);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background var(--fast), color var(--fast);
+}
+
+.navLink:hover {
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.navLink.on {
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.moreTrigger[aria-expanded="true"] {
+  color: var(--ink);
+  background: var(--surface-3);
+}
+
+.count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.spacer {
+  flex: 1;
+}
+
+/* PropertySearch brings the Classic frame's pill; square it off to match. */
+.searchWrap {
+  display: flex;
+  align-items: center;
+}
+
+.searchWrap :global([class*="searchField"]) {
+  border-radius: var(--radius-8);
+  height: 34px;
+  background: var(--surface-2);
+  border-color: var(--line);
+}
+
+.searchWrap :global([class*="searchHint"]) {
+  font-family: var(--font-sans);
+  border-radius: var(--radius-6);
+}
+
+.searchWrap :global(button[class*="searchBtn"]) {
+  border-radius: var(--radius-8);
+  border-color: transparent;
+  background: transparent;
+  width: 40px;
+  height: 40px;
+}
+
+.searchWrap :global([class*="results"]),
+.searchWrap :global([class*="result"]) {
+  border-radius: var(--radius-8);
+}
+
+.iconBtn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-8);
+  background: transparent;
+  color: var(--muted);
+  flex: none;
+}
+
+.iconBtn:hover,
+.iconBtn[aria-expanded="true"] {
+  background: var(--surface-3);
+  color: var(--ink);
+}
+
+.bellWrap {
+  position: relative;
+  flex: none;
+}
+
+.bellDot {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: var(--radius-full);
+  background: var(--danger);
+  color: var(--on-danger);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  box-shadow: 0 0 0 2px var(--surface);
+}
+
+.popover {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  width: 300px;
+  max-width: calc(100vw - 32px);
+  padding: var(--space-2);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-12);
+  box-shadow: var(--shadow-lg);
+}
+
+.popHead {
+  padding: 6px 8px 8px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.popRow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 48px;
+  padding: 6px 8px;
+  border-radius: var(--radius-8);
+  color: var(--ink);
+  text-decoration: none;
+}
+
+.popRow:hover {
+  background: var(--surface-2);
+}
+
+.popIcon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-8);
+  background: var(--surface-3);
+  color: var(--ink-2);
+  flex: none;
+}
+
+.popText {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+
+.popTitle {
+  font-size: var(--text-base);
+  font-weight: 500;
+}
+
+.popSub {
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.popEmpty {
+  margin: 4px 8px 6px;
+  font-size: var(--text-sm);
+  color: var(--muted);
+}
+
+.avatarBtn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  flex: none;
+}
+
+.avatar {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius-full);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: var(--text-xs);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.avatarBtn:hover .avatar,
+.avatarBtn[aria-expanded="true"] .avatar {
+  box-shadow: 0 0 0 2px var(--line-strong);
+}
+
+.who {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 4px;
+}
+
+.whoLabel {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.whoName {
+  font-size: var(--text-sm);
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- Page ---------- */
+
+.main {
+  flex: 1;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) var(--space-16);
+}
+
+.head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+
+.headText {
+  min-width: 0;
+}
+
+.back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-bottom: var(--space-2);
+  color: var(--muted);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+}
+
+.back:hover {
+  color: var(--ink);
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 28px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: var(--tracking-title);
+  color: var(--ink);
+}
+
+.actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+/* ---------- Phone tab bar ---------- */
+
+.tabs {
+  display: none;
+}
+
+/* A laptop: the brand name gives its room to the sections. */
+@media (max-width: 1080px) and (min-width: 721px) {
+  .brandName {
+    display: none;
+  }
+  .barInner {
+    gap: var(--space-2);
+    padding: 0 var(--space-4);
+  }
+  .searchWrap :global([class*="searchField"]) {
+    width: 150px;
+  }
+}
+
+@media (max-width: 860px) and (min-width: 721px) {
+  .navLink {
+    padding: 0 7px;
+  }
+}
+
+@media (max-width: 720px) {
+  .nav {
+    display: none;
+  }
+
+  .barInner {
+    height: 52px;
+    gap: var(--space-1);
+    padding: 0 var(--space-2) 0 var(--space-4);
+  }
+
+  .iconBtn,
+  .avatarBtn {
+    width: 44px;
+    height: 44px;
+  }
+
+  .searchWrap :global(button[class*="searchBtn"]) {
+    width: 44px;
+    height: 44px;
+    color: var(--muted);
+  }
+
+  .bellDot {
+    top: 6px;
+    right: 6px;
+  }
+
+  .popover {
+    position: fixed;
+    top: calc(56px + env(safe-area-inset-top));
+    left: var(--space-4);
+    right: var(--space-4);
+    width: auto;
+    max-width: none;
+  }
+
+  .main {
+    padding: var(--space-4) var(--space-4) calc(88px + env(safe-area-inset-bottom));
+  }
+
+  .head {
+    align-items: flex-start;
+    margin-bottom: var(--space-4);
+  }
+
+  .title {
+    font-size: 24px;
+  }
+
+  .actions {
+    width: 100%;
+  }
+
+  .tabs {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 45;
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    padding: 4px var(--space-1) calc(4px + env(safe-area-inset-bottom));
+    background: color-mix(in srgb, var(--surface) 92%, transparent);
+    backdrop-filter: saturate(1.4) blur(12px);
+    -webkit-backdrop-filter: saturate(1.4) blur(12px);
+    border-top: 1px solid var(--line);
+  }
+
+  .tab {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    min-height: 52px;
+    padding: 4px 0;
+    border: 0;
+    background: none;
+    color: var(--muted);
+    font: inherit;
+    font-size: 11px;
+    font-weight: 500;
+    text-decoration: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .tab.on {
+    color: var(--accent-text);
+  }
+
+  .tabIcon {
+    position: relative;
+    display: grid;
+    place-items: center;
+  }
+
+  .tabCount {
+    position: absolute;
+    top: -4px;
+    left: 14px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    border-radius: var(--radius-full);
+    background: var(--danger);
+    color: var(--on-danger);
+    font-size: 10px;
+    font-weight: 700;
+    line-height: 16px;
+    text-align: center;
+    box-shadow: 0 0 0 2px var(--surface);
+  }
+}
+
+/* ---------- Phone More sheet ---------- */
+
+.sheetScrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: flex-end;
+  background: var(--scrim);
+  animation: fadeIn var(--med);
+}
+
+.sheet {
+  width: 100%;
+  max-height: 85dvh;
+  overflow-y: auto;
+  padding: var(--space-2) var(--space-4) calc(var(--space-4) + env(safe-area-inset-bottom));
+  background: var(--surface);
+  border-radius: var(--radius-12) var(--radius-12) 0 0;
+  box-shadow: var(--shadow-overlay);
+  outline: none;
+  animation: slideUp var(--med);
+}
+
+.sheetHead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+}
+
+.sheetTitle {
+  font-size: var(--text-lg);
+  font-weight: 600;
+}
+
+.sheetGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.sheetItem {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 76px;
+  padding: var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-12);
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: var(--text-xs);
+  font-weight: 500;
+  text-align: center;
+  text-decoration: none;
+}
+
+.sheetItem.on {
+  border-color: var(--accent);
+  color: var(--accent-text);
+  background: var(--accent-soft);
+}
+
+.sheetFoot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--line);
+}
+
+.sheetWho {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
+  font-size: var(--text-sm);
+}
+
+.signOut {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--radius-8);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  flex: none;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(24px);
+    opacity: 0.6;
+  }
+}

@@ -1,5 +1,7 @@
 "use client";
 
+import { hasTrend } from "@/lib/kpi-rules";
+
 /**
  * A 12-point trend line for a stat tile. Deliberately unlabelled — the tile's
  * value and delta carry the numbers; this only shows the shape.
@@ -17,7 +19,8 @@ export default function Sparkline({
   points: number[];
   tone?: "accent" | "expense" | "neutral";
 }) {
-  if (points.length < 2) return null;
+  // One real month draws as a flat line leaping to a dot; wait for a trend.
+  if (points.length < 2 || !hasTrend(points)) return null;
 
   const w = 120;
   const h = 28;
