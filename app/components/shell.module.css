@@ -317,7 +317,10 @@
 .main {
   flex: 1;
   width: 100%;
-  max-width: 1120px;
+  /* The top bar's content is 1280px wide inside 20px of padding; matching
+     it here puts the logo and the page's left edge on one line at every
+     width. */
+  max-width: 1320px;
   margin: 0 auto;
   padding: 28px 20px 80px;
 }
