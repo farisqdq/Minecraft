@@ -624,6 +624,10 @@
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(276px, 1fr));
   gap: 12px;
+  /* Each card is as tall as what's in it. Stretching every card to the
+     tallest one in its row left a single-tenant house with a block of
+     empty space above its Open / Edit / Remove row. */
+  align-items: start;
 }
 
 .propCard {
@@ -720,7 +724,7 @@
   gap: 2px;
   flex-wrap: wrap;
   align-items: center;
-  margin: auto -6px -4px;
+  margin: 0 -6px -4px;
   padding-top: 2px;
 }
 
