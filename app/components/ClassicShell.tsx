@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { signOutTo } from "./sign-out";
 import PropertySearch from "./PropertySearch";
 import InstallBanner from "./InstallBanner";
@@ -203,6 +204,9 @@ export default function ClassicShell({
   children,
 }: ShellProps) {
   const pathname = usePathname() ?? "";
+  const { data: session } = useSession();
+  const who = userLabel || session?.user?.name || session?.user?.email || "";
+  const accountLabel = who ? `${who} — account` : "Account";
   const { admin } = useShellInfo();
   const nav = NAV.filter((item) => !item.adminOnly || admin);
 
@@ -258,16 +262,16 @@ export default function ClassicShell({
 
           <span className={styles.spacer} />
           <PropertySearch />
-          {userLabel && (
-            <Link
-              href="/dashboard/account"
-              className={`${styles.accountBtn} ${isOn("/dashboard/account") ? styles.on : ""}`}
-              aria-label={`${userLabel} — account`}
-              title={`${userLabel} — account`}
-            >
-              <IconUser className={styles.accountIcon} />
-            </Link>
-          )}
+          {/* On every page: pages that don't pass a name get it from the
+              session, and failing both it's simply "Account". */}
+          <Link
+            href="/dashboard/account"
+            className={`${styles.accountBtn} ${isOn("/dashboard/account") ? styles.on : ""}`}
+            aria-label={accountLabel}
+            title={accountLabel}
+          >
+            <IconUser className={styles.accountIcon} />
+          </Link>
           {/* Settings lists Account & security, Appearance (where a Classic
               user can switch layouts) and the rest. */}
           <Link
