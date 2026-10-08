@@ -20,11 +20,11 @@ export async function GET(req: Request) {
   const unitId = q.get("unitId") || null;
   const month = waiverMonth(q.get("month"));
   if (!propertyId || !month) return NextResponse.json({ error: "Missing fields." }, { status: 400 });
-  if (!(await requireProperty(userId, propertyId))) {
+  if (!(await requireProperty(userId, propertyId, "viewer"))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   if (unitId) {
-    const unit = await requireUnit(userId, unitId);
+    const unit = await requireUnit(userId, unitId, "viewer");
     if (!unit || unit.propertyId !== propertyId) return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

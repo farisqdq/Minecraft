@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "re
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "../../AppShell";
+import { useViewOnly } from "../../ViewOnly";
 import CashFlowChart from "../../CashFlowChart";
 import CategoryBars from "../../CategoryBars";
 import ConfirmDialog, { type ConfirmRequest } from "../../ConfirmDialog";
@@ -63,7 +64,7 @@ type Attention = {
   key: string;
   tone: Tone;
   text: ReactNode;
-  action: { label: string; href?: string; onClick?: () => void };
+  action?: { label: string; href?: string; onClick?: () => void };
   menu?: MenuItem[];
 };
 
@@ -112,6 +113,7 @@ export default function CommandDashboard(props: DashboardProps) {
   const now = useMemo(() => dateFromISO(todayKey), [todayKey]);
   const clock = useNow(serverNow);
   const router = useRouter();
+  const viewOnly = useViewOnly();
   useLivePulse("/api/requests/pulse", () => router.refresh());
 
   const thisMonth = todayKey.slice(0, 7);
@@ -269,7 +271,7 @@ export default function CommandDashboard(props: DashboardProps) {
       if (url.searchParams.get("record")) {
         url.searchParams.delete("record");
         window.history.replaceState(window.history.state, "", url.toString());
-        if (companies.length > 0) openRecord();
+        if (companies.length > 0 && !viewOnly) openRecord();
       }
     } catch {
       // Nothing to open.
@@ -483,7 +485,7 @@ export default function CommandDashboard(props: DashboardProps) {
       const chase = tenant ? chases[tenant.id] : undefined;
       const recent = Boolean(tenant && chase?.month === month && chasedRecently(chase.at));
       const menu: MenuItem[] = [];
-      if (tenant)
+      if (tenant && !viewOnly)
         menu.push({
           label:
             chasing === tenant.id
@@ -513,8 +515,13 @@ export default function CommandDashboard(props: DashboardProps) {
             {tenant && waivedLateFees[`${tenant.id}|${month}`] ? " · fee waived" : ""}
           </>
         ),
-        action: { label: "Record", onClick: () => quickRent(row) },
-        menu,
+        action: viewOnly
+          ? {
+              label: "Open",
+              href: tenant ? `/dashboard/properties/${row.target.propertyId}#tenant-${tenant.id}` : `/dashboard/properties/${row.target.propertyId}`,
+            }
+          : { label: "Record", onClick: () => quickRent(row) },
+        menu: viewOnly ? menu.filter((m) => m.label !== "Open property") : menu,
       });
     }
     for (const t of tenants.filter((t) => visibleIds.has(t.propertyId))) {
@@ -528,7 +535,7 @@ export default function CommandDashboard(props: DashboardProps) {
             <strong>{t.name}</strong> · lease {status.kind === "expired" ? `ended ${formatDay(t.leaseEnd)}` : status.label.toLowerCase()}
           </>
         ),
-        action: { label: "Renew", href: `/dashboard/properties/${t.propertyId}#tenant-${t.id}` },
+        action: { label: viewOnly ? "Open" : "Renew", href: `/dashboard/properties/${t.propertyId}#tenant-${t.id}` },
       });
     }
     for (const t of model.targets.filter((t) => t.vacant && t.vacantSince)) {
@@ -541,7 +548,7 @@ export default function CommandDashboard(props: DashboardProps) {
             <strong>{t.label}</strong> · vacant {vacantFor(days)}
           </>
         ),
-        action: { label: "Add tenant", href: `/dashboard/properties/${t.propertyId}` },
+        action: { label: viewOnly ? "Open" : "Add tenant", href: `/dashboard/properties/${t.propertyId}` },
       });
     }
     const docs = byUrgency(
@@ -585,7 +592,7 @@ export default function CommandDashboard(props: DashboardProps) {
             <strong>{r.category}</strong> · {targetLabel(r)} · <span className="num">{money(r.amount)}</span>
           </>
         ),
-        action: { label: "Log", onClick: () => quickRecurring(r) },
+        action: viewOnly ? undefined : { label: "Log", onClick: () => quickRecurring(r) },
       });
     }
     for (const l of dueLoans) {
@@ -597,7 +604,7 @@ export default function CommandDashboard(props: DashboardProps) {
             <strong>Mortgage</strong> · {l.loan.lender} · <span className="num">{money(l.total)}</span>
           </>
         ),
-        action: { label: "Log", onClick: () => setPayingLoanId(l.loan.id) },
+        action: viewOnly ? undefined : { label: "Log", onClick: () => setPayingLoanId(l.loan.id) },
       });
     }
     // Red first, then amber, then bills to log, then vacancies; stable within each.
@@ -605,7 +612,7 @@ export default function CommandDashboard(props: DashboardProps) {
     return out.map((a, i) => ({ a, i })).sort((x, y) => rank[x.a.tone] - rank[y.a.tone] || x.i - y.i).map((x) => x.a);
     // quickRent/quickRecurring/remind close over state they read at call time.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialRepairs, visibleIds, model, chases, chasing, clock, month, waivedLateFees, tenants, now, todayKey, expiringDocs, llc, deposits, dueRecurring, dueLoans]);
+  }, [initialRepairs, visibleIds, model, chases, chasing, clock, month, waivedLateFees, tenants, now, todayKey, expiringDocs, llc, deposits, dueRecurring, dueLoans, viewOnly]);
 
   /* ---------- Ledger, charts, bills ---------- */
 
@@ -749,13 +756,13 @@ export default function CommandDashboard(props: DashboardProps) {
   );
 
   const bulkItems: MenuItem[] = [];
-  if (model.owed.length > 1)
+  if (!viewOnly && model.owed.length > 1)
     bulkItems.push({
       label: bulkBusy === "rent" ? "Recording…" : `Mark all ${model.owed.length} paid`,
       disabled: bulkBusy !== "",
       onSelect: markAllPaid,
     });
-  if (dueRecurring.length + dueLoans.length > 1)
+  if (!viewOnly && dueRecurring.length + dueLoans.length > 1)
     bulkItems.push({
       label: bulkBusy === "bills" ? "Logging…" : `Log all ${dueRecurring.length + dueLoans.length} bills`,
       disabled: bulkBusy !== "",
@@ -839,20 +846,26 @@ export default function CommandDashboard(props: DashboardProps) {
                       Properties
                       <span className={styles.panelCount}>{model.rows.length}</span>
                     </h2>
-                    <OverflowMenu
-                      label="Add"
-                      trigger={
-                        <>
-                          <IconPlus size={16} /> Add
-                        </>
-                      }
-                      triggerClassName={styles.btnSmall}
-                      items={[
-                        { label: "Add a property", onSelect: () => setForm("property") },
-                        { label: "Add an LLC", onSelect: () => setForm("llc") },
-                        { label: "Join an LLC with a code", onSelect: () => setForm("join") },
-                      ]}
-                    />
+                    {viewOnly ? (
+                      <button type="button" className={styles.btnSmall} onClick={() => setForm("join")}>
+                        Join with a code
+                      </button>
+                    ) : (
+                      <OverflowMenu
+                        label="Add"
+                        trigger={
+                          <>
+                            <IconPlus size={16} /> Add
+                          </>
+                        }
+                        triggerClassName={styles.btnSmall}
+                        items={[
+                          { label: "Add a property", onSelect: () => setForm("property") },
+                          { label: "Add an LLC", onSelect: () => setForm("llc") },
+                          { label: "Join an LLC with a code", onSelect: () => setForm("join") },
+                        ]}
+                      />
+                    )}
                   </div>
                   <div className={styles.tableWrap}>
                     <table className={`${styles.table} ${styles.propTable}`} id="tenants">
@@ -926,10 +939,15 @@ export default function CommandDashboard(props: DashboardProps) {
                         {model.rows.length === 0 && (
                           <tr>
                             <td colSpan={showLlcColumn ? 6 : 5} className={styles.empty}>
-                              No properties yet.{" "}
-                              <button type="button" className={styles.linkBtn} onClick={() => setForm("property")}>
-                                Add a property
-                              </button>
+                              No properties yet.
+                              {!viewOnly && (
+                                <>
+                                  {" "}
+                                  <button type="button" className={styles.linkBtn} onClick={() => setForm("property")}>
+                                    Add a property
+                                  </button>
+                                </>
+                              )}
                             </td>
                           </tr>
                         )}
@@ -1003,7 +1021,7 @@ export default function CommandDashboard(props: DashboardProps) {
                                 <th>Property</th>
                                 <th>Details</th>
                                 <th className={styles.numCol}>Amount</th>
-                                <th aria-label="Actions" />
+                                {!viewOnly && <th aria-label="Actions" />}
                               </tr>
                             </thead>
                             <tbody>
@@ -1031,15 +1049,17 @@ export default function CommandDashboard(props: DashboardProps) {
                                     {t.type === "rent" ? "+" : "−"}
                                     {money(t.amount)}
                                   </td>
-                                  <td className={styles.actionsCell}>
-                                    <OverflowMenu
-                                      label={`Actions for ${money(t.amount)} on ${formatDay(t.date)}`}
-                                      items={[
-                                        { label: "Edit", icon: IconPencil, onSelect: () => openEdit(t) },
-                                        { label: "Delete", icon: IconTrash, destructive: true, onSelect: () => removeTransaction(t) },
-                                      ]}
-                                    />
-                                  </td>
+                                  {!viewOnly && (
+                                    <td className={styles.actionsCell}>
+                                      <OverflowMenu
+                                        label={`Actions for ${money(t.amount)} on ${formatDay(t.date)}`}
+                                        items={[
+                                          { label: "Edit", icon: IconPencil, onSelect: () => openEdit(t) },
+                                          { label: "Delete", icon: IconTrash, destructive: true, onSelect: () => removeTransaction(t) },
+                                        ]}
+                                      />
+                                    </td>
+                                  )}
                                 </tr>
                               ))}
                             </tbody>
@@ -1070,7 +1090,7 @@ export default function CommandDashboard(props: DashboardProps) {
                   {tab === "bills" && (
                     <div role="tabpanel" aria-label="Recurring bills">
                       {activeRecurring.length === 0 && dueLoans.length === 0 ? (
-                        <div className={styles.empty}>No recurring bills set up. Add them on a property page.</div>
+                        <div className={styles.empty}>{viewOnly ? "No recurring bills set up." : "No recurring bills set up. Add them on a property page."}</div>
                       ) : (
                         <div className={styles.tableWrap}>
                           <table className={styles.table}>
@@ -1093,9 +1113,13 @@ export default function CommandDashboard(props: DashboardProps) {
                                     {money(l.total)}
                                   </td>
                                   <td data-label={monthName(month, false)}>
-                                    <button type="button" className={styles.btnSmall} onClick={() => setPayingLoanId(l.loan.id)}>
-                                      Log
-                                    </button>
+                                    {viewOnly ? (
+                                      <StatusBadge status="info">Due</StatusBadge>
+                                    ) : (
+                                      <button type="button" className={styles.btnSmall} onClick={() => setPayingLoanId(l.loan.id)}>
+                                        Log
+                                      </button>
+                                    )}
                                   </td>
                                 </tr>
                               ))}
@@ -1118,9 +1142,13 @@ export default function CommandDashboard(props: DashboardProps) {
                                     </td>
                                     <td data-label={monthName(month, false)}>
                                       {dueIds.has(r.id) ? (
-                                        <button type="button" className={styles.btnSmall} onClick={() => quickRecurring(r)}>
-                                          Log
-                                        </button>
+                                        viewOnly ? (
+                                          <StatusBadge status="info">Due</StatusBadge>
+                                        ) : (
+                                          <button type="button" className={styles.btnSmall} onClick={() => quickRecurring(r)}>
+                                            Log
+                                          </button>
+                                        )
                                       ) : inMonth ? (
                                         <StatusBadge status="paid">Logged</StatusBadge>
                                       ) : (
@@ -1156,7 +1184,7 @@ export default function CommandDashboard(props: DashboardProps) {
                         <li key={a.key} className={styles.attnItem}>
                           <span className={`${styles.dot} ${styles[`dot_${a.tone}`]}`} aria-hidden="true" />
                           <span className={styles.attnText}>{a.text}</span>
-                          {a.action.href ? (
+                          {!a.action ? null : a.action.href ? (
                             <Link href={a.action.href} prefetch={false} className={styles.attnAction}>
                               {a.action.label}
                             </Link>
@@ -1165,7 +1193,7 @@ export default function CommandDashboard(props: DashboardProps) {
                               {a.action.label}
                             </button>
                           )}
-                          {a.menu && <OverflowMenu label="More" items={a.menu} triggerClassName={styles.attnMore} />}
+                          {a.menu && a.menu.length > 0 && <OverflowMenu label="More" items={a.menu} triggerClassName={styles.attnMore} />}
                         </li>
                       ))}
                     </ul>

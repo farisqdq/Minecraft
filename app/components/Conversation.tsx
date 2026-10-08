@@ -4,6 +4,7 @@ import { ago } from "@/lib/maintenance";
 import { FileLink, ThumbWithActions } from "./FileViewer";
 import { formatSize, isImageType, isUnreadFor, type MessageDTO, type Side } from "@/lib/messages";
 import styles from "./messages.module.css";
+import { useViewOnly } from "./ViewOnly";
 
 function IconFile(props: { className?: string }) {
   return (
@@ -51,6 +52,7 @@ export default function Conversation({
   now: Date;
   emptyText: string;
 }) {
+  const viewOnly = useViewOnly();
   if (messages.length === 0) return <div className={styles.empty}>{emptyText}</div>;
 
   const mine = (m: MessageDTO) => (side === "tenant" ? m.fromTenant : !m.fromTenant);
@@ -62,13 +64,13 @@ export default function Conversation({
         const day = dayLabel(m.createdAt, now);
         const divider = day !== lastDay ? day : "";
         lastDay = day;
-        const unread = isUnreadFor(m, side, readAt || null);
+        const unread = !viewOnly && isUnreadFor(m, side, readAt || null);
         return (
           <li key={m.id} style={{ display: "contents" }}>
             {divider && <span className={styles.day}>{divider}</span>}
             <div className={`${styles.item} ${mine(m) ? styles.mine : ""} ${unread ? styles.unread : ""}`}>
               <span className={styles.who}>
-                {mine(m) ? "You" : m.authorName} · {ago(m.createdAt, now)}
+                {mine(m) && !viewOnly ? "You" : m.authorName} · {ago(m.createdAt, now)}
               </span>
               {m.body && <div className={styles.bubble}>{m.body}</div>}
               {m.attachments.length > 0 && (

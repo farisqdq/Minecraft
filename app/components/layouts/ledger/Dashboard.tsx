@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "../../AppShell";
+import { useViewOnly } from "../../ViewOnly";
 import RecordEntrySheet, { type EntryDraft, type SavedEntry } from "../../RecordEntrySheet";
 import ConfirmDialog, { type ConfirmRequest } from "../../ConfirmDialog";
 import OverflowMenu, { type MenuItem } from "../../ui/OverflowMenu";
@@ -86,6 +87,7 @@ export default function LedgerDashboard(props: DashboardProps) {
   } = props;
 
   const router = useRouter();
+  const viewOnly = useViewOnly();
   // Server date first so the first client render matches the HTML; the real
   // local date straight after.
   const [todayKey, setTodayKey] = useState(serverToday);
@@ -331,6 +333,13 @@ export default function LedgerDashboard(props: DashboardProps) {
   /* ---------- Row pieces ---------- */
 
   function primaryAction(r: Row) {
+    if (viewOnly) {
+      return (
+        <Link className={`${styles.rowAction} ${styles.rowActionQuiet}`} href={propertyHref(r)}>
+          View
+        </Link>
+      );
+    }
     if (r.balance > 0.005) {
       return (
         <button type="button" className={styles.rowAction} onClick={() => quickRent(r)}>
@@ -362,7 +371,7 @@ export default function LedgerDashboard(props: DashboardProps) {
   function rowMenu(r: Row): MenuItem[] {
     const items: MenuItem[] = [];
     const t = r.tenant;
-    if (r.balance > 0.005 && t) {
+    if (r.balance > 0.005 && t && !viewOnly) {
       const chase = chases[t.id];
       const recent = chase?.month === month && chasedRecently(chase.at);
       items.push({
@@ -375,7 +384,7 @@ export default function LedgerDashboard(props: DashboardProps) {
       items.push({ label: `Call ${t.name}`, href: telHref(t.phone) });
       items.push({ label: `Text ${t.name}`, href: smsHref(t.phone) });
     }
-    if (r.status !== "vacant" && r.balance <= 0.005) {
+    if (r.status !== "vacant" && r.balance <= 0.005 && !viewOnly) {
       items.push({ label: "Record a payment", onSelect: () => quickRent(r) });
     }
     items.push({ label: "Open property", href: propertyHref(r) });
@@ -440,9 +449,11 @@ export default function LedgerDashboard(props: DashboardProps) {
                   </button>
                 )}
               </div>
-              <button type="button" className={`${styles.btn} ${styles.primary}`} onClick={openRecord}>
-                <IconPlus size={16} /> Record payment
-              </button>
+              {!viewOnly && (
+                <button type="button" className={`${styles.btn} ${styles.primary}`} onClick={openRecord}>
+                  <IconPlus size={16} /> Record payment
+                </button>
+              )}
             </div>
 
             <div className={styles.heroBody}>
@@ -514,9 +525,15 @@ export default function LedgerDashboard(props: DashboardProps) {
                 {billsDue > 0 && (
                   <>
                     {strip.length > 0 ? " · " : ""}
-                    <button type="button" className={styles.alertLink} onClick={toBills}>
-                      {billsDue} {billsDue === 1 ? "bill" : "bills"} to log
-                    </button>
+                    {viewOnly ? (
+                      <>
+                        {billsDue} {billsDue === 1 ? "bill" : "bills"} due
+                      </>
+                    ) : (
+                      <button type="button" className={styles.alertLink} onClick={toBills}>
+                        {billsDue} {billsDue === 1 ? "bill" : "bills"} to log
+                      </button>
+                    )}
                   </>
                 )}
               </p>
@@ -557,7 +574,7 @@ export default function LedgerDashboard(props: DashboardProps) {
                   </button>
                 )}
               </div>
-              {owedShown.length > 1 && (filter === "late" || filter === "review") && (
+              {owedShown.length > 1 && !viewOnly && (filter === "late" || filter === "review") && (
                 <button
                   type="button"
                   className={`${styles.btn} ${styles.small}`}
@@ -571,7 +588,7 @@ export default function LedgerDashboard(props: DashboardProps) {
 
             {groups.length === 0 ? (
               <p className={styles.empty}>
-                {filter === "all" ? "No properties yet — add one under Portfolio below." : "Nothing here this month."}
+                {filter === "all" ? (viewOnly ? "No properties yet." : "No properties yet — add one under Portfolio below.") : "Nothing here this month."}
               </p>
             ) : (
               <table className={styles.table}>

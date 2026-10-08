@@ -34,7 +34,7 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const tenant = await requireTenant(userId, id);
+  const tenant = await requireTenant(userId, id, "viewer");
   if (!tenant) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const through = new URL(req.url).searchParams.get("through") ?? "";

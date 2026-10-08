@@ -15,7 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ tenantI
   if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { tenantId } = await params;
-  if (!(await requireTenant(me.id, tenantId))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await requireTenant(me.id, tenantId, "viewer"))) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const thread = await threadForTenant(tenantId, "landlord");
   if (!thread) return NextResponse.json({ error: "Not found" }, { status: 404 });

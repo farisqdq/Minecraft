@@ -13,6 +13,7 @@ import { TRADES, type VendorDTO } from "@/lib/vendors";
 import DocumentsPanel from "../../../components/DocumentsPanel";
 import type { DocumentDTO } from "@/lib/documents";
 import { TAX_CLASSES, TAX_CLASS_LABEL, threshold1099 } from "@/lib/tax1099";
+import { useViewOnly } from "../../../components/ViewOnly";
 
 type Company = { id: string; name: string };
 
@@ -41,6 +42,7 @@ export default function VendorsClient({
   const [company, setCompany] = useState("");
   const [query, setQuery] = useState("");
   const [form, setForm] = useState(EMPTY);
+  const viewOnly = useViewOnly();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -135,14 +137,16 @@ export default function VendorsClient({
       tagline="Who you call to fix things — and what you've paid them."
       back={{ href: "/dashboard/repairs", label: "Repairs" }}
       actions={
-        <button
-          type="button"
-          className={`${styles.btn} ${styles.primary}`}
-          onClick={() => openForm()}
-          disabled={companies.length === 0}
-        >
-          + Add a vendor
-        </button>
+        viewOnly ? undefined : (
+          <button
+            type="button"
+            className={`${styles.btn} ${styles.primary}`}
+            onClick={() => openForm()}
+            disabled={companies.length === 0}
+          >
+            + Add a vendor
+          </button>
+        )
       }
     >
       <div className={styles.vendorTools}>
@@ -187,8 +191,9 @@ export default function VendorsClient({
       {vendors.length === 0 ? (
         <div className={styles.ledgerWrap}>
           <div className={styles.emptyState}>
-            Nobody in the book yet. Add your plumber, your HVAC company, whoever does the lot —
-            then put them on a repair from the queue and their jobs and costs add up here.
+            {viewOnly
+              ? "Nobody in the book yet."
+              : "Nobody in the book yet. Add your plumber, your HVAC company, whoever does the lot — then put them on a repair from the queue and their jobs and costs add up here."}
           </div>
         </div>
       ) : groups.length === 0 ? (
@@ -257,7 +262,7 @@ export default function VendorsClient({
                         : "Tax class not set — it's on their W-9"}
                   </div>
 
-                  <div className={styles.propActions}>
+                  {!viewOnly && <div className={styles.propActions}>
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.small} ${styles.quiet}`}
@@ -274,7 +279,7 @@ export default function VendorsClient({
                         Remove
                       </button>
                     )}
-                  </div>
+                  </div>}
                 </div>
               ))}
             </div>

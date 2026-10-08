@@ -24,6 +24,7 @@ import { recurringPrefill } from "@/lib/quick-record";
 import { periodTotals, shiftMonth, type RentTarget } from "@/lib/layouts/ledger-rentroll";
 import { dayLabel, monthName } from "@/lib/layouts/ledger-format";
 import styles from "./ledger-dashboard.module.css";
+import { useViewOnly } from "../../ViewOnly";
 
 type P = DashboardProps;
 type Txn = P["initialTransactions"][number];
@@ -231,6 +232,7 @@ function CashTab({ month, transactions, companies, properties }: TabProps) {
 /* ---------- Transactions ---------- */
 
 function LedgerTab({ month, transactions, properties, units, openSheet, confirm, push, onTransactions }: TabProps) {
+  const viewOnly = useViewOnly();
   const [query, setQuery] = useState("");
   const [type, setType] = useState<"" | "rent" | "expense">("");
   const [propertyId, setPropertyId] = useState("");
@@ -343,9 +345,11 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
               <th scope="col">Property</th>
               <th scope="col">Details</th>
               <th scope="col" className={styles.numCol}>Amount</th>
-              <th scope="col" className={styles.actCol}>
-                <span className={styles.srOnly}>Actions</span>
-              </th>
+              {!viewOnly && (
+                <th scope="col" className={styles.actCol}>
+                  <span className={styles.srOnly}>Actions</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -373,20 +377,22 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
                   {t.type === "rent" ? "+" : "−"}
                   {money(t.amount)}
                 </td>
-                <td className={styles.actCol}>
-                  <div className={styles.actions}>
-                    <button type="button" className={`${styles.rowAction} ${styles.rowActionQuiet}`} onClick={() => edit(t)}>
-                      Edit
-                    </button>
-                    <OverflowMenu
-                      label={`More for the ${dayLabel(t.date)} entry`}
-                      items={[
-                        { label: "Edit or add proof", onSelect: () => edit(t) },
-                        { label: "Delete entry", destructive: true, onSelect: () => remove(t) },
-                      ]}
-                    />
-                  </div>
-                </td>
+                {!viewOnly && (
+                  <td className={styles.actCol}>
+                    <div className={styles.actions}>
+                      <button type="button" className={`${styles.rowAction} ${styles.rowActionQuiet}`} onClick={() => edit(t)}>
+                        Edit
+                      </button>
+                      <OverflowMenu
+                        label={`More for the ${dayLabel(t.date)} entry`}
+                        items={[
+                          { label: "Edit or add proof", onSelect: () => edit(t) },
+                          { label: "Delete entry", destructive: true, onSelect: () => remove(t) },
+                        ]}
+                      />
+                    </div>
+                  </td>
+                )}
               </tr>
             ))}
           </tbody>
@@ -425,6 +431,7 @@ function BillsTab(
     depositAlerts: (Deposit & { state: ReturnType<typeof returnState> })[];
   }
 ) {
+  const viewOnly = useViewOnly();
   const {
     month,
     todayKey,
@@ -528,7 +535,7 @@ function BillsTab(
         <div className={styles.listBlock}>
           <div className={styles.listHead}>
             <h3 className={styles.h3}>Bills due in {monthName(month, false)}</h3>
-            {dueRecurring.length + dueLoans.length > 1 && (
+            {dueRecurring.length + dueLoans.length > 1 && !viewOnly && (
               <button type="button" className={`${styles.btn} ${styles.small}`} disabled={busy} onClick={logAll}>
                 {busy ? "Logging…" : `Log all ${dueRecurring.length + dueLoans.length}`}
               </button>
@@ -544,9 +551,11 @@ function BillsTab(
                 </span>
               </div>
               <span className={styles.listAmt}>{money(r.amount)}</span>
-              <button type="button" className={styles.rowAction} onClick={() => logRecurring(r)}>
-                Log it
-              </button>
+              {!viewOnly && (
+                <button type="button" className={styles.rowAction} onClick={() => logRecurring(r)}>
+                  Log it
+                </button>
+              )}
             </div>
           ))}
           {dueLoans.map(({ loan, missed, interest, principal, escrow, total }) => (
@@ -563,9 +572,11 @@ function BillsTab(
                 </span>
               </div>
               <span className={styles.listAmt}>{money(total)}</span>
-              <button type="button" className={styles.rowAction} onClick={() => setPayingLoanId(loan.id)}>
-                Log it
-              </button>
+              {!viewOnly && (
+                <button type="button" className={styles.rowAction} onClick={() => setPayingLoanId(loan.id)}>
+                  Log it
+                </button>
+              )}
             </div>
           ))}
         </div>
@@ -597,9 +608,11 @@ function BillsTab(
                 <Link className={`${styles.rowAction} ${styles.rowActionQuiet}`} href={`/dashboard/move-outs/${d.id}`}>
                   Statement
                 </Link>
-                <button type="button" className={styles.rowAction} onClick={() => setReturningId(d.id)}>
-                  Mark sent
-                </button>
+                {!viewOnly && (
+                  <button type="button" className={styles.rowAction} onClick={() => setReturningId(d.id)}>
+                    Mark sent
+                  </button>
+                )}
               </div>
             </div>
           ))}
@@ -627,12 +640,14 @@ function BillsTab(
               </div>
               <div className={styles.actions}>
                 <FileActions url={d.url} name={d.filename || d.title} mime={d.contentType} />
-                <Link
-                  className={styles.rowAction}
-                  href={d.vendorId ? "/dashboard/repairs/vendors" : d.propertyId ? `/dashboard/properties/${d.propertyId}` : "/dashboard/files"}
-                >
-                  Replace
-                </Link>
+                {!viewOnly && (
+                  <Link
+                    className={styles.rowAction}
+                    href={d.vendorId ? "/dashboard/repairs/vendors" : d.propertyId ? `/dashboard/properties/${d.propertyId}` : "/dashboard/files"}
+                  >
+                    Replace
+                  </Link>
+                )}
               </div>
             </div>
           ))}
@@ -663,7 +678,7 @@ function BillsTab(
                 </span>
               </div>
               <Link className={styles.rowAction} href="/dashboard/repairs">
-                Work it
+                {viewOnly ? "Open" : "Work it"}
               </Link>
             </div>
           ))}
@@ -704,6 +719,7 @@ function BillsTab(
 /* ---------- Portfolio ---------- */
 
 function PortfolioTab({ companies, properties, transactions, confirm, push, onCompanies, onProperties, onTransactions, onUnits, onRecurring }: TabProps) {
+  const viewOnly = useViewOnly();
   const [llcName, setLlcName] = useState("");
   const [code, setCode] = useState("");
   const [joinBusy, setJoinBusy] = useState(false);
@@ -796,7 +812,7 @@ function PortfolioTab({ companies, properties, transactions, confirm, push, onCo
         </p>
       )}
       <div className={styles.formGrid}>
-        <form className={styles.card} onSubmit={addProperty}>
+        {!viewOnly && <form className={styles.card} onSubmit={addProperty}>
           <h3 className={styles.h3}>Add a property</h3>
           <label className={styles.field}>
             <span>Property name</span>
@@ -825,18 +841,20 @@ function PortfolioTab({ companies, properties, transactions, confirm, push, onCo
           <button type="submit" className={`${styles.btn} ${styles.primary}`} disabled={!companies.length}>
             Add property
           </button>
-        </form>
+        </form>}
 
         <div className={styles.stack}>
-          <form className={styles.card} onSubmit={addCompany}>
-            <h3 className={styles.h3}>Add an LLC</h3>
-            <div className={styles.inline}>
-              <input className={styles.input} value={llcName} placeholder="e.g. Birchwood Holdings LLC" aria-label="LLC name" onChange={(e) => setLlcName(e.target.value)} />
-              <button type="submit" className={styles.btn}>
-                Add
-              </button>
-            </div>
-          </form>
+          {!viewOnly && (
+            <form className={styles.card} onSubmit={addCompany}>
+              <h3 className={styles.h3}>Add an LLC</h3>
+              <div className={styles.inline}>
+                <input className={styles.input} value={llcName} placeholder="e.g. Birchwood Holdings LLC" aria-label="LLC name" onChange={(e) => setLlcName(e.target.value)} />
+                <button type="submit" className={styles.btn}>
+                  Add
+                </button>
+              </div>
+            </form>
+          )}
           <form className={styles.card} onSubmit={join}>
             <h3 className={styles.h3}>Join an LLC with a code</h3>
             <div className={styles.inline}>
@@ -878,7 +896,7 @@ function PortfolioTab({ companies, properties, transactions, confirm, push, onCo
                         <Link className={`${styles.rowAction} ${styles.rowActionQuiet}`} href={`/dashboard/properties/${p.id}`}>
                           Open
                         </Link>
-                        {owner?.role === "owner" && (
+                        {owner?.role === "owner" && !viewOnly && (
                           <OverflowMenu
                             label={`More for ${p.name}`}
                             items={[{ label: "Remove property", destructive: true, onSelect: () => removeProperty(p) }]}

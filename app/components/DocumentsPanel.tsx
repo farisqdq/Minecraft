@@ -14,6 +14,7 @@ import {
   expiryState,
   type DocumentDTO,
 } from "@/lib/documents";
+import { useViewOnly } from "./ViewOnly";
 
 /** Something a document can be filed against: "property:ID", "tenant:ID" or "vendor:ID". */
 export type DocTarget = { key: string; label: string };
@@ -51,6 +52,7 @@ export default function DocumentsPanel({
    */
   scan?: { properties: ScanProperty[]; tenants: ScanTenant[]; defaultPropertyId?: string };
 }) {
+  const viewOnly = useViewOnly();
   const [docs, setDocs] = useState(initial);
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState(EMPTY_EDIT);
@@ -190,7 +192,7 @@ export default function DocumentsPanel({
                   </span>
                 )}
                 <FileActions url={d.url} name={d.filename || d.title} mime={d.contentType} />
-                <button
+                {!viewOnly && <button
                   type="button"
                   className={styles.portalLink}
                   onClick={() => {
@@ -209,14 +211,14 @@ export default function DocumentsPanel({
                   }}
                 >
                   Edit
-                </button>
+                </button>}
               </li>
             );
           })}
         </ul>
       )}
 
-      {scan ? (
+      {viewOnly ? null : scan ? (
         <div style={{ marginTop: 12, display: "flex", flexWrap: "wrap", gap: 8 }}>
           <button
             type="button"

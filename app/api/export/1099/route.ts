@@ -20,7 +20,7 @@ export async function GET(req: Request) {
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
     return NextResponse.json({ error: "Choose a year." }, { status: 400 });
   }
-  if (!companyId || !(await requireCompany(userId, companyId))) {
+  if (!companyId || !(await requireCompany(userId, companyId, "viewer"))) {
     return NextResponse.json({ error: "LLC not found." }, { status: 404 });
   }
 

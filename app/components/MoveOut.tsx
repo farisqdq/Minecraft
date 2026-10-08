@@ -10,6 +10,7 @@ import { formatDay } from "@/lib/lease";
 import { DEFAULT_RETURN_DAYS, addDays, returnLabel, returnState, settle, type Deduction } from "@/lib/move-out";
 import type { MoveOutDTO } from "@/lib/move-outs-db";
 import type { TenantDTO } from "@/lib/tenants";
+import { useViewOnly } from "./ViewOnly";
 
 type Line = { key: number; kind: "rent" | "charge"; label: string; amount: string };
 
@@ -349,6 +350,7 @@ export function MoveOutSummary({
   onMarkReturned: () => void;
   onUndo: () => void;
 }) {
+  const viewOnly = useViewOnly();
   const state = returnState(moveOut, today);
   const kept = Math.round((moveOut.deposit - moveOut.refund) * 100) / 100;
   return (
@@ -377,14 +379,16 @@ export function MoveOutSummary({
         <Link href={`/dashboard/move-outs/${moveOut.id}`} className={styles.portalLink}>
           Itemized statement
         </Link>
-        {moveOut.deposit > 0 && (
+        {moveOut.deposit > 0 && !viewOnly && (
           <button type="button" className={styles.portalLink} onClick={onMarkReturned}>
             {state.kind === "returned" ? "Change" : "Mark returned"}
           </button>
         )}
-        <button type="button" className={styles.portalLink} onClick={onUndo}>
-          Undo move-out
-        </button>
+        {!viewOnly && (
+          <button type="button" className={styles.portalLink} onClick={onUndo}>
+            Undo move-out
+          </button>
+        )}
       </div>
     </div>
   );

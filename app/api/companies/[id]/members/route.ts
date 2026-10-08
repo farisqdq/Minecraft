@@ -2,13 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireCompany } from "@/lib/access";
+import { shownOthersRole, shownOwnRole } from "@/lib/roles";
 
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!(await requireCompany(userId, id))) {
+  const me = await requireCompany(userId, id, "viewer");
+  if (!me) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -23,7 +25,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
       userId: m.user.id,
       email: m.user.email,
       name: m.user.name ?? "",
-      role: m.role,
+      // A viewer is never told they're one, and isn't shown anyone else's role.
+      role: m.userId === userId ? shownOwnRole(m.role) : shownOthersRole(m.role, me.role),
     }))
   );
 }

@@ -47,6 +47,7 @@ import {
   type ProofKind,
 } from "@/lib/attachments-ui";
 import s from "./proof.module.css";
+import { useViewOnly } from "./ViewOnly";
 
 export type ProofDTO = {
   id: string;
@@ -169,6 +170,7 @@ export function ProofStrip({
   busyId?: string;
   heading?: string;
 }) {
+  const viewOnly = useViewOnly();
   if (items.length === 0) return null;
   return (
     <>
@@ -192,7 +194,7 @@ export function ProofStrip({
             </FileLink>
             <span className={s.name}>{shortName(a.filename, 16)}</span>
             <FileActions url={a.url} name={a.filename} mime={a.contentType} />
-            {onRemove && (
+            {onRemove && !viewOnly && (
               <button
                 type="button"
                 className={s.remove}

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
+import { shownOwnRole } from "@/lib/roles";
 
 export async function GET() {
   const userId = await getCurrentUserId();
@@ -13,7 +14,7 @@ export async function GET() {
   });
 
   return NextResponse.json(
-    memberships.map((m) => ({ id: m.company.id, name: m.company.name, role: m.role }))
+    memberships.map((m) => ({ id: m.company.id, name: m.company.name, role: shownOwnRole(m.role) }))
   );
 }
 

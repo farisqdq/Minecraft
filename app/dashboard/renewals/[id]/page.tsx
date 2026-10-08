@@ -20,7 +20,7 @@ export default async function RenewalLetterPage({ params }: { params: Promise<{ 
   if (!userId) redirect("/login");
   const { id } = await params;
   const letter = await renewalLetter(id);
-  if (!letter || !(await requireTenant(userId, letter.tenant.id))) notFound();
+  if (!letter || !(await requireTenant(userId, letter.tenant.id, "viewer"))) notFound();
   const { renewal: r, tenant, company, place } = letter;
   const changed = r.newRent !== r.previousRent;
   const first = tenant.name.trim().split(/\s+/)[0] || tenant.name;

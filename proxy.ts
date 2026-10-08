@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { crossSiteMutation } from "./lib/origin";
 import { buildCsp, makeNonce } from "./lib/csp";
+import { isViewOnly } from "./lib/access";
 
 /**
  * Runs in front of every page and API route. Three jobs, in this order:
@@ -74,6 +75,18 @@ function areaOf(path: string): Area {
   return "public";
 }
 
+const MUTATING = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+/**
+ * What a view-only account may still do: its own settings (password,
+ * two-factor, appearance), redeem a join code, and leave an LLC.
+ */
+function viewerMayStill(path: string, method: string, userId: string): boolean {
+  if (under(path, ["/api/account", "/api/invites/join"])) return true;
+  const leave = /^\/api\/companies\/[^/]+\/members\/([^/]+)$/.exec(path);
+  return method === "DELETE" && Boolean(leave) && leave![1] === userId;
+}
+
 const LOGIN_FOR: Record<Exclude<Area, "public" | "either">, string> = {
   landlord: "/login",
   tenant: "/portal/login",
@@ -117,6 +130,21 @@ export default async function proxy(req: NextRequest) {
       const login = new URL(LOGIN_FOR[area === "either" ? "landlord" : area], req.url);
       if (area === "landlord" || area === "either") login.searchParams.set("callbackUrl", `${path}${req.nextUrl.search}`);
       return NextResponse.redirect(login);
+    }
+
+    // 2b. Someone who is only ever a viewer changes nothing. Every route
+    // already refuses a viewer on its own (lib/access defaults to "member");
+    // this is the second lock, in front of all of them. The refusal says
+    // nothing about roles.
+    if (
+      area === "landlord" &&
+      path.startsWith("/api/") &&
+      MUTATING.has(req.method) &&
+      !viewerMayStill(path, req.method, typeof token?.id === "string" ? token.id : "") &&
+      typeof token?.id === "string" &&
+      (await isViewOnly(token.id))
+    ) {
+      return NextResponse.json({ error: "That can't be changed from this account." }, { status: 403 });
     }
   }
 

@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
+import { useViewOnly } from "../../components/ViewOnly";
 import ListingForm, { type ListingPhoto } from "../../components/ListingForm";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
@@ -31,6 +32,7 @@ export default function ListingsClient({
   photos: Record<string, ListingPhoto[]>;
 }) {
   const router = useRouter();
+  const viewOnly = useViewOnly();
   const [entries, setEntries] = useState<Entry[]>(initial);
   const [editing, setEditing] = useState<Entry | null>(null);
   const [approving, setApproving] = useState<{ entry: Entry; app: ApplicationDTO } | null>(null);
@@ -144,16 +146,20 @@ export default function ListingsClient({
       {entries.length === 0 ? (
         <div className={styles.firstRun}>
           <h2>Nothing listed</h2>
-          <p>
-            When a place is empty, open its property and choose <b>List for rent</b>. You get a link to share — on
-            Facebook, Zillow, a sign in the window — and everyone who applies lands here.
-          </p>
+          {viewOnly ? (
+            <p>Places listed for rent, and the people who&apos;ve applied, show up here.</p>
+          ) : (
+            <p>
+              When a place is empty, open its property and choose <b>List for rent</b>. You get a link to share — on
+              Facebook, Zillow, a sign in the window — and everyone who applies lands here.
+            </p>
+          )}
         </div>
       ) : (
         <>
           {waiting > 0 && (
             <p className={styles.helpText}>
-              {waiting} {waiting === 1 ? "application is" : "applications are"} waiting on you.
+              {waiting} {waiting === 1 ? "application is" : "applications are"} waiting{viewOnly ? "" : " on you"}.
             </p>
           )}
           {entries.map((e) => {
@@ -185,18 +191,22 @@ export default function ListingsClient({
                           </a>
                         </>
                       )}
-                      <button type="button" className={`${styles.btn} ${styles.small} ${styles.quiet}`} onClick={() => setEditing(e)}>
-                        Edit
-                      </button>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.small} ${styles.quiet}`}
-                        disabled={busy === l.id}
-                        onClick={() => setOpen(e, !l.open)}
-                      >
-                        {l.open ? "Close" : "Reopen"}
-                      </button>
-                      {owner && (
+                      {!viewOnly && (
+                        <>
+                          <button type="button" className={`${styles.btn} ${styles.small} ${styles.quiet}`} onClick={() => setEditing(e)}>
+                            Edit
+                          </button>
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                            disabled={busy === l.id}
+                            onClick={() => setOpen(e, !l.open)}
+                          >
+                            {l.open ? "Close" : "Reopen"}
+                          </button>
+                        </>
+                      )}
+                      {owner && !viewOnly && (
                         <button type="button" className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`} onClick={() => remove(e)}>
                           Delete
                         </button>
@@ -207,7 +217,7 @@ export default function ListingsClient({
 
                   {e.applications.length === 0 ? (
                     <p className={styles.helpText} style={{ marginBottom: 0 }}>
-                      No applications yet{l.open ? " — share the link and they'll arrive here, with an email and a notification for each." : "."}
+                      No applications yet{l.open && !viewOnly ? " — share the link and they'll arrive here, with an email and a notification for each." : "."}
                     </p>
                   ) : (
                     <ul className={styles.appList}>
@@ -277,12 +287,12 @@ export default function ListingsClient({
                                 Email
                               </a>
                             </div>
-                            <div className={styles.propActions}>
+                            {(!viewOnly || a.status === "approved") && <div className={styles.propActions}>
                               {a.status === "approved" ? (
                                 <Link className={`${styles.btn} ${styles.small}`} href={`/dashboard/properties/${l.propertyId}${a.tenantId ? `#tenant-${a.tenantId}` : ""}`}>
                                   Open their tenant card
                                 </Link>
-                              ) : (
+                              ) : viewOnly ? null : (
                                 <>
                                   <button
                                     type="button"
@@ -307,12 +317,12 @@ export default function ListingsClient({
                                   )}
                                 </>
                               )}
-                              {owner && (
+                              {owner && !viewOnly && (
                                 <button type="button" className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`} onClick={() => deleteApp(e, a)}>
                                   Delete
                                 </button>
                               )}
-                            </div>
+                            </div>}
                           </li>
                         );
                       })}

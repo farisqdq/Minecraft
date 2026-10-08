@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "../../components/AppShell";
 import styles from "../dashboard.module.css";
 import { useNow } from "../../components/useNow";
+import { useViewOnly } from "../../components/ViewOnly";
 import { useLivePulse } from "../../components/useLivePulse";
 import { ago } from "@/lib/maintenance";
 import { sortThreads, type InboxRowDTO } from "@/lib/messages";
@@ -33,6 +34,7 @@ export default function InboxClient({
   tenants: { id: string; name: string; place: string; hasPortal: boolean }[];
 }) {
   const router = useRouter();
+  const viewOnly = useViewOnly();
   const [rows, setRows] = useState(initial);
   const [filter, setFilter] = useState<Filter>(initial.some((r) => r.unread > 0) ? "unread" : "all");
   const [picking, setPicking] = useState(false);
@@ -53,11 +55,15 @@ export default function InboxClient({
   return (
     <AppShell
       title="Messages"
-      tagline="Every conversation with a tenant, newest first. Replies go to their portal, by email and to their phone."
+      tagline={
+        viewOnly
+          ? "Every conversation with a tenant, newest first."
+          : "Every conversation with a tenant, newest first. Replies go to their portal, by email and to their phone."
+      }
       userLabel={userLabel}
       openRepairs={openRepairs}
       actions={
-        withoutThread.length > 0 ? (
+        withoutThread.length > 0 && !viewOnly ? (
           picking ? (
             <div className={styles.field} style={{ minWidth: 220 }}>
               <select
@@ -99,7 +105,9 @@ export default function InboxClient({
         <div className={styles.ledgerWrap}>
           <div className={styles.emptyState}>
             {rows.length === 0
-              ? "No conversations yet. Write to a tenant from their card on a property page, or with New message above; once they have a portal login they can write to you here too."
+              ? viewOnly
+                ? "No conversations yet."
+                : "No conversations yet. Write to a tenant from their card on a property page, or with New message above; once they have a portal login they can write to you here too."
               : "Nothing unread — you've seen everything your tenants have sent."}
           </div>
         </div>
@@ -117,7 +125,7 @@ export default function InboxClient({
                   {[r.propertyName, r.unitName].filter(Boolean).join(" — ")} · {ago(r.lastMessageAt, now)}
                 </span>
                 <span className={styles.repairWho}>
-                  {r.lastFromTenant ? `${r.tenantName.split(" ")[0]}: ` : "You: "}
+                  {r.lastFromTenant ? `${r.tenantName.split(" ")[0]}: ` : viewOnly ? "Team: " : "You: "}
                   {r.preview}
                 </span>
               </Link>

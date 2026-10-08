@@ -31,10 +31,14 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!(await requireTenant(userId, id))) {
+  if (!(await requireTenant(userId, id, "viewer"))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  return NextResponse.json(await readAccess(id));
+  const access = await readAccess(id);
+  // An open invite code is a way in, not something to look at: whoever
+  // redeems it becomes the tenant's portal login. A viewer doesn't get it.
+  if (!(await requireTenant(userId, id))) return NextResponse.json({ ...access, inviteCode: "", inviteExpires: "" });
+  return NextResponse.json(access);
 }
 
 /**

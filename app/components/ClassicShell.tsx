@@ -8,12 +8,14 @@ import PropertySearch from "./PropertySearch";
 import InstallBanner from "./InstallBanner";
 import TabBar from "./TabBar";
 import { useShellInfo } from "./ShellContext";
+import { useViewOnly } from "./ViewOnly";
 import { useLivePulse } from "./useLivePulse";
 import { MESSAGES_READ_EVENT } from "./messages-client";
 import styles from "./shell.module.css";
 
 /** The pill beside a page title that opens its edit form. */
 export function TitleEditButton({ label, onClick }: { label: string; onClick: () => void }) {
+  if (useViewOnly()) return null;
   return (
     <button type="button" className={styles.titleEdit} onClick={onClick} aria-label={label} title={label}>
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

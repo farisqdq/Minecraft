@@ -3,6 +3,7 @@
 import { useState, type FormEvent } from "react";
 import Link from "next/link";
 import AppShell from "../../components/AppShell";
+import { useViewOnly } from "../../components/ViewOnly";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
 import type { CompanyOwnersSnapshot, InviteResult, OwnerDTO, OwnerInviteDTO } from "@/lib/owners-db";
@@ -28,6 +29,7 @@ export default function OwnersClient({
   /** LLCs where this person is only a member, and so can't manage owners. */
   memberOnly: number;
 }) {
+  const viewOnly = useViewOnly();
   const [companies, setCompanies] = useState(initial);
   const [drafts, setDrafts] = useState<Record<string, Draft>>({});
   const [editing, setEditing] = useState<Record<string, string[]>>({});
@@ -221,17 +223,17 @@ export default function OwnersClient({
     <AppShell
       openRepairs={openRepairs}
       title="Property owners"
-      tagline="Give an owner or investor a read-only view of their properties: rent roll, income and expenses, monthly statements, open repairs, and the documents you choose."
+      tagline={viewOnly ? "Owners and investors with access to your properties." : "Give an owner or investor a read-only view of their properties: rent roll, income and expenses, monthly statements, open repairs, and the documents you choose."}
       back={{ href: "/dashboard/team", label: "Team" }}
     >
       {companies.length === 0 && (
         <div className={styles.firstRun}>
-          <h2>{memberOnly > 0 ? "Owners only" : "No LLCs yet"}</h2>
-          <p>
+          <h2>{viewOnly ? "Nothing here yet" : memberOnly > 0 ? "Owners only" : "No LLCs yet"}</h2>
+          {!viewOnly && <p>
             {memberOnly > 0
               ? "Only an owner of an LLC can share its properties with investors. Ask an owner on your team."
               : "Add an LLC and a property on the dashboard first, then come back here to share it."}
-          </p>
+          </p>}
         </div>
       )}
 

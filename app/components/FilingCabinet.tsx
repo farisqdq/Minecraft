@@ -10,6 +10,7 @@ import Scanner, { type ScanProperty, type ScanTenant } from "./Scanner";
 import { Toasts, useToasts } from "./Toasts";
 import styles from "../dashboard/dashboard.module.css";
 import { formatDay } from "@/lib/lease";
+import { useViewOnly } from "./ViewOnly";
 import { KINDS, expiryLabel, expiryState, formatSize, type DocumentDTO } from "@/lib/documents";
 
 export type CabinetProperty = ScanProperty & { companyId: string; companyName: string };
@@ -44,6 +45,7 @@ export default function FilingCabinet({
   today: string;
   storageReady: boolean;
 }) {
+  const viewOnly = useViewOnly();
   const { toasts, push, dismiss } = useToasts();
   const [docs, setDocs] = useState(initial);
   const [kind, setKind] = useState("");
@@ -182,14 +184,18 @@ export default function FilingCabinet({
       tagline={
         property
           ? `${property.name} · leases, receipts, notices and photos for this property`
-          : "Every lease, certificate, receipt and notice across your properties — scanned from your phone or uploaded."
+          : viewOnly
+            ? "Every lease, certificate, receipt and notice across your properties."
+            : "Every lease, certificate, receipt and notice across your properties — scanned from your phone or uploaded."
       }
       back={property ? { href: `/dashboard/properties/${property.id}`, label: property.name } : undefined}
       actions={
-        <>
-          {uploadButton}
-          {scanButton}
-        </>
+        viewOnly ? undefined : (
+          <>
+            {uploadButton}
+            {scanButton}
+          </>
+        )
       }
     >
       <Toasts toasts={toasts} onDismiss={dismiss} />
@@ -233,9 +239,11 @@ export default function FilingCabinet({
           {docs.length === 0 ? (
             <>
               <p>Nothing filed yet.</p>
-              <p className={styles.helpText}>
-                Tap <strong>Scan</strong> to photograph a lease or a receipt with your phone, or <strong>Upload a file</strong> for a PDF you already have.
-              </p>
+              {!viewOnly && (
+                <p className={styles.helpText}>
+                  Tap <strong>Scan</strong> to photograph a lease or a receipt with your phone, or <strong>Upload a file</strong> for a PDF you already have.
+                </p>
+              )}
             </>
           ) : (
             <p className={styles.helpText}>Nothing matches that.</p>
@@ -265,7 +273,7 @@ export default function FilingCabinet({
                   </span>
                 )}
                 <FileActions url={d.url} name={d.filename || d.title} mime={d.contentType} />
-                <button
+                {!viewOnly && <button
                   type="button"
                   className={styles.portalLink}
                   onClick={() => {
@@ -274,7 +282,7 @@ export default function FilingCabinet({
                   }}
                 >
                   Edit
-                </button>
+                </button>}
               </li>
             );
           })}

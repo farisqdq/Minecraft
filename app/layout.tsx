@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Geist, Instrument_Sans, Manrope } from "next/font/google";
 import Providers from "./providers";
-import { getRequestAppearance } from "@/lib/appearance-server";
+import { getRequestAppearance, getRequestViewOnly } from "@/lib/appearance-server";
 import { htmlAttributes, themeColors } from "@/lib/appearance";
 import "./globals.css";
 
@@ -48,6 +48,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // The signed-in person's layout, mode and accent go on <html> here, in the
   // server's HTML, so the first paint is already right (no flash).
   const appearance = await getRequestAppearance();
+  const viewOnly = await getRequestViewOnly();
   return (
     <html
       lang="en"
@@ -63,7 +64,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         />
       </head>
       <body>
-        <Providers>{children}</Providers>
+        <Providers viewOnly={viewOnly}>{children}</Providers>
       </body>
     </html>
   );

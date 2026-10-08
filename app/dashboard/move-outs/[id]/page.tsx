@@ -23,7 +23,7 @@ export default async function MoveOutStatementPage({ params }: { params: Promise
   const { id } = await params;
   const row = await prisma.moveOut.findUnique({ where: { id }, include: moveOutInclude });
   if (!row) notFound();
-  const tenant = await requireTenant(userId, row.tenantId);
+  const tenant = await requireTenant(userId, row.tenantId, "viewer");
   if (!tenant) notFound();
 
   const [company, unit, result] = await Promise.all([

@@ -12,6 +12,7 @@ import { money } from "@/lib/money";
 import { isoDay, smsHref, telHref } from "@/lib/lease";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import { monthName } from "@/lib/notices";
+import { useViewOnly } from "../../components/ViewOnly";
 import type { ChargeRule } from "@/lib/charge-rules";
 import {
   buildMonth,
@@ -85,6 +86,7 @@ export default function CalendarClient({
   const [company, setCompany] = useState("all");
   const [payments, setPayments] = useState(initialPayments);
   const router = useRouter();
+  const viewOnly = useViewOnly();
   // "Mark paid" opens the rent form; a counter remounts it per opening.
   const [draft, setDraft] = useState<EntryDraft | null>(null);
   const [draftSeq, setDraftSeq] = useState(0);
@@ -252,7 +254,7 @@ export default function CalendarClient({
               </a>
             </>
           )}
-          {item.status !== "paid" && owed > 0.005 && (
+          {item.status !== "paid" && owed > 0.005 && !viewOnly && (
             <button
               type="button"
               className={`${styles.btn} ${styles.small} ${styles.primary}`}

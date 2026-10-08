@@ -1,6 +1,30 @@
 import { prisma } from "@/lib/prisma";
 
-export type Role = "owner" | "member";
+/**
+ * A team member's standing in one LLC, lowest first:
+ *
+ *   viewer — sees everything the team sees and changes nothing.
+ *   member — records rent and expenses, manages tenants and repairs.
+ *   owner  — also invites, removes people, and deletes things others rely on.
+ *
+ * Every check below defaults to "member", so a viewer is refused anything
+ * that changes data unless a caller deliberately asks for no more than
+ * "viewer" — which only read-only pages and GET routes do. A check that
+ * forgets to say gets the safe answer.
+ */
+export type Role = "owner" | "member" | "viewer";
+
+const RANK: Record<Role, number> = { viewer: 0, member: 1, owner: 2 };
+
+/** A stored role as one of the three; anything unrecognised is the least. */
+export function roleOf(value: string | null | undefined): Role {
+  return value === "owner" || value === "member" ? value : "viewer";
+}
+
+/** Whether a stored role meets the bar. */
+export function hasRole(value: string | null | undefined, atLeast: Role): boolean {
+  return RANK[roleOf(value)] >= RANK[atLeast];
+}
 
 export async function getMembership(userId: string, companyId: string) {
   return prisma.companyMember.findUnique({
@@ -8,11 +32,10 @@ export async function getMembership(userId: string, companyId: string) {
   });
 }
 
-/** Membership for a company, or null when the user isn't on its team. */
+/** Membership for a company at the given standing or above, or null. */
 export async function requireCompany(userId: string, companyId: string, role: Role = "member") {
   const membership = await getMembership(userId, companyId);
-  if (!membership) return null;
-  if (role === "owner" && membership.role !== "owner") return null;
+  if (!membership || !hasRole(membership.role, role)) return null;
   return membership;
 }
 
@@ -39,33 +62,56 @@ export async function requireUnit(userId: string, unitId: string, role: Role = "
 }
 
 /** A recurring expense template the user can reach through one of their company teams. */
-export async function requireRecurring(userId: string, recurringId: string) {
+export async function requireRecurring(userId: string, recurringId: string, role: Role = "member") {
   const template = await prisma.recurringExpense.findUnique({
     where: { id: recurringId },
     include: { property: true },
   });
   if (!template) return null;
-  const membership = await getMembership(userId, template.property.companyId);
+  const membership = await requireCompany(userId, template.property.companyId, role);
   return membership ? template : null;
 }
 
 /** A tenant record the user can reach through one of their company teams. */
-export async function requireTenant(userId: string, tenantId: string) {
+export async function requireTenant(userId: string, tenantId: string, role: Role = "member") {
   const tenant = await prisma.tenant.findUnique({
     where: { id: tenantId },
     include: { property: true },
   });
   if (!tenant) return null;
-  const membership = await getMembership(userId, tenant.property.companyId);
+  const membership = await requireCompany(userId, tenant.property.companyId, role);
   return membership ? tenant : null;
 }
 
+/**
+ * Every LLC the user can SEE, viewers included. For listing and reading
+ * only — anything that writes scopes itself with writableCompanyIds.
+ */
 export async function companyIdsForUser(userId: string) {
   const memberships = await prisma.companyMember.findMany({
     where: { userId },
     select: { companyId: true },
   });
   return memberships.map((m) => m.companyId);
+}
+
+/** The LLCs where the user may change things: member or owner, never viewer. */
+export async function writableCompanyIds(userId: string) {
+  const memberships = await prisma.companyMember.findMany({
+    where: { userId, role: { in: ["member", "owner"] } },
+    select: { companyId: true },
+  });
+  return memberships.map((m) => m.companyId);
+}
+
+/**
+ * True when every one of the user's memberships is a viewer's — they can
+ * change nothing anywhere. The interface uses it to leave out controls that
+ * would only be refused; it says nothing to them about why.
+ */
+export async function isViewOnly(userId: string): Promise<boolean> {
+  const memberships = await prisma.companyMember.findMany({ where: { userId }, select: { role: true } });
+  return memberships.length > 0 && memberships.every((m) => !hasRole(m.role, "member"));
 }
 
 /**

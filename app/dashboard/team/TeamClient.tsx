@@ -11,8 +11,12 @@ import type { LateFeePolicyDTO } from "@/lib/late-fee-policy";
 import LateFeePanel from "../../components/LateFeePanel";
 import styles from "../dashboard.module.css";
 
-type Member = { userId: string; email: string; name: string; role: "owner" | "member" };
-type Invite = { id: string; role: "owner" | "member"; code: string; expiresAt: string };
+type Role = "owner" | "member" | "viewer";
+/** `role` is "" where roles aren't shown to the person looking (see page.tsx). */
+type Member = { userId: string; email: string; name: string; role: Role | "" };
+type Invite = { id: string; role: Role; code: string; expiresAt: string };
+
+const ROLE_LABEL: Record<Role, string> = { owner: "Owner", member: "Member", viewer: "Viewer" };
 type Company = {
   id: string;
   name: string;
@@ -21,7 +25,9 @@ type Company = {
   contactEmail: string;
   /** The LLC's late-fee policy, or null when none was ever saved. */
   lateFees: LateFeePolicyDTO | null;
-  role: "owner" | "member";
+  role: Role;
+  /** True for a viewer: no one's role is shown, their own included. */
+  rolesHidden: boolean;
   propertyCount: number;
   transactionCount: number;
   members: Member[];
@@ -40,7 +46,7 @@ export default function TeamClient({
 }) {
   const router = useRouter();
   const [companies, setCompanies] = useState<Company[]>(initialCompanies);
-  const [drafts, setDrafts] = useState<Record<string, { email: string; role: "owner" | "member" }>>({});
+  const [drafts, setDrafts] = useState<Record<string, { email: string; role: Role }>>({});
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [copied, setCopied] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState("");
@@ -94,7 +100,7 @@ export default function TeamClient({
     return drafts[companyId] ?? { role: "member" as const };
   }
 
-  function setDraft(companyId: string, patch: Partial<{ role: "owner" | "member" }>) {
+  function setDraft(companyId: string, patch: Partial<{ role: Role }>) {
     setDrafts((prev) => ({ ...prev, [companyId]: { ...draftFor(companyId), ...patch } }));
   }
 
@@ -128,7 +134,7 @@ export default function TeamClient({
     );
   }
 
-  async function changeRole(companyId: string, userId: string, role: "owner" | "member") {
+  async function changeRole(companyId: string, userId: string, role: Role) {
     setErrors((prev) => ({ ...prev, [companyId]: "" }));
     const res = await fetch(`/api/companies/${companyId}/members/${userId}`, {
       method: "PATCH",
@@ -244,7 +250,7 @@ export default function TeamClient({
               <h2>{company.name}</h2>
               <span className={styles.count}>
                 {company.members.length} {company.members.length === 1 ? "person" : "people"}
-                {isOwner ? "" : " · you're a member"}
+                {isOwner || company.rolesHidden ? "" : " · you're a member"}
               </span>
               <Link href="/dashboard/reminders" className={styles.portalLink}>
                 Automatic reminders →
@@ -258,7 +264,7 @@ export default function TeamClient({
                 <thead>
                   <tr>
                     <th>Person</th>
-                    <th>Role</th>
+                    {!company.rolesHidden && <th>Role</th>}
                     <th></th>
                   </tr>
                 </thead>
@@ -270,11 +276,19 @@ export default function TeamClient({
                         {m.name && <div className={styles.note}>{m.email}</div>}
                         {m.userId === currentUserId && <div className={styles.note}>That&apos;s you</div>}
                       </td>
-                      <td>
-                        <span className={`${styles.tag} ${m.role === "owner" ? styles.rent : styles.expense}`}>
-                          {m.role === "owner" ? "Owner" : "Member"}
-                        </span>
-                      </td>
+                      {!company.rolesHidden && (
+                        <td>
+                          {m.role && (
+                            <span
+                              className={`${styles.tag} ${
+                                m.role === "owner" ? styles.rent : m.role === "member" ? styles.expense : ""
+                              }`}
+                            >
+                              {ROLE_LABEL[m.role]}
+                            </span>
+                          )}
+                        </td>
+                      )}
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         {isOwner && m.role === "member" && (
                           <button
@@ -283,6 +297,24 @@ export default function TeamClient({
                             onClick={() => changeRole(company.id, m.userId, "owner")}
                           >
                             Make owner
+                          </button>
+                        )}
+                        {isOwner && m.role === "member" && (
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small}`}
+                            onClick={() => changeRole(company.id, m.userId, "viewer")}
+                          >
+                            Make viewer
+                          </button>
+                        )}
+                        {isOwner && m.role === "viewer" && (
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small}`}
+                            onClick={() => changeRole(company.id, m.userId, "member")}
+                          >
+                            Make member
                           </button>
                         )}
                         {/* Leaving as the last owner would strand the LLC with
@@ -310,7 +342,7 @@ export default function TeamClient({
                       </td>
                       <td>
                         <span className={styles.tagPending}>
-                          Joins as {i.role === "owner" ? "owner" : "member"}
+                          Joins as {ROLE_LABEL[i.role].toLowerCase()}
                         </span>
                       </td>
                       <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -409,10 +441,11 @@ export default function TeamClient({
                   <select
                     id={`invite-role-${company.id}`}
                     value={draft.role}
-                    onChange={(e) => setDraft(company.id, { role: e.target.value as "owner" | "member" })}
+                    onChange={(e) => setDraft(company.id, { role: e.target.value as Role })}
                   >
                     <option value="member">Member — record rent and expenses</option>
                     <option value="owner">Owner — can also invite and delete</option>
+                    <option value="viewer">Viewer — sees everything, changes nothing</option>
                   </select>
                 </div>
                 <button type="submit" className={`${styles.btn} ${styles.primary}`}>

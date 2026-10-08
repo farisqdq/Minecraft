@@ -10,7 +10,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!(await requireTenant(userId, id))) {
+  if (!(await requireTenant(userId, id, "viewer"))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

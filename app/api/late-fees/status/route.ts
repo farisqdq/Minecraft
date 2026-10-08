@@ -36,7 +36,7 @@ export async function POST(req: Request) {
   }
 
   const reachable: string[] = [];
-  for (const id of ids) if (await requireTenant(userId, id)) reachable.push(id);
+  for (const id of ids) if (await requireTenant(userId, id, "viewer")) reachable.push(id);
 
   const statuses: Record<string, Omit<LateFeeStatus, "tenantId">> = {};
   for (const { tenantId, ...status } of await lateFeeStatuses(reachable, new Date(), "current")) {

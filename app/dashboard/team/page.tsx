@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getCurrentUserId } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
+import { hasRole, roleOf, type Role } from "@/lib/access";
 import { openRepairCount } from "@/lib/requests";
 import { formatJoinCode } from "@/lib/codes";
 import { policyDTO } from "@/lib/statements";
@@ -48,31 +49,37 @@ export default async function TeamPage() {
     <TeamClient
       openRepairs={openRepairs}
       currentUserId={userId}
-      companies={memberships.map((m) => ({
+      companies={memberships.map((m) => {
+        // A viewer is never shown anyone's role — their own included — and
+        // it isn't sent to the browser either, where page data can be read.
+        const rolesHidden = !hasRole(m.role, "member");
+        return {
         id: m.company.id,
         name: m.company.name,
         contactPhone: m.company.contactPhone ?? "",
         contactEmail: m.company.contactEmail ?? "",
         lateFees: m.company.lateFeePolicy ? policyDTO(m.company.lateFeePolicy) : null,
-        role: m.role as "owner" | "member",
+        role: (rolesHidden ? "member" : roleOf(m.role)) as Role,
+        rolesHidden,
         propertyCount: impact.get(m.companyId)?.properties ?? 0,
         transactionCount: impact.get(m.companyId)?.transactions ?? 0,
         members: m.company.members.map((x) => ({
           userId: x.user.id,
           email: x.user.email,
           name: x.user.name ?? "",
-          role: x.role as "owner" | "member",
+          role: (rolesHidden ? "" : roleOf(x.role)) as Role | "",
         })),
         // Owners only, as in the API. Hiding them on screen isn't enough: this
         // list is sent to the browser in the page data, where a member could
         // read an owner code and redeem it from a second account.
         invites: (m.role === "owner" ? m.company.invites : []).map((i) => ({
           id: i.id,
-          role: i.role as "owner" | "member",
+          role: roleOf(i.role),
           code: formatJoinCode(i.token),
           expiresAt: i.expiresAt.toISOString(),
         })),
-      }))}
+        };
+      })}
     />
   );
 }

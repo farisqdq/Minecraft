@@ -5,6 +5,7 @@ import { useState, type FormEvent } from "react";
 import { signOutTo } from "../../components/sign-out";
 import AppShell from "../../components/AppShell";
 import PushSetup from "../../components/PushSetup";
+import { useViewOnly } from "../../components/ViewOnly";
 import Modal from "../../components/Modal";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
@@ -38,6 +39,7 @@ export default function AccountClient({
   initialTwoFactor: TwoFactor;
   initialFiles: Files;
 }) {
+  const viewOnly = useViewOnly();
   const { toasts, push, dismiss } = useToasts();
   const [twoFactor, setTwoFactor] = useState(initialTwoFactor);
   const [step, setStep] = useState<Step>("");
@@ -182,16 +184,18 @@ export default function AccountClient({
         <Link href="/dashboard/settings/appearance">Settings › Appearance</Link>
       </p>
 
-      <section className={styles.block}>
-        <div className={styles.blockHead}>
-          <h2>Notifications on this device</h2>
-        </div>
-        <p className={styles.helpText} style={{ marginTop: -6 }}>
-          Rent, lease, document and repair reminders as phone notifications. What gets sent, and when, is set per LLC
-          under <Link href="/dashboard/reminders">Reminders</Link>.
-        </p>
-        <PushSetup audience="user" />
-      </section>
+      {!viewOnly && (
+        <section className={styles.block}>
+          <div className={styles.blockHead}>
+            <h2>Notifications on this device</h2>
+          </div>
+          <p className={styles.helpText} style={{ marginTop: -6 }}>
+            Rent, lease, document and repair reminders as phone notifications. What gets sent, and when, is set per LLC
+            under <Link href="/dashboard/reminders">Reminders</Link>.
+          </p>
+          <PushSetup audience="user" />
+        </section>
+      )}
 
       <section className={styles.block}>
         <div className={styles.blockHead}>
@@ -317,16 +321,18 @@ export default function AccountClient({
                 directly, but anyone who kept an old link could still open {files.publicFiles === 1 ? "it" : "them"}.
                 Moving copies each one into private storage and deletes the original.
               </p>
-              <div className={styles.formFoot} style={{ justifyContent: "flex-start" }}>
-                <button
-                  type="button"
-                  className={`${styles.btn} ${styles.primary}`}
-                  onClick={moveFiles}
-                  disabled={moving !== null}
-                >
-                  {moving ? `Moving… ${moving.moved} done` : "Move old files"}
-                </button>
-              </div>
+              {!viewOnly && (
+                <div className={styles.formFoot} style={{ justifyContent: "flex-start" }}>
+                  <button
+                    type="button"
+                    className={`${styles.btn} ${styles.primary}`}
+                    onClick={moveFiles}
+                    disabled={moving !== null}
+                  >
+                    {moving ? `Moving… ${moving.moved} done` : "Move old files"}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>

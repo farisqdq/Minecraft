@@ -16,14 +16,14 @@ export async function PATCH(
   }
 
   const body = await req.json().catch(() => null);
-  const role = body?.role === "owner" ? "owner" : "member";
+  const role = body?.role === "owner" ? "owner" : body?.role === "viewer" ? "viewer" : "member";
 
   const target = await prisma.companyMember.findUnique({
     where: { companyId_userId: { companyId: id, userId } },
   });
   if (!target) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-  if (target.role === "owner" && role === "member") {
+  if (target.role === "owner" && role !== "owner") {
     const owners = await prisma.companyMember.count({ where: { companyId: id, role: "owner" } });
     if (owners <= 1) {
       return NextResponse.json(
@@ -54,7 +54,8 @@ export async function DELETE(
   if (!isOwner && currentUserId !== userId) {
     return NextResponse.json({ error: "Only an owner can remove teammates." }, { status: 403 });
   }
-  if (!(await requireCompany(currentUserId, id))) {
+  // Anyone on the team, viewers included, may leave.
+  if (!(await requireCompany(currentUserId, id, "viewer"))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

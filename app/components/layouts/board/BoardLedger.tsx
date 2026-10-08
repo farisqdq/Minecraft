@@ -10,6 +10,7 @@ import OverflowMenu from "../../ui/OverflowMenu";
 import { IconPencil, IconSearch, IconTrash, IconX } from "../../icons";
 import type { DashboardProps } from "../dashboard-props";
 import styles from "./Dashboard.module.css";
+import { useViewOnly } from "../../ViewOnly";
 
 export type Txn = DashboardProps["initialTransactions"][number];
 
@@ -58,6 +59,7 @@ export default function BoardLedger({
   onAttach: (id: string, files: FileList | null) => void;
   onRemoveProof: (attachmentId: string) => void;
 }) {
+  const viewOnly = useViewOnly();
   const [query, setQuery] = useState("");
   const [property, setProperty] = useState("");
   const [type, setType] = useState("");
@@ -171,7 +173,7 @@ export default function BoardLedger({
                   </span>
                   {[t.detail, t.note].filter(Boolean).join(" · ")}
                 </div>
-                {(t.attachments.length > 0 || storageReady) && (
+                {(t.attachments.length > 0 || (storageReady && !viewOnly)) && (
                   <div className={styles.proofRow}>
                     {t.attachments.map((a) => (
                       <span key={a.id} className={styles.proofItem}>
@@ -185,17 +187,19 @@ export default function BoardLedger({
                             )}
                           </FileLink>
                         </ThumbWithActions>
-                        <button
-                          type="button"
-                          className={styles.proofRemove}
-                          aria-label={`Remove ${a.filename}`}
-                          onClick={() => onRemoveProof(a.id)}
-                        >
-                          <IconX size={12} />
-                        </button>
+                        {!viewOnly && (
+                          <button
+                            type="button"
+                            className={styles.proofRemove}
+                            aria-label={`Remove ${a.filename}`}
+                            onClick={() => onRemoveProof(a.id)}
+                          >
+                            <IconX size={12} />
+                          </button>
+                        )}
                       </span>
                     ))}
-                    {storageReady && (
+                    {storageReady && !viewOnly && (
                       <label className={styles.proofAdd}>
                         {uploadingFor === t.id ? "Uploading…" : t.attachments.length > 0 ? "+ Add another" : "+ Attach proof"}
                         <input
@@ -219,13 +223,15 @@ export default function BoardLedger({
                 {t.type === "rent" ? "+" : "−"}
                 {money(t.amount)}
               </span>
-              <OverflowMenu
-                label={`Actions for the ${money(t.amount)} entry on ${fmtDate(t.date)}`}
-                items={[
-                  { label: "Edit", icon: IconPencil, onSelect: () => onEdit(t) },
-                  { label: "Delete", icon: IconTrash, destructive: true, onSelect: () => onDelete(t) },
-                ]}
-              />
+              {!viewOnly && (
+                <OverflowMenu
+                  label={`Actions for the ${money(t.amount)} entry on ${fmtDate(t.date)}`}
+                  items={[
+                    { label: "Edit", icon: IconPencil, onSelect: () => onEdit(t) },
+                    { label: "Delete", icon: IconTrash, destructive: true, onSelect: () => onDelete(t) },
+                  ]}
+                />
+              )}
             </li>
           ))}
         </ul>

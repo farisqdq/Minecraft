@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import AppShell from "../../components/AppShell";
+import { useViewOnly } from "../../components/ViewOnly";
 import styles from "../dashboard.module.css";
 
 type Counts = {
@@ -24,6 +25,7 @@ export default function BackupClient({
   openRepairs?: number;
 }) {
   const router = useRouter();
+  const viewOnly = useViewOnly();
   const fileInput = useRef<HTMLInputElement>(null);
   const [error, setError] = useState("");
   const [result, setResult] = useState("");
@@ -113,7 +115,7 @@ export default function BackupClient({
     <AppShell
       openRepairs={openRepairs}
       title="Backup"
-      tagline="Download a copy of everything, or restore one back into the app."
+      tagline={viewOnly ? "Download a copy of everything." : "Download a copy of everything, or restore one back into the app."}
     >
 
       {error && <div className={styles.errorBar}>{error}</div>}
@@ -142,7 +144,7 @@ export default function BackupClient({
         </div>
       </section>
 
-      <section className={styles.block}>
+      {!viewOnly && <section className={styles.block}>
         <div className={styles.blockHead}>
           <h2>Restore from a backup</h2>
         </div>
@@ -165,7 +167,7 @@ export default function BackupClient({
           </div>
           {importing && <p className={styles.helpText}>Restoring…</p>}
         </div>
-      </section>
+      </section>}
     </AppShell>
   );
 }

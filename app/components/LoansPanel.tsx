@@ -19,6 +19,7 @@ import {
   yearTotals,
 } from "@/lib/loans";
 import type { LoanDTO, LoanPaymentDTO } from "@/lib/loans-db";
+import { useViewOnly } from "./ViewOnly";
 
 /** A ledger entry a payment wrote, in the shape the parent page keeps. */
 export type LoanLedgerEntry = {
@@ -100,6 +101,7 @@ export default function LoansPanel({
   onEntriesRemoved: (ids: string[]) => void;
   onToast: (message: string, tone?: "bad") => void;
 }) {
+  const viewOnly = useViewOnly();
   const [loans, setLoans] = useState(initial);
   useEffect(() => onLoansChange?.(loans), [loans, onLoansChange]);
   const [loanForm, setLoanForm] = useState(EMPTY_LOAN);
@@ -257,7 +259,7 @@ export default function LoansPanel({
     <>
       {loans.length === 0 ? (
         <>
-          {liveBills.length > 0 && (
+          {liveBills.length > 0 && !viewOnly && (
             <div className={styles.loanNotice}>
               <p>
                 You log {liveBills.length === 1 ? "a" : ""} {liveBills.map((b) => money(b.amount)).join(" and ")}{" "}
@@ -273,7 +275,7 @@ export default function LoansPanel({
         </>
       ) : (
         <>
-          {activeLoans.length > 0 && liveBills.length > 0 && (
+          {activeLoans.length > 0 && liveBills.length > 0 && !viewOnly && (
             <div className={styles.loanNotice}>
               <p>
                 {liveBills.length === 1
@@ -411,8 +413,8 @@ export default function LoansPanel({
 
                   {l.note && <div className={styles.note}>{l.note}</div>}
 
-                  <div className={styles.loanActions}>
-                    {l.active && !paidOff && (
+                  {(!viewOnly || l.payments.length > 0) && <div className={styles.loanActions}>
+                    {l.active && !paidOff && !viewOnly && (
                       <button
                         type="button"
                         className={`${styles.btn} ${styles.small} ${styles.primary}`}
@@ -426,10 +428,12 @@ export default function LoansPanel({
                         History ({l.payments.length})
                       </button>
                     )}
-                    <button type="button" className={styles.portalLink} onClick={() => openEdit(l)}>
-                      Edit
-                    </button>
-                  </div>
+                    {!viewOnly && (
+                      <button type="button" className={styles.portalLink} onClick={() => openEdit(l)}>
+                        Edit
+                      </button>
+                    )}
+                  </div>}
                 </article>
               );
             })}
@@ -437,16 +441,18 @@ export default function LoansPanel({
         </>
       )}
 
-      <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-        <button type="button" className={`${styles.btn} ${styles.small}`} onClick={openAdd}>
-          + Add a mortgage
-        </button>
+      {(!viewOnly || activeLoans.length > 1) && <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        {!viewOnly && (
+          <button type="button" className={`${styles.btn} ${styles.small}`} onClick={openAdd}>
+            + Add a mortgage
+          </button>
+        )}
         {activeLoans.length > 1 && (
           <span className={styles.note} style={{ marginTop: 0 }}>
             {money(owedTotal)} owed across {activeLoans.length} loans
           </span>
         )}
-      </div>
+      </div>}
 
       <Modal
         open={loanOpen}
@@ -625,7 +631,11 @@ export default function LoansPanel({
       <Modal
         open={Boolean(historyLoan)}
         title={historyLoan ? `${historyLoan.lender} · payments` : "Payments"}
-        subtitle="Newest first. Undoing a payment takes its interest and escrow out of the ledger and puts the principal back on the balance."
+        subtitle={
+          viewOnly
+            ? "Newest first."
+            : "Newest first. Undoing a payment takes its interest and escrow out of the ledger and puts the principal back on the balance."
+        }
         onClose={() => setHistoryFor("")}
       >
         {historyLoan && (
@@ -643,9 +653,11 @@ export default function LoansPanel({
                     <span className={styles.note} style={{ marginTop: 0 }}>
                       paid {formatDay(p.date)}
                     </span>
-                    <button type="button" className={styles.portalLink} onClick={() => undoPayment(historyLoan, p)}>
-                      Undo
-                    </button>
+                    {!viewOnly && (
+                      <button type="button" className={styles.portalLink} onClick={() => undoPayment(historyLoan, p)}>
+                        Undo
+                      </button>
+                    )}
                   </div>
                   <div className={styles.loanHistoryFigures}>
                     <span>

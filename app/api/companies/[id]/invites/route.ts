@@ -47,7 +47,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   }
 
   const body = await req.json().catch(() => null);
-  const role = body?.role === "owner" ? "owner" : "member";
+  const role = body?.role === "owner" ? "owner" : body?.role === "viewer" ? "viewer" : "member";
   const expiresAt = new Date(Date.now() + INVITE_DAYS * 24 * 60 * 60 * 1000);
 
   // Codes are unique; on the rare collision just draw another.

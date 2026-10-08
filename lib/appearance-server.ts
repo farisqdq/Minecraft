@@ -34,3 +34,19 @@ export const getRequestAppearance = cache(async (): Promise<Appearance> => {
     return DEFAULT_APPEARANCE;
   }
 });
+
+/**
+ * Whether the signed-in landlord account can change nothing anywhere (a
+ * viewer on every LLC it's on). Tenants, owners and signed-out visitors: false.
+ */
+export const getRequestViewOnly = cache(async (): Promise<boolean> => {
+  try {
+    const session = await getServerSession(authOptions);
+    const id = session?.user?.id;
+    if (!session || !id || (session.kind && session.kind !== "user")) return false;
+    const memberships = await prisma.companyMember.findMany({ where: { userId: id }, select: { role: true } });
+    return memberships.length > 0 && memberships.every((m) => m.role !== "owner" && m.role !== "member");
+  } catch {
+    return false;
+  }
+});

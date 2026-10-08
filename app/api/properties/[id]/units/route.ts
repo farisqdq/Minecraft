@@ -9,7 +9,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!(await requireProperty(userId, id))) {
+  if (!(await requireProperty(userId, id, "viewer"))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

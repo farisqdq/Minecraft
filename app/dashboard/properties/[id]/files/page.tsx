@@ -14,7 +14,7 @@ export default async function PropertyFilesPage({ params }: { params: Promise<{ 
   if (!me) redirect("/login");
 
   const { id } = await params;
-  const property = await requireProperty(me.id, id);
+  const property = await requireProperty(me.id, id, "viewer");
   if (!property) notFound();
 
   const [documents, company, tenants, membership, openRepairs] = await Promise.all([

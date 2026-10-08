@@ -14,6 +14,7 @@ import { useLivePulse } from "../../components/useLivePulse";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { formatPhone, smsHref, telHref } from "@/lib/lease";
 import { rankForRepair, type VendorDTO } from "@/lib/vendors";
+import { useViewOnly } from "../../components/ViewOnly";
 import {
   STATUSES,
   STATUS_LABEL,
@@ -48,6 +49,7 @@ export default function RepairsClient({
   companyOf: Record<string, string>;
 }) {
   const router = useRouter();
+  const viewOnly = useViewOnly();
   const { toasts, push, dismiss } = useToasts();
   const [requests, setRequests] = useState(initial);
   const [filter, setFilter] = useState<Filter>(initialOpen > 0 ? "open" : "all");
@@ -285,7 +287,9 @@ export default function RepairsClient({
         <div className={styles.ledgerWrap}>
           <div className={styles.emptyState}>
             {requests.length === 0
-              ? "Nothing reported yet. Invite a tenant to the portal from their card on a property page and they can report a problem here."
+              ? viewOnly
+                ? "Nothing reported yet."
+                : "Nothing reported yet. Invite a tenant to the portal from their card on a property page and they can report a problem here."
               : filter === "urgent"
                 ? "Nothing urgent is open."
                 : "Nothing open — everything reported has been closed out."}
@@ -355,7 +359,7 @@ export default function RepairsClient({
               </div>
             )}
 
-            <div className={styles.statusRow}>
+            {!viewOnly && <div className={styles.statusRow}>
               {STATUSES.map((s) => (
                 <button
                   key={s}
@@ -369,7 +373,7 @@ export default function RepairsClient({
                   {STATUS_LABEL[s].landlord}
                 </button>
               ))}
-            </div>
+            </div>}
 
             {(() => {
               // Only this LLC's book, best match for the category first.
@@ -378,10 +382,15 @@ export default function RepairsClient({
                 current.category
               );
               const on = vendors.find((v) => v.id === current.vendorId);
+              if (viewOnly && !on) return null;
               return (
                 <div className={styles.vendorPick}>
                   <label htmlFor="repair-vendor">Who&apos;s fixing it</label>
-                  {pool.length === 0 ? (
+                  {viewOnly ? (
+                    <span id="repair-vendor">
+                      {on?.name} — {on?.trade}
+                    </span>
+                  ) : pool.length === 0 ? (
                     <span className={styles.vendorPickNote} style={{ flexBasis: "auto" }}>
                       No vendors in this LLC&apos;s book yet.{" "}
                       <Link href="/dashboard/repairs/vendors">Add one</Link>
@@ -411,11 +420,13 @@ export default function RepairsClient({
                       </a>
                     </>
                   )}
-                  <span className={styles.vendorPickNote}>
-                    {on
-                      ? "Their cost goes to their total when you log this repair on the books. The tenant isn't told who."
-                      : "The tenant isn't told who you send."}
-                  </span>
+                  {!viewOnly && (
+                    <span className={styles.vendorPickNote}>
+                      {on
+                        ? "Their cost goes to their total when you log this repair on the books. The tenant isn't told who."
+                        : "The tenant isn't told who you send."}
+                    </span>
+                  )}
                 </div>
               );
             })()}
@@ -434,7 +445,7 @@ export default function RepairsClient({
                   <span className={styles.threadBody}>
                     {u.statusTo ? STATUS_LABEL[u.statusTo].landlord : u.body}
                   </span>
-                  <button
+                  {!viewOnly && <button
                     type="button"
                     className={styles.threadDel}
                     aria-label={
@@ -446,12 +457,12 @@ export default function RepairsClient({
                     onClick={() => removeUpdate(current, u.id, u.from === "system")}
                   >
                     ×
-                  </button>
+                  </button>}
                 </li>
               ))}
             </ol>
 
-            <div className={styles.replyRow}>
+            {!viewOnly && <div className={styles.replyRow}>
               <input
                 type="text"
                 aria-label={`Reply to ${current.tenantName || "the tenant"}`}
@@ -473,8 +484,11 @@ export default function RepairsClient({
               >
                 Send
               </button>
-            </div>
+            </div>}
 
+            {viewOnly ? (
+              current.loggedAsExpense && <span className={styles.helpText}>This repair is already on the books.</span>
+            ) : (
             <div className={styles.formFoot} style={{ justifyContent: "space-between" }}>
               <button
                 type="button"
@@ -495,6 +509,7 @@ export default function RepairsClient({
                 </button>
               )}
             </div>
+            )}
           </div>
         )}
       </Modal>

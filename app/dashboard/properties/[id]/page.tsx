@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { openRepairCount, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
 import { isOpen } from "@/lib/maintenance";
 import { balancesForTenants } from "@/lib/statements";
-import { requireProperty } from "@/lib/access";
+import { hasRole, requireProperty } from "@/lib/access";
 import { serializeTenant } from "@/lib/tenants";
 import { unreadByTenantForProperty } from "@/lib/messages-db";
 import { isoDay } from "@/lib/lease";
@@ -30,7 +30,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
 
   const { id } = await params;
 
-  const found = await requireProperty(userId, id);
+  const found = await requireProperty(userId, id, "viewer");
   if (!found) notFound();
   // A raise renewed ahead of time becomes today's rent in its month (a25).
   const property =
@@ -42,6 +42,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
     where: { companyId_userId: { companyId: property.companyId, userId } },
     select: { role: true },
   });
+  const canWrite = hasRole(membership?.role, "member");
 
   const [company, units, recurring, tenants, rentChanges, transactions, requests] = await Promise.all([
     prisma.company.findUnique({ where: { id: property.companyId }, select: { name: true } }),
@@ -159,8 +160,10 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         tenants.map((t) => [
           t.id,
           {
-            inviteCode: t.invites[0]?.code ?? "",
-            inviteExpires: t.invites[0]?.expiresAt.toISOString() ?? "",
+            // An open invite code is a way in (whoever redeems it becomes the
+            // tenant's portal login), so a viewer isn't handed one.
+            inviteCode: canWrite ? (t.invites[0]?.code ?? "") : "",
+            inviteExpires: canWrite ? (t.invites[0]?.expiresAt.toISOString() ?? "") : "",
             accountEmail: t.account?.email ?? "",
             accountSince: t.account?.createdAt.toISOString() ?? "",
             lastLoginAt: t.account?.lastLoginAt?.toISOString() ?? "",

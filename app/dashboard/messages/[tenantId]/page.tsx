@@ -17,7 +17,7 @@ export default async function ThreadPage({ params }: { params: Promise<{ tenantI
   if (!me) redirect("/login");
 
   const { tenantId } = await params;
-  const tenant = await requireTenant(me.id, tenantId);
+  const tenant = await requireTenant(me.id, tenantId, "viewer");
   if (!tenant) notFound();
 
   const [thread, openRepairs] = await Promise.all([threadForTenant(tenantId, "landlord"), openRepairCount(me.id)]);

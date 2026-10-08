@@ -9,6 +9,7 @@ import type { TenantDTO } from "@/lib/tenants";
 import StatusBadge from "../../ui/StatusBadge";
 import OverflowMenu, { type MenuItem } from "../../ui/OverflowMenu";
 import { IconMessage, IconPhone, IconPlus, IconBell, IconExternal, IconCheck } from "../../icons";
+import { useViewOnly } from "../../ViewOnly";
 import styles from "./Dashboard.module.css";
 
 export type CardExtras = {
@@ -65,11 +66,11 @@ function Place({ card }: { card: BoardCard<TenantDTO> }) {
   );
 }
 
-function menuFor(card: BoardCard<TenantDTO>, extras: CardExtras, onRecord: () => void, onRemind: () => void): MenuItem[] {
+function menuFor(card: BoardCard<TenantDTO>, extras: CardExtras, onRecord: () => void, onRemind: () => void, viewOnly: boolean): MenuItem[] {
   const t = card.tenant;
   const owes = card.lane === "late" || card.lane === "due";
   const items: MenuItem[] = [];
-  if (owes && t) {
+  if (owes && t && !viewOnly) {
     items.push({
       label: extras.chasing ? "Sending…" : extras.reminded ? `Remind again (${extras.reminded})` : "Send a reminder",
       icon: IconBell,
@@ -77,7 +78,7 @@ function menuFor(card: BoardCard<TenantDTO>, extras: CardExtras, onRecord: () =>
       disabled: extras.chasing,
     });
   }
-  if (!owes && card.lane !== "vacant") items.push({ label: "Record a payment", icon: IconPlus, onSelect: onRecord });
+  if (!owes && card.lane !== "vacant" && !viewOnly) items.push({ label: "Record a payment", icon: IconPlus, onSelect: onRecord });
   if (t?.phone) {
     items.push({ label: `Call ${t.name}`, icon: IconPhone, href: telHref(t.phone) });
     items.push({ label: `Text ${t.name}`, icon: IconMessage, href: smsHref(t.phone) });
@@ -94,7 +95,8 @@ function menuFor(card: BoardCard<TenantDTO>, extras: CardExtras, onRecord: () =>
 /** One place on the board: who, how much, and the one or two things to do about it. */
 export default function LaneCard({ card, extras, onRecord, onRemind }: Props) {
   const t = card.tenant;
-  const menu = menuFor(card, extras, onRecord, onRemind);
+  const viewOnly = useViewOnly();
+  const menu = menuFor(card, extras, onRecord, onRemind, viewOnly);
   const label = card.unitName ? `${card.property.name} ${card.unitName}` : card.property.name;
 
   if (card.lane === "paid") {
@@ -191,12 +193,12 @@ export default function LaneCard({ card, extras, onRecord, onRemind }: Props) {
       </div>
 
       <div className={styles.cardActions}>
-        {owes && (
+        {owes && !viewOnly && (
           <button type="button" className={`${styles.btn} ${styles.primary}`} onClick={onRecord}>
             Record
           </button>
         )}
-        {card.lane === "vacant" && (
+        {card.lane === "vacant" && !viewOnly && (
           <Link href={`/dashboard/properties/${card.property.id}`} className={`${styles.btn} ${styles.primary}`}>
             Add a tenant
           </Link>
@@ -206,7 +208,7 @@ export default function LaneCard({ card, extras, onRecord, onRemind }: Props) {
             <Link href={`/dashboard/properties/${card.property.id}#tenant-${t.id}`} className={`${styles.btn} ${styles.primary}`}>
               Open lease
             </Link>
-          ) : (
+          ) : viewOnly ? null : (
             <Link href={`/dashboard/properties/${card.property.id}`} className={`${styles.btn} ${styles.primary}`}>
               Add a tenant
             </Link>

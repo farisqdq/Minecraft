@@ -1,4 +1,5 @@
 import { redirect } from "next/navigation";
+import { shownOwnRole } from "@/lib/roles";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { openRepairCount, requestInclude, serializeRequestForLandlord } from "@/lib/requests";
@@ -135,7 +136,7 @@ export default async function DashboardPage() {
       initialCompanies={memberships.map((m) => ({
         id: m.company.id,
         name: m.company.name,
-        role: m.role as "owner" | "member",
+        role: shownOwnRole(m.role),
       }))}
       initialProperties={properties.map((p) => ({
         id: p.id,

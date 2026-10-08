@@ -7,6 +7,7 @@ import { Toasts, useToasts } from "../../../components/Toasts";
 import Conversation from "../../../components/Conversation";
 import Composer from "../../../components/Composer";
 import { useNow } from "../../../components/useNow";
+import { useViewOnly } from "../../../components/ViewOnly";
 import { useLivePulse } from "../../../components/useLivePulse";
 import { useMarkRead } from "../../../components/useMarkRead";
 import { announceMessagesRead, sendMessage } from "../../../components/messages-client";
@@ -34,6 +35,7 @@ export default function ThreadClient({
   openRepairs: number;
   storageReady: boolean;
 }) {
+  const viewOnly = useViewOnly();
   const { toasts, push, dismiss } = useToasts();
   const [thread, setThread] = useState(initial);
   const now = useNow(serverNow);
@@ -53,7 +55,8 @@ export default function ThreadClient({
 
   const unread = unreadCount(thread.messages, "landlord", thread.landlordReadAt || null);
 
-  useMarkRead(panel, unread, () => {
+  // Reading a thread as someone who can't write leaves no read receipt.
+  useMarkRead(panel, viewOnly ? 0 : unread, () => {
     void fetch(`/api/messages/${tenantId}/read`, { method: "POST" })
       .then(() => {
         const stamp = new Date().toISOString();
@@ -93,7 +96,7 @@ export default function ThreadClient({
   return (
     <AppShell
       title={thread.tenantName}
-      tagline={`${place}${tenantActive ? "" : " · moved out"}. Everything from your side is signed as the company, never with your name.`}
+      tagline={`${place}${tenantActive ? "" : " · moved out"}${viewOnly ? "" : ". Everything from your side is signed as the company, never with your name."}`}
       userLabel={userLabel}
       openRepairs={openRepairs}
       back={{ href: "/dashboard/messages", label: "Messages" }}
@@ -111,9 +114,15 @@ export default function ThreadClient({
           side="landlord"
           readAt={thread.landlordReadAt}
           now={now}
-          emptyText={`Nothing yet. Write below and ${thread.tenantName} sees it in their portal, by email and on their phone.`}
+          emptyText={
+            viewOnly
+              ? "Nothing yet."
+              : `Nothing yet. Write below and ${thread.tenantName} sees it in their portal, by email and on their phone.`
+          }
         />
-        <Composer onSend={send} storageReady={storageReady} placeholder={`Write to ${thread.tenantName}…`} />
+        {!viewOnly && (
+          <Composer onSend={send} storageReady={storageReady} placeholder={`Write to ${thread.tenantName}…`} />
+        )}
       </div>
     </AppShell>
   );

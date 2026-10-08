@@ -40,7 +40,8 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null);
   const after = typeof body?.after === "string" ? body.after.slice(0, 1000) : "";
-  const where = await fileScope(userId);
+  // Only LLCs this account may change: a viewer's files stay where they are.
+  const where = await fileScope(userId, { writable: true });
   const page = { url: { ...IN_PUBLIC_STORE, gt: after } };
   const pick = { select: { url: true }, orderBy: { url: "asc" as const }, take: BATCH, distinct: ["url" as const] };
 

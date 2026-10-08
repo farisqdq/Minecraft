@@ -15,7 +15,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const userId = await getCurrentUserId();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const { id } = await params;
-  if (!(await requireCompany(userId, id))) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!(await requireCompany(userId, id, "viewer"))) return NextResponse.json({ error: "Not found" }, { status: 404 });
   return NextResponse.json(policyDTO(await prisma.lateFeePolicy.findUnique({ where: { companyId: id } })));
 }
 

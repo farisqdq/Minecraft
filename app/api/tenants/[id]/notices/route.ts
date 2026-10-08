@@ -38,7 +38,7 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!me) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  if (!(await requireTenant(me.id, id))) {
+  if (!(await requireTenant(me.id, id, "viewer"))) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   const rows = await prisma.tenantNotice.findMany({

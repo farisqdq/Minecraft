@@ -39,7 +39,7 @@ export async function viewableFile(kind: string, id: string): Promise<ViewableFi
         where: { id },
         select: { url: true, filename: true, transaction: { select: { propertyId: true } } },
       });
-      if (!a || !(await requireProperty(userId, a.transaction.propertyId))) return null;
+      if (!a || !(await requireProperty(userId, a.transaction.propertyId, "viewer"))) return null;
       return { url: a.url, filename: a.filename };
     }
     case "photo": {
@@ -53,7 +53,7 @@ export async function viewableFile(kind: string, id: string): Promise<ViewableFi
       });
       if (!p) return null;
       const allowed = userId
-        ? await requireCompany(userId, p.request.property.companyId)
+        ? await requireCompany(userId, p.request.property.companyId, "viewer")
         : tenant
           ? p.request.tenantId === tenant.tenant.id
           : false;
@@ -66,7 +66,7 @@ export async function viewableFile(kind: string, id: string): Promise<ViewableFi
       });
       if (!d) return null;
       const allowed = userId
-        ? await requireCompany(userId, d.companyId)
+        ? await requireCompany(userId, d.companyId, "viewer")
         : tenant
           ? d.shared && d.tenantId === tenant.tenant.id
           : ownerMayViewDocument(d, owner!.propertyIds);
@@ -83,7 +83,7 @@ export async function viewableFile(kind: string, id: string): Promise<ViewableFi
       });
       if (!a) return null;
       const allowed = userId
-        ? await requireCompany(userId, a.message.thread.companyId)
+        ? await requireCompany(userId, a.message.thread.companyId, "viewer")
         : a.message.thread.tenantId === tenant!.tenant.id;
       return allowed ? { url: a.url, filename: a.filename } : null;
     }

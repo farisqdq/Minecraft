@@ -33,6 +33,7 @@ import { returnLabel, returnState } from "@/lib/move-out";
 import { MarkReturnedDialog } from "../components/MoveOut";
 import { vacancyCost, vacantDays, vacantFor } from "@/lib/vacancy";
 import AppShell from "../components/AppShell";
+import { useViewOnly } from "../components/ViewOnly";
 import CashFlowChart from "../components/CashFlowChart";
 import { forecast as forecastAhead, otherSpending } from "@/lib/forecast";
 import type { ListingDTO } from "@/lib/listings-db";
@@ -289,6 +290,7 @@ export default function DashboardClient({
   // the relative times get a real timestamp of their own.
   const clock = useNow(serverNow);
   const router = useRouter();
+  const viewOnly = useViewOnly();
 
   // Both the repair rows and the nav count are props from the server, so
   // asking the server to render again is all this page needs. The ledger and
@@ -1581,7 +1583,7 @@ export default function DashboardClient({
       tagline="Rent collected, repairs paid, and the profit left over — by property."
       userLabel={userLabel}
       actions={
-        companies.length > 0 ? (
+        companies.length > 0 && !viewOnly ? (
           <>
             <Link href="/dashboard/import" className={styles.btn}>
               Import from bank
@@ -1618,7 +1620,7 @@ export default function DashboardClient({
               {c.name}
             </button>
           ))}
-          {addingCompany ? (
+          {viewOnly ? null : addingCompany ? (
             <form className={styles.inlineForm} onSubmit={addCompany}>
               <input
                 id="new-company"
@@ -1864,7 +1866,13 @@ export default function DashboardClient({
                           {ahead.ending.slice(0, 3).map((t, i) => (
                             <span key={t.id}>
                               {i > 0 ? ", " : ""}
-                              <Link href={`/dashboard/properties/${t.propertyId}?renew=${t.id}#tenant-${t.id}`}>
+                              <Link
+                                href={
+                                  viewOnly
+                                    ? `/dashboard/properties/${t.propertyId}#tenant-${t.id}`
+                                    : `/dashboard/properties/${t.propertyId}?renew=${t.id}#tenant-${t.id}`
+                                }
+                              >
                                 {t.name}
                               </Link>{" "}
                               ({formatDay(t.leaseEnd)})
@@ -1905,7 +1913,7 @@ export default function DashboardClient({
                   {/* Only worth offering once there's more than one of a thing
                       to clear — with a single row the per-row button is fewer
                       taps and needs no confirming. */}
-                  {unpaidThisMonth.length > 1 && (
+                  {!viewOnly && unpaidThisMonth.length > 1 && (
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.small}`}
@@ -1915,7 +1923,7 @@ export default function DashboardClient({
                       {bulkBusy === "rent" ? "Recording…" : `Mark all ${unpaidThisMonth.length} paid`}
                     </button>
                   )}
-                  {dueRecurring.length + dueLoans.length > 1 && (
+                  {!viewOnly && dueRecurring.length + dueLoans.length > 1 && (
                     <button
                       type="button"
                       className={`${styles.btn} ${styles.small}`}
@@ -1961,7 +1969,7 @@ export default function DashboardClient({
                           className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                           href="/dashboard/repairs"
                         >
-                          Work it
+                          {viewOnly ? "Open" : "Work it"}
                         </Link>
                       </div>
                     </div>
@@ -2006,6 +2014,7 @@ export default function DashboardClient({
                       </span>
                       <div className={styles.attnActions}>
                         {tenant &&
+                          !viewOnly &&
                           (() => {
                             const chase = chases[tenant.id];
                             // Only count a chase about *this* month: last
@@ -2058,20 +2067,24 @@ export default function DashboardClient({
                         )}
                         {/* Both open the rent form with what's owed in it and
                             selected: Enter records it all, typing records part. */}
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
-                          onClick={() => quickRent(row)}
-                        >
-                          Part paid
-                        </button>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.small} ${styles.primary}`}
-                          onClick={() => quickRent(row)}
-                        >
-                          Mark paid
-                        </button>
+                        {!viewOnly && (
+                          <>
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                              onClick={() => quickRent(row)}
+                            >
+                              Part paid
+                            </button>
+                            <button
+                              type="button"
+                              className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                              onClick={() => quickRent(row)}
+                            >
+                              Mark paid
+                            </button>
+                          </>
+                        )}
                       </div>
                     </div>
                     );
@@ -2108,12 +2121,14 @@ export default function DashboardClient({
                             Call
                           </a>
                         )}
-                        <Link
-                          href={`/dashboard/properties/${tenant.propertyId}?renew=${tenant.id}#tenant-${tenant.id}`}
-                          className={`${styles.btn} ${styles.small}`}
-                        >
-                          Renew
-                        </Link>
+                        {!viewOnly && (
+                          <Link
+                            href={`/dashboard/properties/${tenant.propertyId}?renew=${tenant.id}#tenant-${tenant.id}`}
+                            className={`${styles.btn} ${styles.small}`}
+                          >
+                            Renew
+                          </Link>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2135,18 +2150,20 @@ export default function DashboardClient({
                         </div>
                         <div className={styles.attnActions}>
                           <FileActions url={d.url} name={d.filename || d.title} mime={d.contentType} />
-                          <Link
-                            href={
-                              d.vendorId
-                                ? "/dashboard/repairs/vendors"
-                                : d.propertyId
-                                  ? `/dashboard/properties/${d.propertyId}`
-                                  : "/dashboard"
-                            }
-                            className={`${styles.btn} ${styles.small}`}
-                          >
-                            Replace
-                          </Link>
+                          {!viewOnly && (
+                            <Link
+                              href={
+                                d.vendorId
+                                  ? "/dashboard/repairs/vendors"
+                                  : d.propertyId
+                                    ? `/dashboard/properties/${d.propertyId}`
+                                    : "/dashboard"
+                              }
+                              className={`${styles.btn} ${styles.small}`}
+                            >
+                              Replace
+                            </Link>
+                          )}
                         </div>
                       </div>
                     );
@@ -2163,15 +2180,17 @@ export default function DashboardClient({
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} ${styles.neg} num`}>{money(r.amount)}</span>
-                      <div className={styles.attnActions}>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.small}`}
-                          onClick={() => quickRecurring(r)}
-                        >
-                          Log it
-                        </button>
-                      </div>
+                      {!viewOnly && (
+                        <div className={styles.attnActions}>
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small}`}
+                            onClick={() => quickRecurring(r)}
+                          >
+                            Log it
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
 
@@ -2200,20 +2219,24 @@ export default function DashboardClient({
                                 : "Listed"}
                             </Link>
                           ) : (
-                            <Link
-                              href={`/dashboard/properties/${v.target.propertyId}?list=${v.target.unitId ?? "whole"}`}
-                              className={`${styles.btn} ${styles.small}`}
-                            >
-                              List it
-                            </Link>
+                            viewOnly ? null : (
+                              <Link
+                                href={`/dashboard/properties/${v.target.propertyId}?list=${v.target.unitId ?? "whole"}`}
+                                className={`${styles.btn} ${styles.small}`}
+                              >
+                                List it
+                              </Link>
+                            )
                           );
                         })()}
-                        <Link
-                          href={`/dashboard/properties/${v.target.propertyId}`}
-                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
-                        >
-                          Add a tenant
-                        </Link>
+                        {!viewOnly && (
+                          <Link
+                            href={`/dashboard/properties/${v.target.propertyId}`}
+                            className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                          >
+                            Add a tenant
+                          </Link>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2257,13 +2280,15 @@ export default function DashboardClient({
                         <Link href={`/dashboard/move-outs/${d.id}`} className={`${styles.btn} ${styles.small}`}>
                           Statement
                         </Link>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.small}`}
-                          onClick={() => setReturningId(d.id)}
-                        >
-                          Mark sent
-                        </button>
+                        {!viewOnly && (
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small}`}
+                            onClick={() => setReturningId(d.id)}
+                          >
+                            Mark sent
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
@@ -2288,18 +2313,20 @@ export default function DashboardClient({
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} ${styles.neg} num`}>{money(total)}</span>
-                      <div className={styles.attnActions}>
-                        <Link href={`/dashboard/properties/${loan.propertyId}`} className={`${styles.btn} ${styles.small}`}>
-                          Split differently
-                        </Link>
-                        <button
-                          type="button"
-                          className={`${styles.btn} ${styles.small}`}
-                          onClick={() => setPayingLoanId(loan.id)}
-                        >
-                          Log it
-                        </button>
-                      </div>
+                      {!viewOnly && (
+                        <div className={styles.attnActions}>
+                          <Link href={`/dashboard/properties/${loan.propertyId}`} className={`${styles.btn} ${styles.small}`}>
+                            Split differently
+                          </Link>
+                          <button
+                            type="button"
+                            className={`${styles.btn} ${styles.small}`}
+                            onClick={() => setPayingLoanId(loan.id)}
+                          >
+                            Log it
+                          </button>
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2579,14 +2606,16 @@ export default function DashboardClient({
                       >
                         Open
                       </Link>
-                      <button
-                        type="button"
-                        className={`${styles.btn} ${styles.small} ${styles.quiet}`}
-                        onClick={() => startEditProperty(p)}
-                      >
-                        Edit
-                      </button>
-                      {canRemove && (
+                      {!viewOnly && (
+                        <button
+                          type="button"
+                          className={`${styles.btn} ${styles.small} ${styles.quiet}`}
+                          onClick={() => startEditProperty(p)}
+                        >
+                          Edit
+                        </button>
+                      )}
+                      {canRemove && !viewOnly && (
                         <button
                           type="button"
                           className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger}`}
@@ -2600,7 +2629,7 @@ export default function DashboardClient({
                 );
               })}
 
-              {addingProperty ? (
+              {viewOnly ? null : addingProperty ? (
                 <form className={`${styles.propCard} ${styles.propForm}`} onSubmit={addProperty}>
                   <div className={styles.field}>
                     <label htmlFor="new-prop-name">Property name</label>
@@ -2757,8 +2786,14 @@ export default function DashboardClient({
                     : allTime
                       ? (
                         <>
-                          No transactions yet — record a rent payment or expense to get started, or{" "}
-                          <Link href="/dashboard/import">import a statement from your bank</Link>.
+                          {viewOnly ? (
+                            "No transactions yet."
+                          ) : (
+                            <>
+                              No transactions yet — record a rent payment or expense to get started, or{" "}
+                              <Link href="/dashboard/import">import a statement from your bank</Link>.
+                            </>
+                          )}
                         </>
                       )
                       : `Nothing recorded in ${periodLabel} yet.`}
@@ -2774,7 +2809,7 @@ export default function DashboardClient({
                       {sortHead("type")}
                       {sortHead("details")}
                       {sortHead("amount", true)}
-                      <th></th>
+                      {!viewOnly && <th></th>}
                     </tr>
                   </thead>
                   <tbody>
@@ -2805,19 +2840,21 @@ export default function DashboardClient({
                                       )}
                                     </FileLink>
                                   </ThumbWithActions>
-                                  <button
-                                    type="button"
-                                    className={styles.proofRemove}
-                                    aria-label={`Remove ${a.filename}`}
-                                    onClick={() => removeAttachment(a.id)}
-                                  >
-                                    ×
-                                  </button>
+                                  {!viewOnly && (
+                                    <button
+                                      type="button"
+                                      className={styles.proofRemove}
+                                      aria-label={`Remove ${a.filename}`}
+                                      onClick={() => removeAttachment(a.id)}
+                                    >
+                                      ×
+                                    </button>
+                                  )}
                                 </span>
                               ))}
                             </div>
                           )}
-                          {storageReady && (
+                          {storageReady && !viewOnly && (
                             <label className={styles.proofAdd}>
                               {uploadingFor === t.id
                                 ? "Uploading…"
@@ -2848,24 +2885,26 @@ export default function DashboardClient({
                           {t.type === "rent" ? "+" : "−"}
                           {money(t.amount)}
                         </td>
-                        <td>
-                          <div className={styles.rowActions}>
-                            <button
-                              type="button"
-                              className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.rowDel}`}
-                              onClick={() => openEdit(t)}
-                            >
-                              Edit
-                            </button>
-                            <button
-                              type="button"
-                              className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger} ${styles.rowDel}`}
-                              onClick={() => removeTransaction(t)}
-                            >
-                              Delete
-                            </button>
-                          </div>
-                        </td>
+                        {!viewOnly && (
+                          <td>
+                            <div className={styles.rowActions}>
+                              <button
+                                type="button"
+                                className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.rowDel}`}
+                                onClick={() => openEdit(t)}
+                              >
+                                Edit
+                              </button>
+                              <button
+                                type="button"
+                                className={`${styles.btn} ${styles.small} ${styles.quiet} ${styles.danger} ${styles.rowDel}`}
+                                onClick={() => removeTransaction(t)}
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </td>
+                        )}
                       </tr>
                     ))}
                   </tbody>
@@ -2888,10 +2927,14 @@ export default function DashboardClient({
             )}
           </section>
 
-          <div className={styles.fabSpace} aria-hidden="true" />
-          <button type="button" className={styles.fab} onClick={() => openRecord()} aria-label="Record a transaction">
-            <span aria-hidden="true">+</span> Record
-          </button>
+          {!viewOnly && (
+            <>
+              <div className={styles.fabSpace} aria-hidden="true" />
+              <button type="button" className={styles.fab} onClick={() => openRecord()} aria-label="Record a transaction">
+                <span aria-hidden="true">+</span> Record
+              </button>
+            </>
+          )}
         </>
       )}
 

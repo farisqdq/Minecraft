@@ -14,6 +14,7 @@ import {
   type AssetClass,
 } from "@/lib/depreciation";
 import type { AssetDTO } from "@/lib/assets-db";
+import { useViewOnly } from "./ViewOnly";
 
 const EMPTY = {
   id: "",
@@ -52,6 +53,7 @@ export default function DepreciationPanel({
   canDelete: boolean;
   onToast: (message: string, tone?: "bad") => void;
 }) {
+  const viewOnly = useViewOnly();
   const [assets, setAssets] = useState(initial);
   const [form, setForm] = useState(EMPTY);
   const [open, setOpen] = useState(false);
@@ -150,7 +152,7 @@ export default function DepreciationPanel({
       {sorted.length === 0 ? (
         <div className={styles.ledgerWrap}>
           <div className={styles.emptyState}>
-            Nothing on file. Add the building to start taking the deduction.
+            {viewOnly ? "Nothing on file." : "Nothing on file. Add the building to start taking the deduction."}
           </div>
         </div>
       ) : (
@@ -170,16 +172,18 @@ export default function DepreciationPanel({
                   </span>
                 </div>
                 <span className={`${styles.assetAmt} num`}>{now > 0 ? money(now) : "—"}</span>
-                <button type="button" className={styles.portalLink} onClick={() => openEdit(a)}>
-                  Edit
-                </button>
+                {!viewOnly && (
+                  <button type="button" className={styles.portalLink} onClick={() => openEdit(a)}>
+                    Edit
+                  </button>
+                )}
               </li>
             );
           })}
         </ul>
       )}
 
-      <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
+      {!viewOnly && <div style={{ marginTop: 12, display: "flex", gap: 8, flexWrap: "wrap" }}>
         {!hasBuilding && (
           <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => openNew("building")}>
             + Add the building
@@ -188,7 +192,7 @@ export default function DepreciationPanel({
         <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => openNew("improvement")}>
           + Add an improvement
         </button>
-      </div>
+      </div>}
 
       <Modal
         open={open}

@@ -1,3 +1,4 @@
+import { hasRole, type Role } from "@/lib/access";
 import { prisma } from "@/lib/prisma";
 import type { RequestDTO, RequestStatus, Urgency } from "@/lib/maintenance";
 import { fileLink } from "@/lib/file-links";
@@ -104,8 +105,12 @@ export async function requestForTenant(tenantId: string, requestId: string) {
   return row && row.tenantId === tenantId ? row : null;
 }
 
-/** A request on a property the signed-in landlord's team can reach. */
-export async function requestForUser(userId: string, requestId: string) {
+/**
+ * A request on a property the signed-in landlord's team can reach, at the
+ * given standing or above. Every caller today changes the request, so it
+ * defaults to "member" like lib/access: a viewer gets null.
+ */
+export async function requestForUser(userId: string, requestId: string, role: Role = "member") {
   const row = await prisma.maintenanceRequest.findUnique({
     where: { id: requestId },
     include: {
@@ -117,7 +122,7 @@ export async function requestForUser(userId: string, requestId: string) {
   const membership = await prisma.companyMember.findUnique({
     where: { companyId_userId: { companyId: row.property.companyId, userId } },
   });
-  return membership ? row : null;
+  return membership && hasRole(membership.role, role) ? row : null;
 }
 
 /**

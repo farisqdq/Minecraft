@@ -7,6 +7,7 @@ import type { ShellProps } from "../../ClassicShell";
 import { signOutTo } from "../../sign-out";
 import InstallBanner from "../../InstallBanner";
 import { useShellInfo } from "../../ShellContext";
+import { useViewOnly } from "../../ViewOnly";
 import { useLivePulse } from "../../useLivePulse";
 import { MESSAGES_READ_EVENT } from "../../messages-client";
 import OverflowMenu, { type MenuItem } from "../../ui/OverflowMenu";
@@ -118,6 +119,7 @@ export default function CommandShell({ title, titleAction, actions, back, userLa
   const hash = useHash();
   const router = useRouter();
   const { admin } = useShellInfo();
+  const viewOnly = useViewOnly();
   const page = useCommandPage();
   const companies = useShellCompanies();
   const stored = useLlcSelection();
@@ -182,7 +184,7 @@ export default function CommandShell({ title, titleAction, actions, back, userLa
   const llcName = current?.name ?? (companies.length ? "All LLCs" : "Rent Roll");
 
   const recordButton = (compact: boolean) =>
-    page.onRecord ? (
+    viewOnly ? null : page.onRecord ? (
       <button
         type="button"
         className={compact ? styles.iconBtnPrimary : styles.primaryBtn}

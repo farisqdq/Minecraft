@@ -19,6 +19,7 @@ import { vacancyCost } from "@/lib/vacancy";
 import { bulkSummary, entryDateFor, monthLabel, owedLine, recurringPrefill, rentNote, rentPrefill } from "@/lib/quick-record";
 import { LANES, boardTargets, buildBoard, monthsThrough, shiftMonth, type BoardCard, type Lane } from "@/lib/layouts/board-lanes";
 import AppShell from "../../AppShell";
+import { useViewOnly } from "../../ViewOnly";
 import CashFlowChart from "../../CashFlowChart";
 import CategoryBars from "../../CategoryBars";
 import Modal from "../../Modal";
@@ -100,6 +101,7 @@ export default function BoardDashboard({
   const now = useMemo(() => dateFromISO(todayKey), [todayKey]);
   const clock = useNow(serverNow);
   const router = useRouter();
+  const viewOnly = useViewOnly();
   useLivePulse("/api/requests/pulse", () => router.refresh());
 
   const thisMonth = todayKey.slice(0, 7);
@@ -675,7 +677,7 @@ export default function BoardDashboard({
       title="Rent board"
       userLabel={userLabel}
       actions={
-        companies.length > 0 ? (
+        companies.length > 0 && !viewOnly ? (
           <button type="button" className={`${styles.btn} ${styles.primary}`} onClick={openRecord}>
             <IconPlus size={16} />
             Record
@@ -808,7 +810,7 @@ export default function BoardDashboard({
                         {lane === "vacant" ? "/mo" : ""}
                       </span>
                     )}
-                    {lane === "late" && owedCards.length > 1 && (
+                    {lane === "late" && owedCards.length > 1 && !viewOnly && (
                       <OverflowMenu
                         label="Late lane actions"
                         items={[
@@ -850,7 +852,7 @@ export default function BoardDashboard({
               <div className={styles.sectionHead}>
                 <h2 id="board-attn">Also this month</h2>
                 <span className={styles.sectionMeta}>{otherCount ? `${otherCount} to look at` : "All clear"}</span>
-                {billCount > 1 && (
+                {billCount > 1 && !viewOnly && (
                   <button type="button" className={`${styles.btn} ${styles.small}`} disabled={bulkBusy !== ""} onClick={logAllBills}>
                     {bulkBusy === "bills" ? "Logging…" : `Log all ${billCount} bills`}
                   </button>
@@ -875,7 +877,7 @@ export default function BoardDashboard({
                         </div>
                       </div>
                       <Link href="/dashboard/repairs" className={`${styles.btn} ${styles.small}`}>
-                        Work it
+                        {viewOnly ? "Open" : "Work it"}
                       </Link>
                     </li>
                   ))}
@@ -890,9 +892,11 @@ export default function BoardDashboard({
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} num`}>{money(r.amount)}</span>
-                      <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => quickRecurring(r)}>
-                        Log it
-                      </button>
+                      {!viewOnly && (
+                        <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => quickRecurring(r)}>
+                          Log it
+                        </button>
+                      )}
                     </li>
                   ))}
                   {dueLoans.map(({ loan, missed, interest, principal, escrow, total }) => (
@@ -910,13 +914,17 @@ export default function BoardDashboard({
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} num`}>{money(total)}</span>
-                      <OverflowMenu
-                        label={`More for ${loan.lender}`}
-                        items={[{ label: "Split differently", icon: IconExternal, href: `/dashboard/properties/${loan.propertyId}` }]}
-                      />
-                      <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => setPayingLoanId(loan.id)}>
-                        Log it
-                      </button>
+                      {!viewOnly && (
+                        <>
+                          <OverflowMenu
+                            label={`More for ${loan.lender}`}
+                            items={[{ label: "Split differently", icon: IconExternal, href: `/dashboard/properties/${loan.propertyId}` }]}
+                          />
+                          <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => setPayingLoanId(loan.id)}>
+                            Log it
+                          </button>
+                        </>
+                      )}
                     </li>
                   ))}
                   {leaseSoon.map(({ tenant, status }) => (
@@ -950,12 +958,14 @@ export default function BoardDashboard({
                           </div>
                         </div>
                         <FileActions url={d.url} name={d.filename || d.title} mime={d.contentType} />
-                        <Link
-                          href={d.vendorId ? "/dashboard/repairs/vendors" : d.propertyId ? `/dashboard/properties/${d.propertyId}` : "/dashboard"}
-                          className={`${styles.btn} ${styles.small}`}
-                        >
-                          Replace
-                        </Link>
+                        {!viewOnly && (
+                          <Link
+                            href={d.vendorId ? "/dashboard/repairs/vendors" : d.propertyId ? `/dashboard/properties/${d.propertyId}` : "/dashboard"}
+                            className={`${styles.btn} ${styles.small}`}
+                          >
+                            Replace
+                          </Link>
+                        )}
                       </li>
                     );
                   })}
@@ -976,9 +986,11 @@ export default function BoardDashboard({
                       <Link href={`/dashboard/move-outs/${d.id}`} className={`${styles.btn} ${styles.small}`}>
                         Statement
                       </Link>
-                      <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => setReturningId(d.id)}>
-                        Mark sent
-                      </button>
+                      {!viewOnly && (
+                        <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => setReturningId(d.id)}>
+                          Mark sent
+                        </button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -1046,15 +1058,19 @@ export default function BoardDashboard({
                 {visibleProperties.length} {visibleProperties.length === 1 ? "property" : "properties"}
               </span>
               <span className={styles.grow} />
-              <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => setAdding("company")}>
-                + LLC
-              </button>
+              {!viewOnly && (
+                <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => setAdding("company")}>
+                  + LLC
+                </button>
+              )}
               <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => setAdding("join")}>
                 Join code
               </button>
-              <button type="button" className={`${styles.btn} ${styles.small} ${styles.primary}`} onClick={() => setAdding("property")}>
-                + Property
-              </button>
+              {!viewOnly && (
+                <button type="button" className={`${styles.btn} ${styles.small} ${styles.primary}`} onClick={() => setAdding("property")}>
+                  + Property
+                </button>
+              )}
             </div>
             <ul className={styles.propList}>
               {visibleProperties.map((p) => {
@@ -1084,9 +1100,9 @@ export default function BoardDashboard({
                       label={`Actions for ${p.name}`}
                       items={[
                         { label: "Open", icon: IconExternal, href: `/dashboard/properties/${p.id}` },
-                        { label: "Edit details", icon: IconPencil, href: `/dashboard/properties/${p.id}` },
+                        ...(viewOnly ? [] : [{ label: "Edit details", icon: IconPencil, href: `/dashboard/properties/${p.id}` }]),
                         { label: "Files", icon: IconFolder, href: `/dashboard/properties/${p.id}/files` },
-                        ...(owner?.role === "owner"
+                        ...(owner?.role === "owner" && !viewOnly
                           ? [{ label: "Remove property", icon: IconTrash, destructive: true, onSelect: () => removeProperty(p) }]
                           : []),
                       ]}

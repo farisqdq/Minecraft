@@ -17,7 +17,7 @@ export async function GET(req: Request) {
   const companyId = url.searchParams.get("companyId") || "";
   const year = Number(url.searchParams.get("year")) || new Date().getFullYear();
 
-  const membership = await requireCompany(userId, companyId);
+  const membership = await requireCompany(userId, companyId, "viewer");
   if (!membership) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   const company = await prisma.company.findUnique({ where: { id: companyId } });

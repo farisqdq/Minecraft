@@ -14,6 +14,7 @@ import {
 } from "@/lib/late-fee-policy";
 import type { LateFeeLine } from "@/lib/late-fee-report";
 import styles from "../dashboard/dashboard.module.css";
+import { useViewOnly } from "./ViewOnly";
 
 type Draft = {
   enabled: boolean;
@@ -51,7 +52,7 @@ const toDraft = (p: LateFeePolicyDTO): Draft => ({
 export default function LateFeePanel({
   companyId,
   initial,
-  canEdit,
+  canEdit: canEditRole,
 }: {
   companyId: string;
   /** The saved policy, or null when the LLC never saved one. */
@@ -59,6 +60,8 @@ export default function LateFeePanel({
   /** Owners save; members read. */
   canEdit: boolean;
 }) {
+  const viewOnly = useViewOnly();
+  const canEdit = canEditRole && !viewOnly;
   const [saved, setSaved] = useState<LateFeePolicyDTO>(initial ?? DEFAULT_POLICY);
   const [draft, setDraft] = useState<Draft>(toDraft(initial ?? DEFAULT_POLICY));
   const [busy, setBusy] = useState(false);
@@ -264,20 +267,20 @@ export default function LateFeePanel({
             </span>
           )}
         </div>
-      ) : (
+      ) : viewOnly ? null : (
         <span className={styles.helpText} style={{ margin: 0 }}>
           Only an owner of this LLC can change it.
         </span>
       )}
 
-      <div>
+      {!viewOnly && <div>
         <button type="button" className={`${styles.btn} ${styles.small}`} onClick={runNow} disabled={running || busy}>
           {running ? "Running…" : "Run late fees now"}
         </button>
         <span className={styles.helpText} style={{ margin: "0 0 0 10px" }}>
           Applies any fee that's due today and shows why each tenant was or wasn&apos;t charged. It never charges twice.
         </span>
-      </div>
+      </div>}
 
       {report && (
         <ul className={styles.lateReport} aria-label="Late fees by tenant">

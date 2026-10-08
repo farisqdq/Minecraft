@@ -3,6 +3,7 @@
 import { useState } from "react";
 import AppShell from "../../components/AppShell";
 import PushSetup from "../../components/PushSetup";
+import { useViewOnly } from "../../components/ViewOnly";
 import { Toasts, useToasts } from "../../components/Toasts";
 import styles from "../dashboard.module.css";
 import { KIND_LABEL, type ReminderKind, type ReminderSettingsDTO } from "@/lib/reminders";
@@ -56,6 +57,7 @@ export default function RemindersClient({
   companies: Company[];
 }) {
   const { toasts, push, dismiss } = useToasts();
+  const viewOnly = useViewOnly();
   const [companies, setCompanies] = useState(initial);
   const [drafts, setDrafts] = useState<Record<string, ReminderSettingsDTO>>(
     Object.fromEntries(initial.map((c) => [c.id, c.snapshot.settings]))
@@ -122,12 +124,14 @@ export default function RemindersClient({
     >
       <Toasts toasts={toasts} onDismiss={dismiss} />
 
-      <section className={styles.block}>
-        <div className={styles.blockHead}>
-          <h2>Notifications on this device</h2>
-        </div>
-        <PushSetup audience="user" />
-      </section>
+      {!viewOnly && (
+        <section className={styles.block}>
+          <div className={styles.blockHead}>
+            <h2>Notifications on this device</h2>
+          </div>
+          <PushSetup audience="user" />
+        </section>
+      )}
 
       {companies.length === 0 && (
         <section className={styles.block}>
@@ -138,7 +142,7 @@ export default function RemindersClient({
 
       {companies.map((company) => {
         const s = drafts[company.id];
-        const canEdit = company.role === "owner";
+        const canEdit = company.role === "owner" && !viewOnly;
         const snap = company.snapshot;
         const rows: { key: "rentDue" | "rentLate" | "leaseEnd" | "docExpiry" | "maintenance"; label: string; who: string; detail: React.ReactNode }[] = [
           {
@@ -200,7 +204,7 @@ export default function RemindersClient({
           <section key={company.id} className={styles.block}>
             <div className={styles.blockHead}>
               <h2>{company.name}</h2>
-              <span className={styles.count}>{canEdit ? "" : "you're a member — an owner changes these"}</span>
+              <span className={styles.count}>{canEdit || viewOnly ? "" : "you're a member — an owner changes these"}</span>
             </div>
 
             <label className={`${styles.checkboxField} ${styles.remMaster}`}>
@@ -242,12 +246,16 @@ export default function RemindersClient({
                   {busy === `save:${company.id}` ? "Saving…" : "Save"}
                 </button>
               )}
-              <button type="button" className={styles.btn} onClick={() => test(company, "email")} disabled={busy.startsWith("test:")}>
-                Send test email
-              </button>
-              <button type="button" className={styles.btn} onClick={() => test(company, "push")} disabled={busy.startsWith("test:")}>
-                Send test notification
-              </button>
+              {!viewOnly && (
+                <>
+                  <button type="button" className={styles.btn} onClick={() => test(company, "email")} disabled={busy.startsWith("test:")}>
+                    Send test email
+                  </button>
+                  <button type="button" className={styles.btn} onClick={() => test(company, "push")} disabled={busy.startsWith("test:")}>
+                    Send test notification
+                  </button>
+                </>
+              )}
             </div>
 
             <ul className={styles.remStatus}>

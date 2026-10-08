@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell, { TitleEditButton } from "../../../components/AppShell";
+import { useViewOnly } from "../../../components/ViewOnly";
 import CashFlowChart from "../../../components/CashFlowChart";
 import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
 import Modal from "../../../components/Modal";
@@ -183,6 +184,7 @@ export default function PropertyManageClient({
   initialListings?: ListingDTO[];
 }) {
   const router = useRouter();
+  const viewOnly = useViewOnly();
 
   // Same reconciliation as the dashboard: start on the server's date so the
   // first client render matches, then switch to the browser's own.
@@ -551,6 +553,7 @@ export default function PropertyManageClient({
   const [renewalBusy, setRenewalBusy] = useState("");
   // "Renew" on the overview's lease alert lands here with ?renew=<tenant>.
   useEffect(() => {
+    if (viewOnly) return;
     const id = new URLSearchParams(window.location.search).get("renew");
     const t = id ? initialTenants.find((x) => x.id === id && x.active) : null;
     if (t) setRenewing(t);
@@ -562,6 +565,7 @@ export default function PropertyManageClient({
   const [listingFor, setListingFor] = useState<{ listing: ListingDTO | null; unitId: string | null } | null>(null);
   // "List it" on the overview lands here with ?list=<unit id, or "whole">.
   useEffect(() => {
+    if (viewOnly) return;
     const want = new URLSearchParams(window.location.search).get("list");
     if (want) setListingFor({ listing: null, unitId: want === "whole" ? null : want });
   }, []);
@@ -1106,10 +1110,12 @@ export default function PropertyManageClient({
         </span>
         <span className={styles.renewalLinks}>
           <Link href={`/dashboard/renewals/${r.id}`}>Letter</Link>
-          <button type="button" disabled={busy} onClick={() => sendRenewal(t, r)}>
-            {r.sentAt ? "Send again" : `Send to ${first}`}
-          </button>
-          {r.undoable && (
+          {!viewOnly && (
+            <button type="button" disabled={busy} onClick={() => sendRenewal(t, r)}>
+              {r.sentAt ? "Send again" : `Send to ${first}`}
+            </button>
+          )}
+          {r.undoable && !viewOnly && (
             <button type="button" disabled={busy} onClick={() => undoRenewal(t, r)}>
               Undo
             </button>
@@ -1232,18 +1238,20 @@ export default function PropertyManageClient({
       back={{ href: "/dashboard", label: "All properties" }}
       titleAction={<TitleEditButton label="Edit property" onClick={openPropertyEdit} />}
       actions={
-        <>
-          <button type="button" className={styles.btn} onClick={() => openTenant()}>
-            + Add a tenant
-          </button>
-          <button
-            type="button"
-            className={`${styles.btn} ${styles.accent}`}
-            onClick={() => openNewEntry()}
-          >
-            + Record a payment
-          </button>
-        </>
+        viewOnly ? undefined : (
+          <>
+            <button type="button" className={styles.btn} onClick={() => openTenant()}>
+              + Add a tenant
+            </button>
+            <button
+              type="button"
+              className={`${styles.btn} ${styles.accent}`}
+              onClick={() => openNewEntry()}
+            >
+              + Record a payment
+            </button>
+          </>
+        )
       }
     >
 
@@ -1269,9 +1277,11 @@ export default function PropertyManageClient({
                 Math.round(vacancyCost(property.vacantSince, todayKey, (m) => expectedRentFor(null, m)))
               )} of rent gone so far`}
           </span>
-          <button type="button" className={styles.portalLink} onClick={() => openTenant()}>
-            Add the next tenant
-          </button>
+          {!viewOnly && (
+            <button type="button" className={styles.portalLink} onClick={() => openTenant()}>
+              Add the next tenant
+            </button>
+          )}
         </div>
       )}
 
@@ -1318,7 +1328,7 @@ export default function PropertyManageClient({
         </section>
       )}
 
-      {(listings.length > 0 || listingPlaces.some((p) => p.vacant)) && (
+      {(listings.length > 0 || (!viewOnly && listingPlaces.some((p) => p.vacant))) && (
         <section className={styles.block}>
           <div className={styles.blockHead}>
             <h2>For rent</h2>
@@ -1376,21 +1386,25 @@ export default function PropertyManageClient({
                           Copy link
                         </button>
                       )}
-                      <button type="button" className={`${styles.btn} ${styles.small} ${styles.quiet}`} onClick={() => setListingFor({ listing: l, unitId: l.unitId })}>
-                        Edit
-                      </button>
+                      {!viewOnly && (
+                        <button type="button" className={`${styles.btn} ${styles.small} ${styles.quiet}`} onClick={() => setListingFor({ listing: l, unitId: l.unitId })}>
+                          Edit
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}
               </ul>
-              <button
-                type="button"
-                className={`${styles.btn} ${styles.small}`}
-                style={{ marginTop: 10 }}
-                onClick={() => setListingFor({ listing: null, unitId: listingPlaces.find((p) => p.vacant)?.unitId ?? null })}
-              >
-                + List another place
-              </button>
+              {!viewOnly && (
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.small}`}
+                  style={{ marginTop: 10 }}
+                  onClick={() => setListingFor({ listing: null, unitId: listingPlaces.find((p) => p.vacant)?.unitId ?? null })}
+                >
+                  + List another place
+                </button>
+              )}
             </div>
           )}
         </section>
@@ -1411,7 +1425,9 @@ export default function PropertyManageClient({
         {tenants.length === 0 ? (
           <div className={styles.ledgerWrap}>
             <div className={styles.emptyState}>
-              No tenants on file yet — add one and unpaid rent starts telling you who to call.
+              {viewOnly
+                ? "No tenants on file yet."
+                : "No tenants on file yet — add one and unpaid rent starts telling you who to call."}
             </div>
           </div>
         ) : (
@@ -1544,24 +1560,30 @@ export default function PropertyManageClient({
                               ? ` · last in ${formatDay(access.lastLoginAt.slice(0, 10))}`
                               : " · not signed in yet"}
                           </span>
-                          <button
-                            type="button"
-                            className={styles.portalLink}
-                            onClick={() => resetPortal(t)}
-                          >
-                            Forgot password
-                          </button>
-                          <button
-                            type="button"
-                            className={styles.portalLink}
-                            onClick={() => revokePortal(t)}
-                          >
-                            Remove
-                          </button>
+                          {!viewOnly && (
+                            <>
+                              <button
+                                type="button"
+                                className={styles.portalLink}
+                                onClick={() => resetPortal(t)}
+                              >
+                                Forgot password
+                              </button>
+                              <button
+                                type="button"
+                                className={styles.portalLink}
+                                onClick={() => revokePortal(t)}
+                              >
+                                Remove
+                              </button>
+                            </>
+                          )}
                         </div>
                       );
                     }
                     if (access.inviteCode) {
+                      // An invite code is the way in to the portal: not for eyes that can't send it.
+                      if (viewOnly) return null;
                       return (
                         <div className={styles.portalRow}>
                           <span className={styles.portalCode}>{formatJoinCode(access.inviteCode)}</span>
@@ -1591,21 +1613,23 @@ export default function PropertyManageClient({
                         <span className={styles.portalWho}>
                           No portal login yet — they can&apos;t report a problem online.
                         </span>
-                        <button
-                          type="button"
-                          className={styles.portalLink}
-                          disabled={portalBusy === t.id}
-                          onClick={() => invitePortal(t)}
-                        >
-                          {portalBusy === t.id ? "Making a code\u2026" : "Invite to the portal"}
-                        </button>
+                        {!viewOnly && (
+                          <button
+                            type="button"
+                            className={styles.portalLink}
+                            disabled={portalBusy === t.id}
+                            onClick={() => invitePortal(t)}
+                          >
+                            {portalBusy === t.id ? "Making a code\u2026" : "Invite to the portal"}
+                          </button>
+                        )}
                       </div>
                     );
                   })()}
 
                   {t.active && renewals[t.id] && renewalLine(t, renewals[t.id])}
 
-                  <div className={styles.propActions}>
+                  {!viewOnly && <div className={styles.propActions}>
                     {/* The commonest reason to be looking at a tenant: they
                         paid. Their unit and name fill themselves in. */}
                     {t.active && (
@@ -1659,18 +1683,20 @@ export default function PropertyManageClient({
                     >
                       Delete
                     </button>
-                  </div>
+                  </div>}
                 </div>
               );
             })}
           </div>
         )}
 
-        <div style={{ marginTop: 14 }}>
-          <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => openTenant()}>
-            + Add a tenant
-          </button>
-        </div>
+        {!viewOnly && (
+          <div style={{ marginTop: 14 }}>
+            <button type="button" className={`${styles.btn} ${styles.small}`} onClick={() => openTenant()}>
+              + Add a tenant
+            </button>
+          </div>
+        )}
       </section>
 
       <section className={styles.block}>
@@ -1682,8 +1708,7 @@ export default function PropertyManageClient({
         </div>
         <p className={styles.helpText} style={{ marginTop: -6 }}>
           Leases, insurance certificates, licences and inspections — with the date each runs
-          out. Anything expiring in the next 30 days shows on the overview. Scan document
-          photographs paper with your phone and saves it here as a PDF.
+          out. Anything expiring in the next 30 days shows on the overview.{viewOnly ? "" : " Scan document photographs paper with your phone and saves it here as a PDF."}
         </p>
         <DocumentsPanel
           initial={initialDocuments}
@@ -1775,7 +1800,7 @@ export default function PropertyManageClient({
                           href="/dashboard/repairs"
                           className={`${styles.btn} ${styles.small} ${styles.quiet}`}
                         >
-                          Work it
+                          {viewOnly ? "Open" : "Work it"}
                         </Link>
                       </div>
                     </td>
@@ -1794,10 +1819,12 @@ export default function PropertyManageClient({
             {units.length ? `${units.length} ${units.length === 1 ? "unit" : "units"}` : ""}
           </span>
         </div>
-        <p className={styles.helpText} style={{ marginTop: 0 }}>
-          Split this property into units when it&apos;s a duplex, triplex, or building with more than one tenant —
-          each unit gets its own rent target and tenant. Leave it with no units for a single-tenant house.
-        </p>
+        {!viewOnly && (
+          <p className={styles.helpText} style={{ marginTop: 0 }}>
+            Split this property into units when it&apos;s a duplex, triplex, or building with more than one tenant —
+            each unit gets its own rent target and tenant. Leave it with no units for a single-tenant house.
+          </p>
+        )}
 
         {units.length === 0 ? (
           <div className={styles.ledgerWrap}>
@@ -1810,8 +1837,8 @@ export default function PropertyManageClient({
               <tr>
                 <th>Unit</th>
                 <th style={{ textAlign: "right" }}>Monthly rent</th>
-                <th></th>
-                <th></th>
+                {!viewOnly && <th></th>}
+                {!viewOnly && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -1887,7 +1914,7 @@ export default function PropertyManageClient({
                       {money(u.monthlyRent)}
                       <RentTrail unitId={u.id} />
                     </td>
-                    <td style={{ textAlign: "right" }}>
+                    {!viewOnly && <td style={{ textAlign: "right" }}>
                       <div className={styles.rowActions}>
                         <button
                           type="button"
@@ -1904,8 +1931,8 @@ export default function PropertyManageClient({
                           Edit
                         </button>
                       </div>
-                    </td>
-                    <td style={{ textAlign: "right" }}>
+                    </td>}
+                    {!viewOnly && <td style={{ textAlign: "right" }}>
                       {canManage && (
                         <button
                           type="button"
@@ -1915,7 +1942,7 @@ export default function PropertyManageClient({
                           Remove
                         </button>
                       )}
-                    </td>
+                    </td>}
                   </tr>
                 )
               )}
@@ -1924,7 +1951,7 @@ export default function PropertyManageClient({
         </div>
         )}
 
-        {addingUnit ? (
+        {viewOnly ? null : addingUnit ? (
           <form className={styles.inlineForm} onSubmit={addUnit} style={{ marginTop: 14, flexWrap: "wrap" }}>
             <input
               type="text"
@@ -2014,11 +2041,13 @@ export default function PropertyManageClient({
         <div className={styles.blockHead}>
           <h2>Recurring expenses</h2>
         </div>
-        <p className={styles.helpText} style={{ marginTop: 0 }}>
-          Insurance, HOA dues, a management fee — set the amount and schedule once. Mortgages go under Mortgages
-          above, so each payment is split. Nothing posts on its own: when it&apos;s
-          due, it shows up on the dashboard for that month with a one-click &ldquo;Log it&rdquo; button.
-        </p>
+        {!viewOnly && (
+          <p className={styles.helpText} style={{ marginTop: 0 }}>
+            Insurance, HOA dues, a management fee — set the amount and schedule once. Mortgages go under Mortgages
+            above, so each payment is split. Nothing posts on its own: when it&apos;s
+            due, it shows up on the dashboard for that month with a one-click &ldquo;Log it&rdquo; button.
+          </p>
+        )}
 
         {recurring.length === 0 ? (
           <div className={styles.ledgerWrap}>
@@ -2033,8 +2062,8 @@ export default function PropertyManageClient({
                 <th>Applies to</th>
                 <th>Schedule</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
-                <th></th>
-                <th></th>
+                {!viewOnly && <th></th>}
+                {!viewOnly && <th></th>}
               </tr>
             </thead>
             <tbody>
@@ -2047,24 +2076,28 @@ export default function PropertyManageClient({
                   <td>{unitLabel(r.unitId)}</td>
                   <td>{scheduleLabel(r)}</td>
                   <td className={`${styles.amt} num ${styles.neg}`}>{money(r.amount)}</td>
-                  <td style={{ textAlign: "right" }}>
-                    <button
-                      type="button"
-                      className={`${styles.btn} ${styles.small}`}
-                      onClick={() => toggleRecurringActive(r)}
-                    >
-                      {r.active ? "Pause" : "Resume"}
-                    </button>
-                  </td>
-                  <td style={{ textAlign: "right" }}>
-                    <button
-                      type="button"
-                      className={`${styles.btn} ${styles.small} ${styles.ghost}`}
-                      onClick={() => removeRecurring(r)}
-                    >
-                      Delete
-                    </button>
-                  </td>
+                  {!viewOnly && (
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.small}`}
+                        onClick={() => toggleRecurringActive(r)}
+                      >
+                        {r.active ? "Pause" : "Resume"}
+                      </button>
+                    </td>
+                  )}
+                  {!viewOnly && (
+                    <td style={{ textAlign: "right" }}>
+                      <button
+                        type="button"
+                        className={`${styles.btn} ${styles.small} ${styles.ghost}`}
+                        onClick={() => removeRecurring(r)}
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -2072,7 +2105,7 @@ export default function PropertyManageClient({
         </div>
         )}
 
-        {addingRecurring ? (
+        {viewOnly ? null : addingRecurring ? (
           <form className={styles.formCard} onSubmit={addRecurring} style={{ marginTop: 14 }}>
             <div className={styles.fieldGrid}>
               <div className={styles.field}>
@@ -2191,27 +2224,32 @@ export default function PropertyManageClient({
                 ? `${transactions.length} ${transactions.length === 1 ? "entry" : "entries"} all time`
                 : ""}
             </span>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.small}`}
-              onClick={() => openNewEntry({ type: "expense" })}
-            >
-              + Expense
-            </button>
-            <button
-              type="button"
-              className={`${styles.btn} ${styles.small} ${styles.primary}`}
-              onClick={() => openNewEntry()}
-            >
-              + Rent
-            </button>
+            {!viewOnly && (
+              <>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.small}`}
+                  onClick={() => openNewEntry({ type: "expense" })}
+                >
+                  + Expense
+                </button>
+                <button
+                  type="button"
+                  className={`${styles.btn} ${styles.small} ${styles.primary}`}
+                  onClick={() => openNewEntry()}
+                >
+                  + Rent
+                </button>
+              </>
+            )}
           </div>
         </div>
         {recentEntries.length === 0 ? (
           <div className={styles.ledgerWrap}>
             <div className={styles.emptyState}>
-              Nothing recorded against this property yet — record the first payment and the
-              numbers above start filling in.
+              {viewOnly
+                ? "Nothing recorded against this property yet."
+                : "Nothing recorded against this property yet — record the first payment and the numbers above start filling in."}
             </div>
           </div>
         ) : (
@@ -2224,7 +2262,7 @@ export default function PropertyManageClient({
                   <th>Type</th>
                   <th>Details</th>
                   <th style={{ textAlign: "right" }}>Amount</th>
-                  <th></th>
+                  {!viewOnly && <th></th>}
                 </tr>
               </thead>
               <tbody>
@@ -2267,7 +2305,7 @@ export default function PropertyManageClient({
                       {t.type === "rent" ? "+" : "\u2212"}
                       {money(t.amount)}
                     </td>
-                    <td>
+                    {!viewOnly && <td>
                       <div className={styles.rowActions}>
                         {storageReady && t.attachments.length < MAX_PROOFS && (
                           <button
@@ -2293,7 +2331,7 @@ export default function PropertyManageClient({
                           Delete
                         </button>
                       </div>
-                    </td>
+                    </td>}
                   </tr>
                 ))}
               </tbody>
