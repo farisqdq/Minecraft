@@ -14,7 +14,7 @@
  */
 
 import { rentForMonth, type RentChangeDTO } from "../rent.ts";
-import { rentMonthOf } from "../rent-month.ts";
+import { allocate, spreadForReports } from "../spread.ts";
 import { rentTargetOf, unitIdsCountingToward } from "../rent-target.ts";
 import { dateFromISO, daysLate, leaseStatus } from "../lease.ts";
 import { vacantDays } from "../vacancy.ts";
@@ -54,6 +54,7 @@ export type BoardTxn = {
   propertyId: string;
   unitId: string | null;
   appliesTo?: string | null;
+  spreadMonths?: number | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -172,8 +173,10 @@ export function rentIndex(txns: readonly BoardTxn[]): Map<string, number> {
   const rent = new Map<string, number>();
   for (const t of txns) {
     if (t.type !== "rent") continue;
-    const key = `${t.propertyId}|${t.unitId ?? ""}|${rentMonthOf(t)}`;
-    rent.set(key, (rent.get(key) ?? 0) + t.amount);
+    for (const a of allocate(t)) {
+      const key = `${t.propertyId}|${t.unitId ?? ""}|${a.month}`;
+      rent.set(key, (rent.get(key) ?? 0) + a.amount);
+    }
   }
   return rent;
 }
@@ -288,7 +291,7 @@ export function buildBoard<T extends BoardTenant>(input: BoardInput<T>): Board<T
 
   const ids = new Set(properties.map((p) => p.id));
   let rentIn = 0;
-  for (const t of transactions) {
+  for (const t of spreadForReports(transactions)) {
     if (t.type === "rent" && ids.has(t.propertyId) && t.date.startsWith(month)) rentIn += t.amount;
   }
 

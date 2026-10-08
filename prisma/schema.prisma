@@ -375,6 +375,11 @@ model Transaction {
   // `date`. Rent status, balances and late fees go by this; cash flow and
   // the tax export still go by `date`, when the money actually came in.
   appliesTo   String?
+  // Spread across this many months (2–36) from `appliesTo`, or else from the
+  // month of `date`: a yearly property-tax bill counted a twelfth a month in
+  // monthly views, or six months' rent paid up front marking each month paid.
+  // Null: not spread. The tax export still goes by `date` (lib/spread).
+  spreadMonths Int?
   createdAt   DateTime @default(now())
 
   attachments        Attachment[]

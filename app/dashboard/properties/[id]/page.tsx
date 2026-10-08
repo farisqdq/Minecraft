@@ -183,6 +183,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
         note: t.note ?? "",
         category: t.category ?? "",
         appliesTo: t.appliesTo,
+        spreadMonths: t.spreadMonths,
         // Thumbnails and the paperclip on "Recent activity" read these;
         // files are only ever served through /api/files (access-checked).
         attachments: t.attachments.map((a) => ({

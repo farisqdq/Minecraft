@@ -19,7 +19,7 @@
  */
 
 import { rentForMonth, type RentChangeDTO } from "../rent.ts";
-import { rentMonthOf } from "../rent-month.ts";
+import { allocate, spreadForReports } from "../spread.ts";
 import { rentTargetOf, unitIdsCountingToward } from "../rent-target.ts";
 import { daysLate, leaseStatus } from "../lease.ts";
 
@@ -55,6 +55,7 @@ export type MonthTransaction = {
   propertyId: string;
   unitId: string | null;
   appliesTo?: string | null;
+  spreadMonths?: number | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -241,12 +242,16 @@ export function monthModel<T extends MonthTenant>(input: {
   let expenses = 0;
   let expenseCount = 0;
   for (const t of transactions) {
-    const m = t.date.slice(0, 7);
     if (t.type === "rent") {
-      const key = `${t.propertyId}|${t.unitId ?? ""}|${rentMonthOf(t)}`;
-      rentIndex.set(key, (rentIndex.get(key) ?? 0) + t.amount);
+      for (const a of allocate(t)) {
+        const key = `${t.propertyId}|${t.unitId ?? ""}|${a.month}`;
+        rentIndex.set(key, (rentIndex.get(key) ?? 0) + a.amount);
+      }
     }
-    if (m === month && visibleIds.has(t.propertyId)) {
+  }
+  // The month's figures count a spread entry's share (lib/spread).
+  for (const t of spreadForReports(transactions)) {
+    if (t.date.slice(0, 7) === month && visibleIds.has(t.propertyId)) {
       if (t.type === "rent") rentReceived += t.amount;
       else {
         expenses += t.amount;

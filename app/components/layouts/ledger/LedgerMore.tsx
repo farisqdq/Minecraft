@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { spreadSummary, spreadForReports } from "@/lib/spread";
 import { monthLabel } from "@/lib/rent-month";
 import Link from "next/link";
 import CashFlowChart from "../../CashFlowChart";
@@ -160,7 +161,9 @@ function placeLabel(properties: Property[], units: Unit[], t: { propertyId: stri
 
 /* ---------- Cash flow ---------- */
 
-function CashTab({ month, transactions, companies, properties }: TabProps) {
+function CashTab({ month, transactions: entries, companies, properties }: TabProps) {
+  // Figures count a spread entry as its monthly shares (lib/spread).
+  const transactions = useMemo(() => spreadForReports(entries), [entries]);
   const series = useMemo(() => {
     const keys = Array.from({ length: 12 }, (_, i) => shiftMonth(month, i - 11));
     const buckets = new Map(keys.map((k) => [k, { month: k, rent: 0, expense: 0 }]));
@@ -269,7 +272,7 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
       editingId: t.id,
       existingProof: t.attachments.length,
       targetKey: keyOf(t),
-      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined },
+      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined, spreadMonths: t.spreadMonths ?? undefined },
     });
   }
 
@@ -364,7 +367,11 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
                   </span>{" "}
                   {t.detail}
                   {t.note && <span className={styles.subLine}>{t.note}</span>}
-                  {t.appliesTo && <span className={styles.subLine}>Counts toward {monthLabel(t.appliesTo)}</span>}
+                  {t.spreadMonths && t.spreadMonths > 1 ? (
+                    <span className={styles.subLine}>{spreadSummary(t)}</span>
+                  ) : (
+                    t.appliesTo && <span className={styles.subLine}>Counts toward {monthLabel(t.appliesTo)}</span>
+                  )}
                   {t.attachments.length > 0 && (
                     <span className={styles.proofs}>
                       {t.attachments.map((a) => (

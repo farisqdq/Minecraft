@@ -5,6 +5,7 @@ import { requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
 import { validAmount } from "@/lib/money";
 import { parseAppliesTo } from "@/lib/rent-month";
+import { MAX_SPREAD, parseSpreadMonths } from "@/lib/spread";
 import { fileLink } from "@/lib/file-links";
 import { shortMonth } from "@/lib/loans-db";
 import { tenantForRentTarget, waiverFromRentEntry } from "@/lib/late-fee-waivers-db";
@@ -76,12 +77,18 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
   // Rent's "counts toward" month: kept unless sent, re-checked against a new
   // date (the same month as the date is stored as none), cleared for expenses.
+  const sentSpread = parseSpreadMonths(body.spreadMonths);
+  if (sentSpread === false) {
+    return NextResponse.json({ error: `Spread over 2 to ${MAX_SPREAD} months.` }, { status: 400 });
+  }
+  const spreadMonths = sentSpread === undefined ? existing.spreadMonths : sentSpread;
   const sentAppliesTo = parseAppliesTo(body.appliesTo, date);
   if (sentAppliesTo === false) {
     return NextResponse.json({ error: "That isn't a month to apply the payment to." }, { status: 400 });
   }
   const keptAppliesTo = sentAppliesTo === undefined ? parseAppliesTo(existing.appliesTo, date) : sentAppliesTo;
-  const appliesTo = type === "rent" && keptAppliesTo ? keptAppliesTo : null;
+  // An expense only has a month of its own when it's spread (its first month).
+  const appliesTo = (type === "rent" || spreadMonths) && keptAppliesTo ? keptAppliesTo : null;
 
   if (existing.moveOutId) {
     const changed =
@@ -133,6 +140,7 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       note: typeof body.note === "string" ? body.note.trim() || null : existing.note,
       category,
       appliesTo,
+      spreadMonths,
     },
     include: { attachments: { orderBy: { createdAt: "asc" } } },
   });

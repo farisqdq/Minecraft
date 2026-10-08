@@ -27,6 +27,8 @@ export type EntryPrefill = {
   category: string;
   /** Rent only: the month it counts toward ("2026-09"). Unset: the month of `date`. */
   appliesTo?: string;
+  /** Spread across this many months (lib/spread); unset or 0: not spread. */
+  spreadMonths?: number;
 };
 
 const cents = (n: number) => Math.round(n * 100) / 100;

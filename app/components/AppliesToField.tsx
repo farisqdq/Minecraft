@@ -13,6 +13,7 @@ export default function AppliesToField({
   value,
   onChange,
   className,
+  label = "Counts toward",
 }: {
   id: string;
   /** The payment's date, YYYY-MM-DD. */
@@ -20,11 +21,12 @@ export default function AppliesToField({
   value: string;
   onChange: (month: string) => void;
   className?: string;
+  label?: string;
 }) {
   const paidMonth = /^\d{4}-\d{2}/.test(date) ? date.slice(0, 7) : "";
   return (
     <div className={className}>
-      <label htmlFor={id}>Counts toward</label>
+      <label htmlFor={id}>{label}</label>
       <select id={id} value={value || paidMonth} onChange={(e) => onChange(e.target.value)}>
         {monthChoices(paidMonth, value).map((m) => (
           <option key={m} value={m}>

@@ -11,7 +11,7 @@
  */
 
 import { monthlyChargesFor, type ChargeRule } from "./charge-rules.ts";
-import { rentMonthOf } from "./rent-month.ts";
+import { allocate } from "./spread.ts";
 
 export type CalTarget = {
   key: string;
@@ -39,6 +39,8 @@ export type CalPayment = {
   amount: number;
   /** The month it counts toward, when not the month of `date`. */
   appliesTo?: string | null;
+  /** Spread across this many months (lib/spread). */
+  spreadMonths?: number | null;
 };
 
 export type DueStatus = "paid" | "partial" | "due" | "late";
@@ -141,7 +143,12 @@ export function buildMonth(opts: {
     }
   }
 
-  const forMonth = payments.filter((p) => rentMonthOf(p) === month);
+  // A payment spread over several months pays a share toward each.
+  const forMonth = payments.flatMap((p) =>
+    allocate({ ...p, type: "rent" })
+      .filter((a) => a.month === month)
+      .map((a) => ({ ...p, amount: a.amount }))
+  );
 
   let expected = 0;
   let collected = 0;

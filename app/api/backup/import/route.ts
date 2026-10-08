@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { parseAppliesTo } from "@/lib/rent-month";
+import { parseSpreadMonths } from "@/lib/spread";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -45,6 +46,8 @@ type CleanTransaction = {
   category: string | null;
   /** Rent only: the month it counts toward, when not the month of `date`. */
   appliesTo: string | null;
+  /** Spread across this many months (lib/spread), or null. */
+  spreadMonths: number | null;
   attachments: CleanAttachment[];
   /** Who was paid, by name — re-linked to this LLC's restored vendor book. */
   vendorName: string;
@@ -363,7 +366,9 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         detail: str(t.detail, 200) || null,
         note: str(t.note, 500) || null,
         category: type === "expense" ? normalizeCategory(t.category) : null,
-        appliesTo: type === "rent" ? parseAppliesTo(t.appliesTo, date) || null : null,
+        spreadMonths: parseSpreadMonths(t.spreadMonths) || null,
+        appliesTo:
+          type === "rent" || parseSpreadMonths(t.spreadMonths) ? parseAppliesTo(t.appliesTo, date) || null : null,
         attachments,
         vendorName: type === "expense" ? str(t.vendorName, 120) : "",
         bankRef: typeof t.bankRef === "string" && REF_PATTERN.test(t.bankRef) ? t.bankRef : null,
@@ -1021,6 +1026,7 @@ export async function POST(req: Request) {
           note: t.note,
           category: t.category,
           appliesTo: t.appliesTo,
+          spreadMonths: t.spreadMonths,
           vendorId: (t.vendorName && vendorsByName.get(t.vendorName)) || null,
           loanPaymentId: (t.loanRef && loanPayments.get(t.loanRef)) || null,
           moveOutId:

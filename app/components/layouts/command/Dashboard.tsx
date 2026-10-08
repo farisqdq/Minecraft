@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { spreadSummary, spreadForReports } from "@/lib/spread";
 import { monthLabel } from "@/lib/rent-month";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -234,7 +235,7 @@ export default function CommandDashboard(props: DashboardProps) {
       editingId: t.id,
       existingProof: t.attachments.length,
       targetKey: targetKeyOf(t.propertyId, t.unitId),
-      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined },
+      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined, spreadMonths: t.spreadMonths ?? undefined },
     });
   }
 
@@ -640,7 +641,8 @@ export default function CommandDashboard(props: DashboardProps) {
   const series = useMemo(() => {
     const keys = Array.from({ length: 12 }, (_, i) => shiftMonth(month, i - 11));
     const buckets = new Map(keys.map((k) => [k, { month: k, rent: 0, expense: 0 }]));
-    for (const t of visibleTransactions) {
+    // A spread entry counts its share in each of its months (lib/spread).
+    for (const t of spreadForReports(visibleTransactions)) {
       const b = buckets.get(t.date.slice(0, 7));
       if (!b) continue;
       if (t.type === "rent") b.rent += t.amount;
@@ -651,7 +653,7 @@ export default function CommandDashboard(props: DashboardProps) {
 
   const byCategory = useMemo(() => {
     const totals = new Map<string, number>();
-    for (const t of visibleTransactions) {
+    for (const t of spreadForReports(visibleTransactions)) {
       if (t.type !== "expense" || !t.date.startsWith(month)) continue;
       const key = t.category || "Other";
       totals.set(key, (totals.get(key) ?? 0) + t.amount);
@@ -1036,7 +1038,11 @@ export default function CommandDashboard(props: DashboardProps) {
                                     <span className={styles.kind}>{t.type === "rent" ? "Rent" : t.category || "Expense"}</span>
                                     {t.detail && <span> {t.detail}</span>}
                                     {t.note && <div className={styles.sub}>{t.note}</div>}
-                                    {t.appliesTo && <div className={styles.sub}>Counts toward {monthLabel(t.appliesTo)}</div>}
+                                    {t.spreadMonths && t.spreadMonths > 1 ? (
+                                      <div className={styles.sub}>{spreadSummary(t)}</div>
+                                    ) : (
+                                      t.appliesTo && <div className={styles.sub}>Counts toward {monthLabel(t.appliesTo)}</div>
+                                    )}
                                     {t.attachments.length > 0 && (
                                       <div className={styles.proofs}>
                                         {t.attachments.map((a) => (

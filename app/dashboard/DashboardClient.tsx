@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { rentMonthOf, monthLabel } from "@/lib/rent-month";
+import { allocate, spreadForReports, spreadSummary } from "@/lib/spread";
+import { monthLabel } from "@/lib/rent-month";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { rentTargetOf, unitIdsCountingToward } from "@/lib/rent-target";
@@ -104,6 +105,8 @@ type Transaction = {
   unitId: string | null;
   /** Rent only: the month it counts toward when not the month of `date`. */
   appliesTo?: string | null;
+  /** Spread across this many months (lib/spread); null when not. */
+  spreadMonths?: number | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -432,9 +435,11 @@ export default function DashboardClient({
     for (const t of transactions) {
       const month = t.date.slice(0, 7);
       if (t.type === "rent") {
-        // Rent status goes by the month the payment counts toward.
-        const key = `${t.propertyId}|${t.unitId ?? ""}|${rentMonthOf(t)}`;
-        rent.set(key, (rent.get(key) ?? 0) + t.amount);
+        // Rent status goes by the month(s) the payment counts toward.
+        for (const a of allocate(t)) {
+          const key = `${t.propertyId}|${t.unitId ?? ""}|${a.month}`;
+          rent.set(key, (rent.get(key) ?? 0) + a.amount);
+        }
       }
       if (t.recurringExpenseId) recurringLogged.add(`${t.recurringExpenseId}|${month}`);
     }
@@ -543,6 +548,12 @@ export default function DashboardClient({
     [visibleTransactions, scopeKey]
   );
 
+  // What the figures and charts count: a spread entry (a yearly tax bill,
+  // rent paid ahead) as its monthly shares. The ledger still lists the real
+  // entries (scopedTransactions above). lib/spread.
+  const reportVisible = useMemo(() => spreadForReports(visibleTransactions), [visibleTransactions]);
+  const reportScoped = useMemo(() => reportVisible.filter(inScope), [reportVisible, scopeKey]);
+
   function totalsFor(ids: Set<string> | null, txns: Transaction[]) {
     let rent = 0;
     let expense = 0;
@@ -554,9 +565,9 @@ export default function DashboardClient({
     return { rent, expense, net: rent - expense };
   }
 
-  const inScopeTransactions = useMemo(() => transactions.filter(inScope), [transactions, scopeKey]);
+  const inScopeTransactions = useMemo(() => spreadForReports(transactions).filter(inScope), [transactions, scopeKey]);
 
-  const overall = totalsFor(visibleIds, scopedTransactions);
+  const overall = totalsFor(visibleIds, reportScoped);
 
   // Each property card's totals for the period, from one pass rather than one
   // pass per card.
@@ -596,14 +607,14 @@ export default function DashboardClient({
         ? Array.from({ length: 12 }, (_, i) => `${selectedYear}-${String(i + 1).padStart(2, "0")}`)
         : Array.from({ length: 12 }, (_, i) => shiftMonth(barMonth, i - 11));
     const buckets = new Map(keys.map((k) => [k, { month: k, rent: 0, expense: 0 }]));
-    for (const t of visibleTransactions) {
+    for (const t of reportVisible) {
       const bucket = buckets.get(t.date.slice(0, 7));
       if (!bucket) continue;
       if (t.type === "rent") bucket.rent += t.amount;
       else bucket.expense += t.amount;
     }
     return keys.map((k) => buckets.get(k)!);
-  }, [visibleTransactions, barMonth, periodKind, selectedYear]);
+  }, [reportVisible, barMonth, periodKind, selectedYear]);
 
   // The year ahead (a forecast, not the books): the same chart, switched.
   const [cashView, setCashView] = useState<"past" | "next">("past");
@@ -630,13 +641,13 @@ export default function DashboardClient({
 
   const byCategory = useMemo(() => {
     const totals = new Map<string, number>();
-    for (const t of scopedTransactions) {
+    for (const t of reportScoped) {
       if (t.type !== "expense") continue;
       const key = t.category || "Other";
       totals.set(key, (totals.get(key) ?? 0) + t.amount);
     }
     return Array.from(totals, ([label, value]) => ({ label, value }));
-  }, [scopedTransactions]);
+  }, [reportScoped]);
 
   // Month-over-month movement for the stat cards. Meaningless on All time,
   // where there is no previous period to compare against.
@@ -645,9 +656,9 @@ export default function DashboardClient({
     const key =
       periodKind === "month" ? shiftMonth(selectedMonth, -1) : String(Number(selectedYear) - 1);
     const label = periodKind === "month" ? shortMonth(key) : key;
-    const prior = visibleTransactions.filter((t) => t.date.startsWith(key));
+    const prior = reportVisible.filter((t) => t.date.startsWith(key));
     return { key, label, ...totalsFor(null, prior) };
-  }, [visibleTransactions, selectedMonth, selectedYear, periodKind]);
+  }, [reportVisible, selectedMonth, selectedYear, periodKind]);
 
   /**
    * What this place was renting for in a given month, which is not always
@@ -1133,7 +1144,7 @@ export default function DashboardClient({
         detail: t.detail,
         note: t.note,
         category: t.category,
-        appliesTo: t.appliesTo ?? undefined,
+        appliesTo: t.appliesTo ?? undefined, spreadMonths: t.spreadMonths ?? undefined,
       },
     });
   }
@@ -2833,7 +2844,11 @@ export default function DashboardClient({
                           {t.category && <div className={styles.categoryTag}>{t.category}</div>}
                           {t.detail}
                           {t.note && <div className={styles.note}>{t.note}</div>}
-                          {t.appliesTo && <div className={styles.note}>Counts toward {monthLabel(t.appliesTo)}</div>}
+                          {t.spreadMonths && t.spreadMonths > 1 ? (
+                            <div className={styles.note}>{spreadSummary(t)}</div>
+                          ) : (
+                            t.appliesTo && <div className={styles.note}>Counts toward {monthLabel(t.appliesTo)}</div>
+                          )}
                           {t.attachments.length > 0 && (
                             <div className={styles.proofRow}>
                               {t.attachments.map((a) => (

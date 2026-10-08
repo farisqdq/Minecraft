@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { spreadForReports, spreadSummary } from "@/lib/spread";
 import { monthLabel } from "@/lib/rent-month";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -10,6 +11,7 @@ import CashFlowChart from "../../../components/CashFlowChart";
 import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
 import Modal from "../../../components/Modal";
 import AppliesToField from "../../../components/AppliesToField";
+import SpreadField from "../../../components/SpreadField";
 import StatementPanel from "../../../components/StatementPanel";
 import WaiveLateFeeField from "../../../components/WaiveLateFeeField"; // late fee waivers (a21)
 import DocumentsPanel from "../../../components/DocumentsPanel";
@@ -65,6 +67,8 @@ type LedgerEntry = {
   unitId: string | null;
   /** Rent only: the month it counts toward when not the month of `date`. */
   appliesTo?: string | null;
+  /** Spread across this many months (lib/spread); null when not. */
+  spreadMonths?: number | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -235,8 +239,10 @@ export default function PropertyManageClient({
     detail: "",
     note: "",
     category: "",
-    /** Rent's "counts toward" month; "" follows the date. */
+    /** Rent's "counts toward" month (or a spread entry's first); "" follows the date. */
     appliesTo: "",
+    /** 0: not spread. Otherwise the number of months (lib/spread). */
+    spreadMonths: 0,
   });
   const [error, setError] = useState("");
   // ---- Attach proof: files queued in the entry form, the row whose
@@ -758,6 +764,7 @@ export default function PropertyManageClient({
       note: t.note,
       category: t.category,
       appliesTo: t.appliesTo ?? "",
+      spreadMonths: t.spreadMonths ?? 0,
     });
     resetProofQueue();
     setEntryOpen(true);
@@ -810,6 +817,7 @@ export default function PropertyManageClient({
       note: "",
       category: "",
       appliesTo: "",
+      spreadMonths: 0,
     });
     resetProofQueue();
     setEntryOpen(true);
@@ -862,7 +870,8 @@ export default function PropertyManageClient({
         detail: entry.detail,
         note: entry.note,
         category: entry.type === "expense" ? entry.category : undefined,
-        appliesTo: entry.type === "rent" ? entry.appliesTo || null : undefined,
+        appliesTo: entry.type === "rent" || entry.spreadMonths > 1 ? entry.appliesTo || null : null,
+        spreadMonths: entry.spreadMonths > 1 ? entry.spreadMonths : null,
         // a21: only sent once the box was touched, so an edit can't un-waive by accident.
         waiveLateFee: entry.type === "rent" && waiveLateFee !== null ? waiveLateFee : undefined,
       }),
@@ -1196,7 +1205,8 @@ export default function PropertyManageClient({
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
     });
     const buckets = new Map(keys.map((k) => [k, { month: k, rent: 0, expense: 0 }]));
-    for (const t of transactions) {
+    // A spread entry counts its share in each of its months (lib/spread).
+    for (const t of spreadForReports(transactions)) {
       const bucket = buckets.get(t.date.slice(0, 7));
       if (!bucket) continue;
       if (t.type === "rent") bucket.rent += t.amount;
@@ -2288,7 +2298,11 @@ export default function PropertyManageClient({
                       {t.category && <div className={styles.categoryTag}>{t.category}</div>}
                       {t.detail}
                       {t.note && <div className={styles.note}>{t.note}</div>}
-                      {t.appliesTo && <div className={styles.note}>Counts toward {monthLabel(t.appliesTo)}</div>}
+                      {t.spreadMonths && t.spreadMonths > 1 ? (
+                        <div className={styles.note}>{spreadSummary(t)}</div>
+                      ) : (
+                        t.appliesTo && <div className={styles.note}>Counts toward {monthLabel(t.appliesTo)}</div>
+                      )}
                       {/* Paperclip with the count; tap to show the thumbnails. */}
                       {t.attachments.length > 0 && (
                         <div>
@@ -2416,6 +2430,7 @@ export default function PropertyManageClient({
               <AppliesToField
                 id="e-applies"
                 className={styles.field}
+                label={entry.spreadMonths > 1 ? "First month" : "Counts toward"}
                 date={entry.date}
                 value={entry.appliesTo}
                 onChange={(m) => setEntry((f) => ({ ...f, appliesTo: m }))}
@@ -2473,6 +2488,20 @@ export default function PropertyManageClient({
                 onChange={(e) => setEntry((f) => ({ ...f, note: e.target.value }))}
               />
             </div>
+            <SpreadField
+              idPrefix="e"
+              type={entry.type}
+              date={entry.date}
+              amount={entry.amount}
+              months={entry.spreadMonths}
+              start={entry.appliesTo}
+              onMonths={(n) => setEntry((f) => ({ ...f, spreadMonths: n }))}
+              onStart={(m) => setEntry((f) => ({ ...f, appliesTo: m }))}
+              fieldClass={styles.field}
+              wideClass={styles.span4}
+              checkboxClass={styles.checkboxField}
+              noteClass={styles.note}
+            />
             {/* Late fee waivers (a21) */}
             {entry.type === "rent" && (
               <WaiveLateFeeField

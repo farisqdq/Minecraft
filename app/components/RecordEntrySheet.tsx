@@ -22,6 +22,7 @@
 
 import { useRef, useState } from "react";
 import AppliesToField from "./AppliesToField";
+import SpreadField from "./SpreadField";
 import Modal from "./Modal";
 import ProofPicker, { releasePending, uploadProof, type PendingProof, type ProofDTO } from "./ProofPicker";
 import WaiveLateFeeField from "./WaiveLateFeeField";
@@ -63,6 +64,8 @@ export type SavedEntry = {
   loanPaymentId: string | null;
   /** Rent only: the month it counts toward, when not the month of `date`. */
   appliesTo?: string | null;
+  /** Spread across this many months (lib/spread). */
+  spreadMonths?: number | null;
 };
 
 const STORAGE_HINT =
@@ -103,6 +106,8 @@ export default function RecordEntrySheet({
   // "" follows the date: rent counts toward the month it's dated in until
   // someone picks another. A "Mark paid" for a month arrives already set.
   const [appliesTo, setAppliesTo] = useState(draft.prefill.appliesTo ?? "");
+  // 0: not spread. Otherwise the number of months (lib/spread).
+  const [spreadMonths, setSpreadMonths] = useState(draft.prefill.spreadMonths ?? 0);
   const [waive, setWaive] = useState<boolean | null>(null);
   const [pending, setPending] = useState<PendingProof[]>([]);
   const [existing, setExisting] = useState(draft.existingProof ?? 0);
@@ -143,7 +148,9 @@ export default function RecordEntrySheet({
       detail,
       note,
       category: type === "expense" ? category : undefined,
-      appliesTo: type === "rent" ? appliesTo || null : undefined,
+      // Rent's month, or a spread expense's first month.
+      appliesTo: type === "rent" || spreadMonths > 1 ? appliesTo || null : null,
+      spreadMonths: spreadMonths > 1 ? spreadMonths : null,
     };
     let res: Response;
     try {
@@ -185,6 +192,7 @@ export default function RecordEntrySheet({
       recurringExpenseId: data.recurringExpenseId ?? null,
       loanPaymentId: data.loanPaymentId ?? null,
       appliesTo: data.appliesTo ?? null,
+      spreadMonths: data.spreadMonths ?? null,
     };
     const sentWaive = isRent ? waive : null;
     setWaive(null);
@@ -309,9 +317,26 @@ export default function RecordEntrySheet({
               <AppliesToField
                 id="f-applies"
                 className={`${styles.field} ${styles.wide}`}
+                label={spreadMonths > 1 ? "First month" : "Counts toward"}
                 date={date}
                 value={appliesTo}
                 onChange={setAppliesTo}
+              />
+            )}
+            {!draft.recurring && (
+              <SpreadField
+                idPrefix="f"
+                type={type}
+                date={date}
+                amount={amount}
+                months={spreadMonths}
+                start={appliesTo}
+                onMonths={setSpreadMonths}
+                onStart={setAppliesTo}
+                fieldClass={styles.field}
+                wideClass={styles.span4}
+                checkboxClass={styles.checkboxField}
+                noteClass={styles.note}
               />
             )}
             {!isRent && (

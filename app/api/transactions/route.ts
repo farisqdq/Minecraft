@@ -5,6 +5,7 @@ import { companyIdsForUser, requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
 import { validAmount } from "@/lib/money";
 import { parseAppliesTo } from "@/lib/rent-month";
+import { MAX_SPREAD, parseSpreadMonths } from "@/lib/spread";
 import { tenantForRentTarget, waiverFromRentEntry } from "@/lib/late-fee-waivers-db";
 
 function serialize<T extends { date: Date; detail: string | null; note: string | null; category: string | null }>(
@@ -51,8 +52,14 @@ export async function POST(req: Request) {
   if (type === "expense" && !category) {
     return NextResponse.json({ error: "Pick a category for this expense." }, { status: 400 });
   }
-  // Rent can count toward a month other than the one it arrived in.
-  const appliesTo = type === "rent" ? parseAppliesTo(body?.appliesTo, date) : null;
+  // Spread over several months (lib/spread) — a yearly bill, rent paid ahead.
+  const spreadMonths = parseSpreadMonths(body?.spreadMonths);
+  if (spreadMonths === false) {
+    return NextResponse.json({ error: `Spread over 2 to ${MAX_SPREAD} months.` }, { status: 400 });
+  }
+  // Rent can count toward a month other than the one it arrived in; a spread
+  // entry, rent or expense, can start in another month.
+  const appliesTo = type === "rent" || spreadMonths ? parseAppliesTo(body?.appliesTo, date) : null;
   if (appliesTo === false) {
     return NextResponse.json({ error: "That isn't a month to apply the payment to." }, { status: 400 });
   }
@@ -86,6 +93,7 @@ export async function POST(req: Request) {
       note: note || null,
       category,
       appliesTo: appliesTo ?? null,
+      spreadMonths: spreadMonths ?? null,
     },
   });
   const waiver =

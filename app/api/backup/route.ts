@@ -21,6 +21,7 @@ type TxnRow = {
   note: string | null;
   category: string | null;
   appliesTo: string | null;
+  spreadMonths: number | null;
   attachments: { url: string; filename: string; contentType: string; size: number }[];
   vendor: { name: string } | null;
   loanPayment: { loanId: string; month: string } | null;
@@ -45,6 +46,8 @@ function serializeTxns(txns: TxnRow[], key: FileKey, loanIndex: LoanIndex, tenan
     category: t.category ?? "",
     // Rent counted toward another month than the one it arrived in.
     appliesTo: t.appliesTo ?? "",
+    // Spread across this many months (lib/spread); 0 when not.
+    spreadMonths: t.spreadMonths ?? 0,
     // By name: ids don't survive a restore into a fresh database.
     vendorName: t.vendor?.name ?? "",
     // Which mortgage payment wrote this entry, as the loan's position in the

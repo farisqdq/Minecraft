@@ -13,7 +13,7 @@
  */
 
 import { rentForMonth, type RentChangeDTO } from "../rent.ts";
-import { rentMonthOf } from "../rent-month.ts";
+import { allocate } from "../spread.ts";
 import { rentTargetOf, unitIdsCountingToward } from "../rent-target.ts";
 import { daysLate, leaseStatus } from "../lease.ts";
 
@@ -39,6 +39,7 @@ export type LedgerTxn = {
   propertyId: string;
   unitId: string | null;
   appliesTo?: string | null;
+  spreadMonths?: number | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -117,8 +118,10 @@ export function rentIndex(txns: LedgerTxn[]): Map<string, number> {
   const rent = new Map<string, number>();
   for (const t of txns) {
     if (t.type !== "rent") continue;
-    const key = `${t.propertyId}|${t.unitId ?? ""}|${rentMonthOf(t)}`;
-    rent.set(key, (rent.get(key) ?? 0) + t.amount);
+    for (const a of allocate(t)) {
+      const key = `${t.propertyId}|${t.unitId ?? ""}|${a.month}`;
+      rent.set(key, (rent.get(key) ?? 0) + a.amount);
+    }
   }
   return rent;
 }

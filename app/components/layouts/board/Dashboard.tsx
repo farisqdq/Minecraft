@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { spreadForReports } from "@/lib/spread";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { shrinkImage } from "@/lib/shrinkImage";
@@ -248,7 +249,7 @@ export default function BoardDashboard({
       editingId: t.id,
       existingProof: t.attachments.length,
       targetKey: targetKeyOf(t.propertyId, t.unitId),
-      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined },
+      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined, spreadMonths: t.spreadMonths ?? undefined },
     });
   }
 
@@ -603,7 +604,8 @@ export default function BoardDashboard({
   const series = useMemo(() => {
     const keys = Array.from({ length: 12 }, (_, i) => shiftMonth(month, i - 11));
     const buckets = new Map(keys.map((k) => [k, { month: k, rent: 0, expense: 0 }]));
-    for (const t of visibleTransactions) {
+    // A spread entry counts its share in each of its months (lib/spread).
+    for (const t of spreadForReports(visibleTransactions)) {
       const b = buckets.get(t.date.slice(0, 7));
       if (!b) continue;
       if (t.type === "rent") b.rent += t.amount;
@@ -616,7 +618,7 @@ export default function BoardDashboard({
     let rent = 0;
     let expense = 0;
     const cats = new Map<string, number>();
-    for (const t of visibleTransactions) {
+    for (const t of spreadForReports(visibleTransactions)) {
       if (!t.date.startsWith(month)) continue;
       if (t.type === "rent") rent += t.amount;
       else {
@@ -634,7 +636,7 @@ export default function BoardDashboard({
         const ids = new Set(properties.filter((p) => p.companyId === c.id).map((p) => p.id));
         let rent = 0;
         let expense = 0;
-        for (const t of transactions) {
+        for (const t of spreadForReports(transactions)) {
           if (!ids.has(t.propertyId) || !t.date.startsWith(month)) continue;
           if (t.type === "rent") rent += t.amount;
           else expense += t.amount;
