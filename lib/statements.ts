@@ -1,3 +1,4 @@
+import { effectivePaymentDay, rentMonthOf } from "@/lib/rent-month";
 import { prisma } from "@/lib/prisma";
 import { rentForMonth, type RentChangeDTO } from "@/lib/rent";
 import { rentTargetOf, unitIdsCountingToward } from "@/lib/rent-target";
@@ -358,7 +359,7 @@ export async function statementForTenant(
   const [payments, rentChanges] = await Promise.all([
     prisma.transaction.findMany({
       where: { propertyId: tenant.propertyId, type: "rent", ...onTarget },
-      select: { date: true, amount: true },
+      select: { date: true, amount: true, appliesTo: true },
       orderBy: { date: "asc" },
     }),
     prisma.rentChange.findMany({
@@ -393,7 +394,9 @@ export async function statementForTenant(
 
   const startMonth = resolveStartMonth({
     explicit: tenant.balanceFrom,
-    firstPaymentMonth: payments.length ? monthOf(payments[0].date) : null,
+    // The earliest month any payment counts toward — not simply the first
+    // by date, since a payment can be applied to an earlier month.
+    firstPaymentMonth: payments.length ? payments.map((p) => rentMonthOf(p)).sort()[0] : null,
     leaseStartMonth: tenant.leaseStart ? monthOf(tenant.leaseStart) : null,
     currentMonth,
   });
@@ -433,8 +436,11 @@ export async function statementForTenant(
     .map(ruleDTO)
     .filter(inForce)
     .filter((r) => !(shared && r.kind === "late"));
-  const paymentInputs = payments.map((p) => ({ month: monthOf(p.date), amount: p.amount }));
-  const datedPayments: DatedPayment[] = payments.map((p) => ({ day: dayOf(p.date), amount: p.amount }));
+  // A payment counts toward the month it was applied to (lib/rent-month);
+  // for late fees, one paid early for a later month was on hand on that
+  // month's 1st, and one paid late for an earlier month arrived when it did.
+  const paymentInputs = payments.map((p) => ({ month: rentMonthOf(p), amount: p.amount }));
+  const datedPayments: DatedPayment[] = payments.map((p) => ({ day: effectivePaymentDay(p), amount: p.amount }));
 
   // Work out what the rules imply, write anything missing, then read the
   // charges back — so the statement is built from rows that exist rather than

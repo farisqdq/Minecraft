@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { rentMonthOf, monthLabel } from "@/lib/rent-month";
 import Link from "next/link";
 import { shrinkImage } from "@/lib/shrinkImage";
 import { rentTargetOf, unitIdsCountingToward } from "@/lib/rent-target";
@@ -101,6 +102,8 @@ type Transaction = {
   id: string;
   propertyId: string;
   unitId: string | null;
+  /** Rent only: the month it counts toward when not the month of `date`. */
+  appliesTo?: string | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -429,7 +432,8 @@ export default function DashboardClient({
     for (const t of transactions) {
       const month = t.date.slice(0, 7);
       if (t.type === "rent") {
-        const key = `${t.propertyId}|${t.unitId ?? ""}|${month}`;
+        // Rent status goes by the month the payment counts toward.
+        const key = `${t.propertyId}|${t.unitId ?? ""}|${rentMonthOf(t)}`;
         rent.set(key, (rent.get(key) ?? 0) + t.amount);
       }
       if (t.recurringExpenseId) recurringLogged.add(`${t.recurringExpenseId}|${month}`);
@@ -1070,6 +1074,8 @@ export default function DashboardClient({
         amount: owed,
         detail: tenantName ?? "",
         note: `${monthName(barMonth)} rent`,
+        // It's this month's rent, whatever day it lands on.
+        appliesTo: barMonth,
       }),
     });
     const data = await res.json().catch(() => ({}));
@@ -1127,6 +1133,7 @@ export default function DashboardClient({
         detail: t.detail,
         note: t.note,
         category: t.category,
+        appliesTo: t.appliesTo ?? undefined,
       },
     });
   }
@@ -2826,6 +2833,7 @@ export default function DashboardClient({
                           {t.category && <div className={styles.categoryTag}>{t.category}</div>}
                           {t.detail}
                           {t.note && <div className={styles.note}>{t.note}</div>}
+                          {t.appliesTo && <div className={styles.note}>Counts toward {monthLabel(t.appliesTo)}</div>}
                           {t.attachments.length > 0 && (
                             <div className={styles.proofRow}>
                               {t.attachments.map((a) => (

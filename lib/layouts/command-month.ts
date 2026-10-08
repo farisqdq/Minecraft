@@ -19,6 +19,7 @@
  */
 
 import { rentForMonth, type RentChangeDTO } from "../rent.ts";
+import { rentMonthOf } from "../rent-month.ts";
 import { rentTargetOf, unitIdsCountingToward } from "../rent-target.ts";
 import { daysLate, leaseStatus } from "../lease.ts";
 
@@ -53,6 +54,7 @@ export type MonthTenant = {
 export type MonthTransaction = {
   propertyId: string;
   unitId: string | null;
+  appliesTo?: string | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -241,7 +243,7 @@ export function monthModel<T extends MonthTenant>(input: {
   for (const t of transactions) {
     const m = t.date.slice(0, 7);
     if (t.type === "rent") {
-      const key = `${t.propertyId}|${t.unitId ?? ""}|${m}`;
+      const key = `${t.propertyId}|${t.unitId ?? ""}|${rentMonthOf(t)}`;
       rentIndex.set(key, (rentIndex.get(key) ?? 0) + t.amount);
     }
     if (m === month && visibleIds.has(t.propertyId)) {

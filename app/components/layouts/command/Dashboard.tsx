@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { monthLabel } from "@/lib/rent-month";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import AppShell from "../../AppShell";
@@ -233,7 +234,7 @@ export default function CommandDashboard(props: DashboardProps) {
       editingId: t.id,
       existingProof: t.attachments.length,
       targetKey: targetKeyOf(t.propertyId, t.unitId),
-      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category },
+      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined },
     });
   }
 
@@ -1035,6 +1036,7 @@ export default function CommandDashboard(props: DashboardProps) {
                                     <span className={styles.kind}>{t.type === "rent" ? "Rent" : t.category || "Expense"}</span>
                                     {t.detail && <span> {t.detail}</span>}
                                     {t.note && <div className={styles.sub}>{t.note}</div>}
+                                    {t.appliesTo && <div className={styles.sub}>Counts toward {monthLabel(t.appliesTo)}</div>}
                                     {t.attachments.length > 0 && (
                                       <div className={styles.proofs}>
                                         {t.attachments.map((a) => (

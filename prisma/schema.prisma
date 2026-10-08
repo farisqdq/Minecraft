@@ -369,6 +369,12 @@ model Transaction {
   detail      String?
   note        String?
   category    String?
+  // Rent only: the month this payment counts toward ("2026-09"), when that
+  // isn't the month it arrived in — a late September check paid on October
+  // 3rd, or October paid early on September 28th. Null means the month of
+  // `date`. Rent status, balances and late fees go by this; cash flow and
+  // the tax export still go by `date`, when the money actually came in.
+  appliesTo   String?
   createdAt   DateTime @default(now())
 
   attachments        Attachment[]

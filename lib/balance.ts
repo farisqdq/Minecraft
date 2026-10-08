@@ -51,6 +51,12 @@ export type Statement = {
   monthsBehind: number;
   charged: number;
   received: number;
+  /**
+   * Paid toward months that haven't started yet ("counts toward November"
+   * entered in October). Not in `balance` — the current month is still what
+   * it is — but never dropped either: the statement shows it separately.
+   */
+  paidAhead: number;
 };
 
 /** Money, to the cent. Floats accumulate error over twelve additions. */
@@ -227,7 +233,14 @@ export function buildStatement(opts: {
     }
   }
 
-  return { rows, balance: running, behindSince, monthsBehind, charged, received };
+  // Money applied to months after the statement's last one. Only while the
+  // tenancy runs: past a move-out, later payments are the next tenant's.
+  let paidAhead = 0;
+  if (lastMonth === currentMonth) {
+    for (const p of payments) if (p.month > currentMonth) paidAhead += Math.max(0, p.amount || 0);
+  }
+
+  return { rows, balance: running, behindSince, monthsBehind, charged, received, paidAhead: cents(paidAhead) };
 }
 
 /** "$1,750 behind since July" — the one line a card needs. */

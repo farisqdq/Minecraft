@@ -46,7 +46,7 @@ export default async function CalendarPage() {
         type: "rent",
         date: { gte: new Date(Date.now() - 2 * 365 * 86_400_000), lte: new Date(Date.now() + 2 * 365 * 86_400_000) },
       },
-      select: { propertyId: true, unitId: true, date: true, amount: true },
+      select: { propertyId: true, unitId: true, date: true, amount: true, appliesTo: true },
     }),
     prisma.tenantChargeRule.findMany({
       where: { kind: "monthly", active: true, tenant: { ...scope, active: true } },
@@ -90,6 +90,7 @@ export default async function CalendarPage() {
         unitId: p.unitId,
         date: p.date.toISOString().slice(0, 10),
         amount: p.amount,
+        appliesTo: p.appliesTo,
       }))}
       rules={rules.map((r) => ({
         id: r.id,

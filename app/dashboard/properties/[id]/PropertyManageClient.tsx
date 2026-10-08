@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { monthLabel } from "@/lib/rent-month";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell, { TitleEditButton } from "../../../components/AppShell";
@@ -8,6 +9,7 @@ import { useViewOnly } from "../../../components/ViewOnly";
 import CashFlowChart from "../../../components/CashFlowChart";
 import ConfirmDialog, { type ConfirmRequest } from "../../../components/ConfirmDialog";
 import Modal from "../../../components/Modal";
+import AppliesToField from "../../../components/AppliesToField";
 import StatementPanel from "../../../components/StatementPanel";
 import WaiveLateFeeField from "../../../components/WaiveLateFeeField"; // late fee waivers (a21)
 import DocumentsPanel from "../../../components/DocumentsPanel";
@@ -61,6 +63,8 @@ type Property = {
 type LedgerEntry = {
   id: string;
   unitId: string | null;
+  /** Rent only: the month it counts toward when not the month of `date`. */
+  appliesTo?: string | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -231,6 +235,8 @@ export default function PropertyManageClient({
     detail: "",
     note: "",
     category: "",
+    /** Rent's "counts toward" month; "" follows the date. */
+    appliesTo: "",
   });
   const [error, setError] = useState("");
   // ---- Attach proof: files queued in the entry form, the row whose
@@ -751,6 +757,7 @@ export default function PropertyManageClient({
       detail: t.detail,
       note: t.note,
       category: t.category,
+      appliesTo: t.appliesTo ?? "",
     });
     resetProofQueue();
     setEntryOpen(true);
@@ -802,6 +809,7 @@ export default function PropertyManageClient({
       detail: type === "rent" ? (prefill?.detail ?? tenantFor(unitId)) : "",
       note: "",
       category: "",
+      appliesTo: "",
     });
     resetProofQueue();
     setEntryOpen(true);
@@ -854,6 +862,7 @@ export default function PropertyManageClient({
         detail: entry.detail,
         note: entry.note,
         category: entry.type === "expense" ? entry.category : undefined,
+        appliesTo: entry.type === "rent" ? entry.appliesTo || null : undefined,
         // a21: only sent once the box was touched, so an edit can't un-waive by accident.
         waiveLateFee: entry.type === "rent" && waiveLateFee !== null ? waiveLateFee : undefined,
       }),
@@ -2279,6 +2288,7 @@ export default function PropertyManageClient({
                       {t.category && <div className={styles.categoryTag}>{t.category}</div>}
                       {t.detail}
                       {t.note && <div className={styles.note}>{t.note}</div>}
+                      {t.appliesTo && <div className={styles.note}>Counts toward {monthLabel(t.appliesTo)}</div>}
                       {/* Paperclip with the count; tap to show the thumbnails. */}
                       {t.attachments.length > 0 && (
                         <div>
@@ -2402,6 +2412,15 @@ export default function PropertyManageClient({
                 onChange={(e) => setEntry((f) => ({ ...f, date: e.target.value }))}
               />
             </div>
+            {entry.type === "rent" && (
+              <AppliesToField
+                id="e-applies"
+                className={styles.field}
+                date={entry.date}
+                value={entry.appliesTo}
+                onChange={(m) => setEntry((f) => ({ ...f, appliesTo: m }))}
+              />
+            )}
             <div className={styles.field}>
               <label htmlFor="e-amount">Amount ($)</label>
               <input
@@ -2460,7 +2479,7 @@ export default function PropertyManageClient({
                 className={styles.span4}
                 propertyId={property.id}
                 unitId={entry.unitId || null}
-                date={entry.date}
+                date={entry.appliesTo ? `${entry.appliesTo}-01` : entry.date}
                 value={waiveLateFee}
                 onChange={setWaiveLateFee}
               />

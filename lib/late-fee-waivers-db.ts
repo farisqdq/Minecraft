@@ -162,9 +162,11 @@ export async function waiverFromRentEntry(opts: {
   propertyId: string;
   unitId: string | null;
   date: Date;
+  /** The month the rent counts toward, when it isn't the month of `date`. */
+  appliesTo?: string | null;
   waive: boolean;
 }): Promise<{ error: string } | { waiver: WaiverDTO | null }> {
-  const month = opts.date.toISOString().slice(0, 7);
+  const month = opts.appliesTo || opts.date.toISOString().slice(0, 7);
   const tenant = await tenantForRentTarget(opts.propertyId, opts.unitId);
   if (!tenant) {
     return opts.waive

@@ -248,7 +248,7 @@ export default function BoardDashboard({
       editingId: t.id,
       existingProof: t.attachments.length,
       targetKey: targetKeyOf(t.propertyId, t.unitId),
-      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category },
+      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined },
     });
   }
 

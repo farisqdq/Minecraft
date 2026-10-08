@@ -57,7 +57,15 @@ test("month helpers", () => {
 test("rent prefill from a Needs attention row", () => {
   assert.deepEqual(
     rentPrefill({ month: "2026-09", today: "2026-09-29", expected: 1000, paid: 0, fees: 70, tenantName: "Sam Lee" }),
-    { type: "rent", amount: "1070", date: "2026-09-29", detail: "Sam Lee", note: "September 2026 rent", category: "" }
+    {
+      type: "rent",
+      amount: "1070",
+      date: "2026-09-29",
+      detail: "Sam Lee",
+      note: "September 2026 rent",
+      category: "",
+      appliesTo: "2026-09",
+    }
   );
   const calendar = rentPrefill({
     month: "2026-10",
@@ -69,6 +77,8 @@ test("rent prefill from a Needs attention row", () => {
   assert.equal(calendar.amount, "1000");
   assert.equal(calendar.date, "2026-10-05");
   assert.equal(calendar.detail, "");
+  // Marking a month paid counts toward that month, whatever date ends up on it.
+  assert.equal(calendar.appliesTo, "2026-10");
 });
 
 test("recurring prefill is dated on the bill's day in that month", () => {

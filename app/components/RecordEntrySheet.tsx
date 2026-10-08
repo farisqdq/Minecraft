@@ -21,6 +21,7 @@
  */
 
 import { useRef, useState } from "react";
+import AppliesToField from "./AppliesToField";
 import Modal from "./Modal";
 import ProofPicker, { releasePending, uploadProof, type PendingProof, type ProofDTO } from "./ProofPicker";
 import WaiveLateFeeField from "./WaiveLateFeeField";
@@ -60,6 +61,8 @@ export type SavedEntry = {
   category: string;
   recurringExpenseId: string | null;
   loanPaymentId: string | null;
+  /** Rent only: the month it counts toward, when not the month of `date`. */
+  appliesTo?: string | null;
 };
 
 const STORAGE_HINT =
@@ -97,6 +100,9 @@ export default function RecordEntrySheet({
   const [detail, setDetail] = useState(draft.prefill.detail);
   const [note, setNote] = useState(draft.prefill.note);
   const [category, setCategory] = useState(draft.prefill.category);
+  // "" follows the date: rent counts toward the month it's dated in until
+  // someone picks another. A "Mark paid" for a month arrives already set.
+  const [appliesTo, setAppliesTo] = useState(draft.prefill.appliesTo ?? "");
   const [waive, setWaive] = useState<boolean | null>(null);
   const [pending, setPending] = useState<PendingProof[]>([]);
   const [existing, setExisting] = useState(draft.existingProof ?? 0);
@@ -137,6 +143,7 @@ export default function RecordEntrySheet({
       detail,
       note,
       category: type === "expense" ? category : undefined,
+      appliesTo: type === "rent" ? appliesTo || null : undefined,
     };
     let res: Response;
     try {
@@ -177,6 +184,7 @@ export default function RecordEntrySheet({
       category: data.category ?? "",
       recurringExpenseId: data.recurringExpenseId ?? null,
       loanPaymentId: data.loanPaymentId ?? null,
+      appliesTo: data.appliesTo ?? null,
     };
     const sentWaive = isRent ? waive : null;
     setWaive(null);
@@ -297,6 +305,15 @@ export default function RecordEntrySheet({
                 onChange={(e) => setDate(e.target.value)}
               />
             </div>
+            {isRent && !draft.recurring && (
+              <AppliesToField
+                id="f-applies"
+                className={`${styles.field} ${styles.wide}`}
+                date={date}
+                value={appliesTo}
+                onChange={setAppliesTo}
+              />
+            )}
             {!isRent && (
               <div className={`${styles.field} ${styles.wide}`}>
                 <label htmlFor="f-category">Category</label>
@@ -335,7 +352,8 @@ export default function RecordEntrySheet({
                 className={styles.span4}
                 propertyId={target.propertyId}
                 unitId={target.unitId}
-                date={date}
+                // The fee waived is the chosen month's, as the server applies it.
+                date={appliesTo ? `${appliesTo}-01` : date}
                 value={waive}
                 onChange={setWaive}
               />
@@ -378,3 +396,4 @@ export default function RecordEntrySheet({
     </Modal>
   );
 }
+

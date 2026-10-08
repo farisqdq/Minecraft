@@ -14,6 +14,7 @@
  */
 
 import { rentForMonth, type RentChangeDTO } from "../rent.ts";
+import { rentMonthOf } from "../rent-month.ts";
 import { rentTargetOf, unitIdsCountingToward } from "../rent-target.ts";
 import { dateFromISO, daysLate, leaseStatus } from "../lease.ts";
 import { vacantDays } from "../vacancy.ts";
@@ -52,6 +53,7 @@ export type BoardTenant = {
 export type BoardTxn = {
   propertyId: string;
   unitId: string | null;
+  appliesTo?: string | null;
   type: "rent" | "expense";
   date: string;
   amount: number;
@@ -170,7 +172,7 @@ export function rentIndex(txns: readonly BoardTxn[]): Map<string, number> {
   const rent = new Map<string, number>();
   for (const t of txns) {
     if (t.type !== "rent") continue;
-    const key = `${t.propertyId}|${t.unitId ?? ""}|${t.date.slice(0, 7)}`;
+    const key = `${t.propertyId}|${t.unitId ?? ""}|${rentMonthOf(t)}`;
     rent.set(key, (rent.get(key) ?? 0) + t.amount);
   }
   return rent;

@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { companyIdsForUser, requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
 import { validAmount } from "@/lib/money";
+import { parseAppliesTo } from "@/lib/rent-month";
 import { tenantForRentTarget, waiverFromRentEntry } from "@/lib/late-fee-waivers-db";
 
 function serialize<T extends { date: Date; detail: string | null; note: string | null; category: string | null }>(
@@ -50,6 +51,11 @@ export async function POST(req: Request) {
   if (type === "expense" && !category) {
     return NextResponse.json({ error: "Pick a category for this expense." }, { status: 400 });
   }
+  // Rent can count toward a month other than the one it arrived in.
+  const appliesTo = type === "rent" ? parseAppliesTo(body?.appliesTo, date) : null;
+  if (appliesTo === false) {
+    return NextResponse.json({ error: "That isn't a month to apply the payment to." }, { status: 400 });
+  }
 
   if (!(await requireProperty(userId, propertyId))) {
     return NextResponse.json({ error: "Property not found." }, { status: 404 });
@@ -79,10 +85,13 @@ export async function POST(req: Request) {
       detail: detail || null,
       note: note || null,
       category,
+      appliesTo: appliesTo ?? null,
     },
   });
   const waiver =
-    waive === null ? undefined : await waiverFromRentEntry({ userId, propertyId, unitId, date, waive });
+    waive === null
+      ? undefined
+      : await waiverFromRentEntry({ userId, propertyId, unitId, date, appliesTo: transaction.appliesTo, waive });
   return NextResponse.json(
     { ...serialize(transaction), ...(waiver && "waiver" in waiver ? { lateFeeWaiver: waiver.waiver } : {}) },
     { status: 201 }

@@ -168,6 +168,11 @@ export default function StatementPanel({
               behind since {monthName(statement.behindSince)}
             </div>
           )}
+          {statement.paidAhead > 0.005 && (
+            <div className={styles.statementSince}>
+              plus {money(statement.paidAhead)} paid toward months still to come
+            </div>
+          )}
         </div>
         <button
           type="button"

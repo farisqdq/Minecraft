@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
+import { monthLabel } from "@/lib/rent-month";
 import Link from "next/link";
 import CashFlowChart from "../../CashFlowChart";
 import CategoryBars from "../../CategoryBars";
@@ -268,7 +269,7 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
       editingId: t.id,
       existingProof: t.attachments.length,
       targetKey: keyOf(t),
-      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category },
+      prefill: { type: t.type, amount: String(t.amount), date: t.date, detail: t.detail, note: t.note, category: t.category, appliesTo: t.appliesTo ?? undefined },
     });
   }
 
@@ -363,6 +364,7 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
                   </span>{" "}
                   {t.detail}
                   {t.note && <span className={styles.subLine}>{t.note}</span>}
+                  {t.appliesTo && <span className={styles.subLine}>Counts toward {monthLabel(t.appliesTo)}</span>}
                   {t.attachments.length > 0 && (
                     <span className={styles.proofs}>
                       {t.attachments.map((a) => (

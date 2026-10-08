@@ -198,7 +198,7 @@ export default function CalendarClient({
     if (entry.type === "rent") {
       setPayments((prev) => [
         ...prev,
-        { propertyId: entry.propertyId, unitId: entry.unitId, date: entry.date, amount: entry.amount },
+        { propertyId: entry.propertyId, unitId: entry.unitId, date: entry.date, amount: entry.amount, appliesTo: entry.appliesTo ?? null },
       ]);
     }
     push(

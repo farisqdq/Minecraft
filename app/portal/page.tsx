@@ -188,6 +188,11 @@ export default async function PortalHome() {
                     : "nothing outstanding"}
               </span>
             </div>
+            {account.statement.paidAhead > 0.005 && (
+              <p className={styles.factLabel}>
+                Plus {money(account.statement.paidAhead)} you&apos;ve paid toward months still to come.
+              </p>
+            )}
             <table className={styles.months}>
               <thead>
                 <tr>

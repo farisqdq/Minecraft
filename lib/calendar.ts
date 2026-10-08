@@ -11,6 +11,7 @@
  */
 
 import { monthlyChargesFor, type ChargeRule } from "./charge-rules.ts";
+import { rentMonthOf } from "./rent-month.ts";
 
 export type CalTarget = {
   key: string;
@@ -36,6 +37,8 @@ export type CalPayment = {
   /** YYYY-MM-DD */
   date: string;
   amount: number;
+  /** The month it counts toward, when not the month of `date`. */
+  appliesTo?: string | null;
 };
 
 export type DueStatus = "paid" | "partial" | "due" | "late";
@@ -138,6 +141,8 @@ export function buildMonth(opts: {
     }
   }
 
+  const forMonth = payments.filter((p) => rentMonthOf(p) === month);
+
   let expected = 0;
   let collected = 0;
   let overdue = 0;
@@ -156,7 +161,9 @@ export function buildMonth(opts: {
         }).map((c) => ({ label: c.label, amount: c.amount }))
       : [];
     const due = cents(rent + extras.reduce((s, e) => s + e.amount, 0));
-    const paid = cents(inMonth.filter((p) => same(t, p)).reduce((s, p) => s + Math.max(0, p.amount), 0));
+    // Money landing on a day is marked on that day above; whether this
+    // month's rent is paid goes by the month each payment counts toward.
+    const paid = cents(forMonth.filter((p) => same(t, p)).reduce((s, p) => s + Math.max(0, p.amount), 0));
 
     const day = dueDayIn(month, tenant?.dueDay ?? 1);
     const dueDate = `${month}-${pad(day)}`;

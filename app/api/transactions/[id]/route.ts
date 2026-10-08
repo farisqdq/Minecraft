@@ -4,6 +4,7 @@ import { getCurrentUserId } from "@/lib/session";
 import { requireProperty, requireUnit } from "@/lib/access";
 import { normalizeCategory } from "@/lib/categories";
 import { validAmount } from "@/lib/money";
+import { parseAppliesTo } from "@/lib/rent-month";
 import { fileLink } from "@/lib/file-links";
 import { shortMonth } from "@/lib/loans-db";
 import { tenantForRentTarget, waiverFromRentEntry } from "@/lib/late-fee-waivers-db";
@@ -73,6 +74,14 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   if (type === "expense" && !category) {
     return NextResponse.json({ error: "Pick a category for this expense." }, { status: 400 });
   }
+  // Rent's "counts toward" month: kept unless sent, re-checked against a new
+  // date (the same month as the date is stored as none), cleared for expenses.
+  const sentAppliesTo = parseAppliesTo(body.appliesTo, date);
+  if (sentAppliesTo === false) {
+    return NextResponse.json({ error: "That isn't a month to apply the payment to." }, { status: 400 });
+  }
+  const keptAppliesTo = sentAppliesTo === undefined ? parseAppliesTo(existing.appliesTo, date) : sentAppliesTo;
+  const appliesTo = type === "rent" && keptAppliesTo ? keptAppliesTo : null;
 
   if (existing.moveOutId) {
     const changed =
@@ -123,12 +132,13 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       detail: typeof body.detail === "string" ? body.detail.trim() || null : existing.detail,
       note: typeof body.note === "string" ? body.note.trim() || null : existing.note,
       category,
+      appliesTo,
     },
     include: { attachments: { orderBy: { createdAt: "asc" } } },
   });
 
   const waiver =
-    waive === null ? undefined : await waiverFromRentEntry({ userId, propertyId, unitId, date, waive });
+    waive === null ? undefined : await waiverFromRentEntry({ userId, propertyId, unitId, date, appliesTo: transaction.appliesTo, waive });
 
   return NextResponse.json({
     ...serialize(transaction),

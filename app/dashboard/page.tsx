@@ -187,6 +187,7 @@ export default async function DashboardPage() {
         detail: t.detail ?? "",
         note: t.note ?? "",
         category: t.category ?? "",
+        appliesTo: t.appliesTo,
         recurringExpenseId: t.recurringExpenseId,
         loanPaymentId: t.loanPaymentId,
         attachments: t.attachments.map((a) => ({

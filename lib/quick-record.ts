@@ -25,6 +25,8 @@ export type EntryPrefill = {
   detail: string;
   note: string;
   category: string;
+  /** Rent only: the month it counts toward ("2026-09"). Unset: the month of `date`. */
+  appliesTo?: string;
 };
 
 const cents = (n: number) => Math.round(n * 100) / 100;
@@ -108,6 +110,9 @@ export function rentPrefill(o: {
     detail: o.tenantName ?? "",
     note: rentNote(o.month),
     category: "",
+    // Marking a month paid counts toward that month, whatever date it's
+    // recorded on — September's rent paid on October 3rd is still September's.
+    appliesTo: o.month,
   };
 }
 
