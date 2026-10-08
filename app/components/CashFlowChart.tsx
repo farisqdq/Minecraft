@@ -3,6 +3,10 @@
 import { useState, type ReactNode } from "react";
 import styles from "./charts.module.css";
 
+/** The plot's height in px, and the least room an axis label needs. */
+const PLOT_HEIGHT = 176;
+const MIN_LABEL_GAP = 16;
+
 export type CashFlowPoint = { month: string; rent: number; expense: number };
 
 const money = new Intl.NumberFormat("en-US", {
@@ -93,16 +97,24 @@ export default function CashFlowChart({
   const zeroPct = (topMax / span) * 100;
 
   // Gridlines at the axis ends and their midpoints — four hairlines at most,
-  // which is enough to read a bar's height without fencing in the data.
+  // which is enough to read a bar's height without fencing in the data. Each
+  // is labelled only where its label has room: when one side dwarfs the
+  // other (a $40,000 month of rent over $1,500 of expenses) the small side is
+  // a sliver, and its labels would print on top of "$0". "$0" always shows;
+  // then the ends, then the midpoints, each only if it clears the others.
+  const candidates: { value: number; pct: number }[] = [];
+  if (topMax > 0) candidates.push({ value: topMax, pct: 0 });
+  if (bottomMax > 0) candidates.push({ value: -bottomMax, pct: 100 });
+  if (topMax > 0) candidates.push({ value: topMax / 2, pct: zeroPct / 2 });
+  if (bottomMax > 0) candidates.push({ value: -bottomMax / 2, pct: zeroPct + (100 - zeroPct) / 2 });
+  const placed = [zeroPct];
   const ticks: { value: number; pct: number; strong: boolean }[] = [];
-  if (topMax > 0) {
-    ticks.push({ value: topMax, pct: 0, strong: false });
-    ticks.push({ value: topMax / 2, pct: zeroPct / 2, strong: false });
+  for (const c of candidates) {
+    if (placed.some((p) => (Math.abs(p - c.pct) / 100) * PLOT_HEIGHT < MIN_LABEL_GAP)) continue;
+    placed.push(c.pct);
+    ticks.push({ ...c, strong: false });
   }
-  if (bottomMax > 0) {
-    ticks.push({ value: -bottomMax / 2, pct: zeroPct + (100 - zeroPct) / 2, strong: false });
-    ticks.push({ value: -bottomMax, pct: 100, strong: false });
-  }
+  ticks.sort((a, b) => a.pct - b.pct);
 
   const shown = hover === null ? null : data[hover];
   const readoutRent = shown ? shown.rent : totalRent;
@@ -170,7 +182,7 @@ export default function CashFlowChart({
 
         <div
           className={styles.plot}
-          style={{ height: 176 }}
+          style={{ height: PLOT_HEIGHT }}
           role="img"
           aria-label={`${projected ? "Expected cash flow" : "Cash flow"} from ${first} to ${last}. ${
             projected ? "Rent expected" : "Rent collected"

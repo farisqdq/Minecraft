@@ -102,16 +102,6 @@
   min-width: 0;
 }
 
-.who {
-  font-size: 12.5px;
-  color: var(--muted);
-  max-width: 160px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  text-decoration: none;
-}
-
 .signOut {
   flex: none;
   height: 32px;
@@ -425,13 +415,6 @@
   initial-value: 0px;
 }
 
-/* Tighter bar on laptops: the search shrinks, then the name goes. */
-@media (max-width: 1500px) and (min-width: 721px) {
-  .who {
-    display: none;
-  }
-}
-
 @media (max-width: 1240px) and (min-width: 721px) {
   .bar,
   .barInner {
@@ -467,7 +450,6 @@
 
 @media (max-width: 720px) {
   .nav,
-  .who,
   .searchHint {
     display: none;
   }
@@ -769,8 +751,8 @@
   text-align: center;
 }
 
-/* The way to Account & security. Always visible — on a phone the name next
-   to it is hidden, so this is the only way there. */
+/* The way to Account & security (account icon, then settings gear). Always
+   visible on every width. */
 .accountBtn {
   display: grid;
   place-items: center;
@@ -792,11 +774,6 @@
 .accountIcon {
   width: 16px;
   height: 16px;
-}
-
-a.who:hover {
-  color: var(--ink);
-  text-decoration: underline;
 }
 
 /* An admin's ninth section: icons only until there is clear room. */

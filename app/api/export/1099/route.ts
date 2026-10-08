@@ -27,6 +27,8 @@ export async function GET(req: Request) {
   const [company, vendors, payments, w9s] = await Promise.all([
     prisma.company.findUnique({ where: { id: companyId }, select: { name: true } }),
     prisma.vendor.findMany({ where: { companyId }, select: { id: true, name: true, taxClass: true } }),
+    // 1099s report what was actually PAID to a vendor in the calendar year,
+    // so this stays by payment date and ignores any spread.
     prisma.transaction.findMany({
       where: {
         type: "expense",

@@ -5,6 +5,7 @@ import { requireCompany } from "@/lib/access";
 import { EXPENSE_CATEGORIES } from "@/lib/categories";
 import { csvRow } from "@/lib/csv";
 import { balanceAt, yearTotals } from "@/lib/loans";
+import { taxYearLines } from "@/lib/tax-spread";
 import { accumulatedThrough, depreciationFor, normalizeClass, RECOVERY_YEARS } from "@/lib/depreciation";
 
 const fmt = (n: number) => n.toFixed(2);
@@ -26,11 +27,20 @@ export async function GET(req: Request) {
   const start = new Date(Date.UTC(year, 0, 1));
   const end = new Date(Date.UTC(year + 1, 0, 1));
 
-  const transactions = await prisma.transaction.findMany({
-    where: { property: { companyId }, date: { gte: start, lt: end } },
+  // Entries dated in the year, plus spread entries whose monthly shares can
+  // reach into it (an "applies to" start can sit well away from the date, so
+  // spread entries are not bounded by date; there are few of them). Unspread
+  // entries count by the date they were paid, whatever "applies to" says.
+  const fetched = await prisma.transaction.findMany({
+    where: {
+      property: { companyId },
+      OR: [{ date: { gte: start, lt: end } }, { spreadMonths: { not: null } }],
+    },
     include: { property: { select: { name: true } }, unit: { select: { name: true } } },
     orderBy: { date: "asc" },
   });
+  // Spread entries count by their shares falling in this year, as one line.
+  const transactions = taxYearLines(fetched, year);
 
   const rows: string[] = [];
   rows.push(csvRow(["Date", "Property", "Unit", "Type", "Category", "Description", "Note", "Amount"]));
@@ -67,7 +77,7 @@ export async function GET(req: Request) {
     }
     rows.push(
       csvRow([
-        t.date.toISOString().slice(0, 10),
+        t.day,
         t.property.name,
         t.unit?.name ?? "",
         isRent ? "Rent" : "Expense",
