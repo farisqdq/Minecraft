@@ -5,7 +5,7 @@ import type { ConfirmRequest } from "../../components/ConfirmDialog";
 import styles from "../dashboard.module.css";
 import s from "./admin-push.module.css";
 import { formatDay } from "@/lib/lease";
-import { PUSH_BODY_MAX, PUSH_LINK_MAX, PUSH_TITLE_MAX, checkCompose, type PushTarget } from "@/lib/push-rules";
+import { PUSH_BODY_MAX, PUSH_LINK_MAX, PUSH_TITLE_MAX, MAX_PUSH_TIMES, checkCompose, parsePushTimes, type PushTarget } from "@/lib/push-rules";
 import type { AdminDevice, AdminSnapshot } from "@/lib/admin-db";
 
 const day = (iso: string) => formatDay(iso.slice(0, 10));
@@ -19,7 +19,7 @@ function When({ iso }: { iso: string }) {
   return <>{text || " "}</>;
 }
 
-type Result = { id: string; device: string; who: string; sent: boolean; status?: number; error?: string; removed?: boolean };
+type Result = { id: string; device: string; who: string; sent: boolean; sentCount?: number; status?: number; error?: string; removed?: boolean };
 
 const targetValue = (t: PushTarget) => (t.kind === "everyone" ? "everyone" : t.kind === "device" ? `device:${t.id}` : `person:${t.owner}`);
 
@@ -51,9 +51,11 @@ export default function AdminPush({
   const [body, setBody] = useState("");
   const [link, setLink] = useState("");
   const [target, setTarget] = useState("everyone");
+  const [times, setTimes] = useState("1");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [results, setResults] = useState<Result[] | null>(null);
+  const [rounds, setRounds] = useState(1);
   const composeRef = useRef<HTMLDivElement>(null);
 
   const people = useMemo(() => {
@@ -97,16 +99,18 @@ export default function AdminPush({
     }
   }
 
-  async function doSend() {
+  async function doSend(count: number) {
     const t = targetFrom(target);
     setResults(null);
-    const json = await call("/api/admin/push", "POST", { title, body, link, target: t });
+    const json = await call("/api/admin/push", "POST", { title, body, link, target: t, times: count });
     if (!json) return;
     const r = (json.results as Result[]) ?? [];
     setResults(r);
+    setRounds(count);
     const sent = Number(json.sent ?? 0);
     const failed = Number(json.failed ?? 0);
-    toast(failed ? `Sent to ${sent}, ${failed} failed.` : `Sent to ${sent} device${sent === 1 ? "" : "s"}.`, failed && !sent ? "bad" : "good");
+    const what = count > 1 ? `${sent} notification${sent === 1 ? "" : "s"}` : `${sent} device${sent === 1 ? "" : "s"}`;
+    toast(failed ? `Sent ${sent}, ${failed} failed.` : `Sent to ${what}.`, failed && !sent ? "bad" : "good");
   }
 
   function send(e: React.FormEvent) {
@@ -116,19 +120,25 @@ export default function AdminPush({
       setError(check.error);
       return;
     }
+    const count = parsePushTimes(times);
+    if (!count) {
+      setError(`Send it from 1 to ${MAX_PUSH_TIMES} times.`);
+      return;
+    }
     if (targetFrom(target).kind === "everyone") {
+      const repeat = count > 1 ? `, ${count} times each` : "";
       confirm({
-        title: `Send to all ${devices.length} device${devices.length === 1 ? "" : "s"}?`,
-        body: `"${check.title}" goes to every landlord and tenant with notifications on.`,
+        title: `Send to all ${devices.length} device${devices.length === 1 ? "" : "s"}${count > 1 ? ` ${count} times` : ""}?`,
+        body: `"${check.title}" goes to every landlord and tenant with notifications on${repeat}.`,
         confirmLabel: "Send to everyone",
         onConfirm: () => {
           confirm(null);
-          void doSend();
+          void doSend(count);
         },
       });
       return;
     }
-    void doSend();
+    void doSend(count);
   }
 
   function remove(d: AdminDevice) {
@@ -205,7 +215,7 @@ export default function AdminPush({
               {body.length}/{PUSH_BODY_MAX}
             </span>
           </div>
-          <div className={`${styles.field} ${s.full}`}>
+          <div className={styles.field}>
             <label htmlFor="push-link">Link (optional)</label>
             <input
               id="push-link"
@@ -217,9 +227,22 @@ export default function AdminPush({
               inputMode="url"
             />
           </div>
+          <div className={styles.field}>
+            <label htmlFor="push-times">Times</label>
+            <input
+              id="push-times"
+              type="number"
+              min={1}
+              max={MAX_PUSH_TIMES}
+              step={1}
+              value={times}
+              onChange={(e) => setTimes(e.target.value)}
+              inputMode="numeric"
+            />
+          </div>
           <div className={`${s.sendRow} ${s.full}`}>
             <button type="submit" className={`${styles.btn} ${styles.accent}`} disabled={busy || devices.length === 0}>
-              {busy ? "Sending…" : "Send notification"}
+              {busy ? "Sending…" : Number(times) > 1 ? `Send ${Number(times)} times` : "Send notification"}
             </button>
             {error && (
               <span className={s.error} role="alert">
@@ -237,7 +260,13 @@ export default function AdminPush({
                   {r.sent ? "✓" : "✗"}
                 </span>
                 <span>
-                  <strong>{r.who}</strong> · {r.device} — {r.sent ? "sent" : `failed: ${r.error ?? "not sent"}`}
+                  <strong>{r.who}</strong> · {r.device} — {!r.sent
+                    ? `failed: ${r.error ?? "not sent"}`
+                    : rounds === 1
+                      ? "sent"
+                      : (r.sentCount ?? 1) < rounds
+                        ? `sent ${r.sentCount} of ${rounds} times${r.error ? ` — last failed: ${r.error}` : ""}`
+                        : `sent ${rounds} times`}
                 </span>
               </li>
             ))}

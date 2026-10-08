@@ -203,24 +203,17 @@ export function selectTargets<T extends TargetableDevice>(devices: T[], target: 
 }
 
 /**
- * Ten sends per admin in fifteen minutes is plenty for testing a phone;
- * three of them to everyone at once, because each one buzzes every tenant's
- * pocket. The ceiling is what stops a slipped finger (or a stolen admin
- * session) from spamming the whole site.
+ * How many times one send repeats. Each round goes to every chosen device
+ * in turn, so the ceiling keeps a broadcast inside the request's time limit.
  */
-export const MAX_PUSH_SENDS_PER_ADMIN = 10;
-export const MAX_PUSH_BROADCASTS_PER_ADMIN = 3;
+export const MAX_PUSH_TIMES = 50;
 
-/** Throttle keys for lib/throttle.ts, prefixed so they can never collide with sign-in keys. */
-export function adminPushKeys(adminId: string, target: PushTarget): { key: string; max: number }[] {
-  const keys = [{ key: `admin-push:by:${adminId}`, max: MAX_PUSH_SENDS_PER_ADMIN }];
-  if (target.kind === "everyone") keys.push({ key: `admin-push:all:${adminId}`, max: MAX_PUSH_BROADCASTS_PER_ADMIN });
-  return keys;
-}
-
-export function pushPausedMessage(seconds: number): string {
-  const minutes = Math.max(1, Math.ceil(seconds / 60));
-  return `That's enough notifications for now — try again in ${minutes} ${minutes === 1 ? "minute" : "minutes"}.`;
+/** The repeat count from a request: a whole number from 1 to MAX_PUSH_TIMES, 1 when left out. */
+export function parsePushTimes(raw: unknown): number | null {
+  if (raw === undefined || raw === null || raw === "") return 1;
+  const n = typeof raw === "string" ? Number(raw.trim()) : raw;
+  if (typeof n !== "number" || !Number.isInteger(n) || n < 1 || n > MAX_PUSH_TIMES) return null;
+  return n;
 }
 
 /** "3 sent, 1 failed" — for the audit log and the toast. */

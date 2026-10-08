@@ -1,7 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import {
-  adminPushKeys,
   base64UrlToBytes,
   checkCompose,
   checkPushLink,
@@ -13,8 +12,8 @@ import {
   sameApplicationServerKey,
   selectTargets,
   sendTally,
-  MAX_PUSH_BROADCASTS_PER_ADMIN,
-  MAX_PUSH_SENDS_PER_ADMIN,
+  parsePushTimes,
+  MAX_PUSH_TIMES,
 } from "../lib/push-rules.ts";
 import { describeAction, ADMIN_ACTIONS } from "../lib/admin.ts";
 
@@ -152,12 +151,18 @@ test("targets are read strictly from a request", () => {
   assert.equal(parsePushTarget("everyone"), null);
 });
 
-test("sends are rate-limited per admin, broadcasts more tightly", () => {
-  assert.deepEqual(adminPushKeys("a1", { kind: "device", id: "d1" }), [{ key: "admin-push:by:a1", max: MAX_PUSH_SENDS_PER_ADMIN }]);
-  assert.deepEqual(adminPushKeys("a1", { kind: "everyone" }), [
-    { key: "admin-push:by:a1", max: MAX_PUSH_SENDS_PER_ADMIN },
-    { key: "admin-push:all:a1", max: MAX_PUSH_BROADCASTS_PER_ADMIN },
-  ]);
+test("the repeat count is a whole number from 1 to the ceiling", () => {
+  assert.equal(parsePushTimes(undefined), 1);
+  assert.equal(parsePushTimes(""), 1);
+  assert.equal(parsePushTimes(1), 1);
+  assert.equal(parsePushTimes("5"), 5);
+  assert.equal(parsePushTimes(MAX_PUSH_TIMES), MAX_PUSH_TIMES);
+  assert.equal(parsePushTimes(MAX_PUSH_TIMES + 1), null);
+  assert.equal(parsePushTimes(0), null);
+  assert.equal(parsePushTimes(-2), null);
+  assert.equal(parsePushTimes(2.5), null);
+  assert.equal(parsePushTimes("abc"), null);
+  assert.equal(parsePushTimes({}), null);
 });
 
 test("the tally and the audit sentences", () => {
