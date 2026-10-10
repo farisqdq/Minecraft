@@ -17,6 +17,7 @@ import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
 import { waivedLateFeesFor } from "@/lib/late-fee-waivers-db"; // a21
 import { policyDTO } from "@/lib/statements";
 import DashboardSwitch from "../components/layouts/DashboardSwitch";
+import { packLedger } from "@/lib/ledger-pack";
 
 export default async function DashboardPage() {
   const me = await getCurrentUser();
@@ -55,10 +56,27 @@ export default async function DashboardPage() {
       where: { property: { companyId: { in: companyIds } }, active: true },
       orderBy: { createdAt: "asc" },
     }),
+    // Only the columns the overview reads. Attachments come separately
+    // below: joined here, Prisma fetches them by every entry's id, which on
+    // a few years of books is the slowest thing this page does.
     prisma.transaction.findMany({
       where: { property: { companyId: { in: companyIds } } },
       orderBy: { date: "desc" },
-      include: { attachments: { orderBy: { createdAt: "asc" } } },
+      select: {
+        id: true,
+        propertyId: true,
+        unitId: true,
+        type: true,
+        date: true,
+        amount: true,
+        detail: true,
+        note: true,
+        category: true,
+        appliesTo: true,
+        spreadMonths: true,
+        recurringExpenseId: true,
+        loanPaymentId: true,
+      },
     }),
     // The latest chase per tenant, so a row can say "Reminded 3 days ago"
     // instead of letting you do it twice before lunch.
@@ -93,6 +111,19 @@ export default async function DashboardPage() {
   });
   const lateFees: Record<string, number> = {};
   for (const r of lateFeeRows) lateFees[`${r.tenantId}|${r.month}`] = Math.round((r._sum.amount ?? 0) * 100) / 100;
+
+  // Proof on ledger entries, by entry, oldest first as before.
+  const attachmentRows = await prisma.attachment.findMany({
+    where: { transaction: { property: { companyId: { in: companyIds } } } },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, transactionId: true, filename: true, contentType: true },
+  });
+  const attachmentsByEntry = new Map<string, typeof attachmentRows>();
+  for (const a of attachmentRows) {
+    const list = attachmentsByEntry.get(a.transactionId);
+    if (list) list.push(a);
+    else attachmentsByEntry.set(a.transactionId, [a]);
+  }
 
   const loans = await loansWhere({ property: { companyId: { in: companyIds } }, active: true });
   // Open listings (a27), so an empty place can say it's listed and who applied.
@@ -177,28 +208,32 @@ export default async function DashboardPage() {
         tenantName: d.tenant.name,
         propertyId: d.tenant.propertyId,
       }))}
-      initialTransactions={transactions.map((t) => ({
-        id: t.id,
-        propertyId: t.propertyId,
-        unitId: t.unitId,
-        type: t.type as "rent" | "expense",
-        date: t.date.toISOString().slice(0, 10),
-        amount: t.amount,
-        detail: t.detail ?? "",
-        note: t.note ?? "",
-        category: t.category ?? "",
-        appliesTo: t.appliesTo,
-        spreadMonths: t.spreadMonths,
-        recurringExpenseId: t.recurringExpenseId,
-        loanPaymentId: t.loanPaymentId,
-        attachments: t.attachments.map((a) => ({
-          id: a.id,
-          transactionId: a.transactionId,
-          url: fileLink("attachment", a.id),
-          filename: a.filename,
-          contentType: a.contentType,
-        })),
-      }))}
+      // Packed for the trip (lib/ledger-pack); DashboardSwitch unpacks it
+      // into exactly what each layout was always given.
+      packedTransactions={packLedger(
+        transactions.map((t) => ({
+          id: t.id,
+          propertyId: t.propertyId,
+          unitId: t.unitId,
+          type: t.type as "rent" | "expense",
+          date: t.date.toISOString().slice(0, 10),
+          amount: t.amount,
+          detail: t.detail ?? "",
+          note: t.note ?? "",
+          category: t.category ?? "",
+          appliesTo: t.appliesTo,
+          spreadMonths: t.spreadMonths,
+          recurringExpenseId: t.recurringExpenseId,
+          loanPaymentId: t.loanPaymentId,
+          attachments: (attachmentsByEntry.get(t.id) ?? []).map((a) => ({
+            id: a.id,
+            transactionId: a.transactionId,
+            url: fileLink("attachment", a.id),
+            filename: a.filename,
+            contentType: a.contentType,
+          })),
+        }))
+      )}
     />
   );
 }
