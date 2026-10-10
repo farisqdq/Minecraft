@@ -503,6 +503,10 @@ Signed in, an owner sees, for their properties only:
   (deposit money kept at a move-out), expenses by category, net; per
   property and combined, with **Download PDF**. The PDF is a real text PDF
   (`lib/pdf-text.ts`, base-14 Helvetica, no dependencies).
+- **Returns** — each property as an investment, and all of theirs together:
+  value, equity, cap rate, cash-on-cash and total return (with IRR after a
+  year), worked out exactly as on the landlord's Returns page. Where a value
+  came from is shown; the note on it stays with the team.
 - **Account** — a switch for a monthly email when each statement is ready
   (goes out on the 2nd via the daily reminders run, once per owner per
   month), and **Sign out everywhere**.

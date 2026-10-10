@@ -8,13 +8,14 @@ import styles from "./owners.module.css";
 
 const TABS = [
   { href: "/owners", label: "Overview" },
-  // Short enough that all four fit across a phone without scrolling.
+  // Short enough that all five fit across a phone without scrolling.
   { href: "/owners/money", label: "Money" },
   { href: "/owners/statement", label: "Statement" },
+  { href: "/owners/returns", label: "Returns" },
   { href: "/owners/account", label: "Account" },
 ];
 
-/** The owner frame: a brand, four tabs, who you are, and the way out. */
+/** The owner frame: a brand, five tabs, who you are, and the way out. */
 export default function OwnerShell({ who, children }: { who: string; children: ReactNode }) {
   const pathname = usePathname() ?? "";
   const isOn = (href: string) => (href === "/owners" ? pathname === "/owners" : pathname.startsWith(href));

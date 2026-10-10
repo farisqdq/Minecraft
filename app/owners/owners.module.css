@@ -86,7 +86,7 @@
   color: var(--ink);
 }
 
-/* The tabs: four things an owner ever wants, in a row that fits a phone. */
+/* The tabs: five things an owner ever wants, in a row that fits a phone. */
 .tabs {
   display: flex;
   gap: 4px;
@@ -516,6 +516,18 @@
 
   .tabs {
     padding: 8px 16px 0;
+  }
+
+  /* Five tabs across a 375px phone: share the width rather than scroll. */
+  .tabs {
+    gap: 2px;
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+  .tab {
+    flex: 1 1 auto;
+    padding: 8px 4px;
+    text-align: center;
   }
 
   .main {
