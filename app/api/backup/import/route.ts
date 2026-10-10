@@ -16,6 +16,7 @@ import { REF_PATTERN } from "@/lib/bank-csv";
 import { parseAssetInput, type AssetInput } from "@/lib/depreciation";
 import { parsePurchaseInput, parseValuationInput, type Purchase, type ValuationInput } from "@/lib/returns";
 import { dateOf, latestDay } from "@/lib/returns-db";
+import { parseBackupInspections, type BackupInspection } from "@/lib/inspections";
 import { parseSettings, settingsToRow, type ReminderSettingsDTO } from "@/lib/reminders";
 import { parseLateFeeMode, parsePolicy, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
 
@@ -163,6 +164,8 @@ type CleanTenant = {
   at: number;
   /** Lease renewals (a25). */
   renewals: CleanRenewal[];
+  /** Move-in and move-out inspections (a32). */
+  inspections: BackupInspection[];
   moveOut: CleanMoveOut | null;
   notices: CleanNotice[];
   /** The conversation with them, and how far each side had read it. */
@@ -664,6 +667,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
         rules,
         lateFeeWaivers, // a21
         renewals, // a25
+        inspections: parseBackupInspections(t.inspections, acceptFile), // a32
         openingBalance: num(t.openingBalance),
         balanceFrom: /^\d{4}-\d{2}$/.test(str(t.balanceFrom, 7)) ? str(t.balanceFrom, 7) : null,
         name,
@@ -979,6 +983,7 @@ export async function POST(req: Request) {
     moveOuts: 0,
     assets: 0,
     valuations: 0,
+    inspections: 0,
     propertyOwners: 0,
   };
 
@@ -1116,7 +1121,7 @@ export async function POST(req: Request) {
   ) {
     const byName = new Map<string, string>();
     for (const t of tenants) {
-      const { notices, messages, messagesReadAt, charges, rules, moveOut, at, lateFeeWaivers, renewals, ...fields } = t;
+      const { notices, messages, messagesReadAt, charges, rules, moveOut, at, lateFeeWaivers, renewals, inspections, ...fields } = t;
       const row = await tx.tenant.create({
         data: { ...fields, propertyId, unitId, createdById: userId },
       });
@@ -1155,6 +1160,47 @@ export async function POST(req: Request) {
         await tx.leaseRenewal.createMany({
           data: renewals.map((r) => ({ ...r, tenantId: row.id, createdById: userId })),
         });
+      }
+      // Inspections (a32), each with its lines and their photos, signature as it was.
+      for (const insp of inspections) {
+        const made = await tx.inspection.create({
+          data: {
+            tenantId: row.id,
+            kind: insp.kind,
+            inspectedOn: new Date(`${insp.inspectedOn}T00:00:00Z`),
+            note: insp.note || null,
+            sharedAt: insp.sharedAt ? new Date(insp.sharedAt) : null,
+            acknowledgedAt: insp.acknowledgedAt ? new Date(insp.acknowledgedAt) : null,
+            acknowledgedName: insp.acknowledgedName || null,
+            tenantComment: insp.tenantComment || null,
+            createdById: userId,
+          },
+        });
+        created.inspections += 1;
+        for (const [position, item] of insp.items.entries()) {
+          const madeItem = await tx.inspectionItem.create({
+            data: {
+              inspectionId: made.id,
+              room: item.room,
+              name: item.name,
+              condition: item.condition,
+              note: item.note || null,
+              position,
+            },
+          });
+          if (item.photos.length > 0) {
+            await tx.inspectionPhoto.createMany({
+              data: item.photos.map((p) => ({
+                itemId: madeItem.id,
+                url: p.url,
+                pathname: new URL(p.url).pathname.replace(/^\//, ""),
+                filename: p.filename,
+                contentType: p.contentType,
+                size: p.size,
+              })),
+            });
+          }
+        }
       }
       // Late fee waivers (a21), before anything can work out a statement.
       if (lateFeeWaivers.length > 0) {

@@ -69,6 +69,8 @@ model User {
   moveOuts            MoveOut[]
   assetsAdded         DepreciableAsset[]
   valuationsAdded     PropertyValuation[]
+  inspectionsDone     Inspection[]
+  inspectionPhotos    InspectionPhoto[]
   adminActions        AdminLog[]
   passwordResets      PasswordReset[]
   pushSubscriptions   PushSubscription[]
@@ -291,6 +293,8 @@ model Tenant {
   renewals       LeaseRenewal[]
   /// The application they were approved from (a27), if any.
   applications   RentalApplication[]
+  /// Move-in and move-out inspections (a32).
+  inspections    Inspection[]
 
   // What they owed on the day you started keeping books here, and the first
   // month to charge rent for. Without these, a lease that began in 2023 and a
@@ -953,6 +957,65 @@ model PropertyValuation {
   createdAt   DateTime @default(now())
 
   @@index([propertyId])
+}
+
+// A walk-through of a tenant's place on the way in or out (a32): a
+// checklist of rooms and items with a condition, a note and photos each.
+// Shared with the tenant in the portal, who acknowledges it by typing their
+// name; from then on it can't be changed. See lib/inspections.ts.
+model Inspection {
+  id               String    @id @default(cuid())
+  tenantId         String
+  tenant           Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  /// "move_in" or "move_out".
+  kind             String
+  inspectedOn      DateTime
+  note             String?
+  sharedAt         DateTime?
+  acknowledgedAt   DateTime?
+  /// What the tenant typed as their signature.
+  acknowledgedName String?
+  /// Anything they see differently, in their words.
+  tenantComment    String?
+  createdById      String?
+  createdBy        User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt        DateTime  @default(now())
+
+  items InspectionItem[]
+
+  @@index([tenantId])
+}
+
+model InspectionItem {
+  id           String     @id @default(cuid())
+  inspectionId String
+  inspection   Inspection @relation(fields: [inspectionId], references: [id], onDelete: Cascade)
+  room         String
+  name         String
+  /// good, fair, poor, damaged, na — or "" when not yet checked.
+  condition    String     @default("")
+  note         String?
+  position     Int        @default(0)
+
+  photos InspectionPhoto[]
+
+  @@index([inspectionId])
+}
+
+model InspectionPhoto {
+  id           String         @id @default(cuid())
+  itemId       String
+  item         InspectionItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  url          String
+  pathname     String
+  filename     String
+  contentType  String
+  size         Int
+  uploadedById String?
+  uploadedBy   User?          @relation(fields: [uploadedById], references: [id], onDelete: SetNull)
+  createdAt    DateTime       @default(now())
+
+  @@index([itemId])
 }
 
 // What an admin did to whom. An admin can delete any account and rewrite any

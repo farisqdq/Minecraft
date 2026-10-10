@@ -148,7 +148,33 @@ function serializeLoans(rows: LoanRow[]) {
   }));
 }
 
+const INSPECTION_INCLUDE = {
+  orderBy: [{ inspectedOn: "asc" as const }, { createdAt: "asc" as const }],
+  include: {
+    items: {
+      orderBy: [{ position: "asc" as const }, { id: "asc" as const }],
+      include: { photos: { orderBy: { createdAt: "asc" as const } } },
+    },
+  },
+};
+
 type TenantRow = {
+  inspections?: {
+    kind: string;
+    inspectedOn: Date;
+    note: string | null;
+    sharedAt: Date | null;
+    acknowledgedAt: Date | null;
+    acknowledgedName: string | null;
+    tenantComment: string | null;
+    items: {
+      room: string;
+      name: string;
+      condition: string;
+      note: string | null;
+      photos: { url: string; filename: string; contentType: string; size: number }[];
+    }[];
+  }[];
   notices?: { kind: string; month: string | null; amount: number | null; body: string; createdAt: Date; readAt: Date | null }[];
   thread?: {
     tenantReadAt: Date | null;
@@ -332,6 +358,31 @@ function serializeTenants(rows: TenantRow[], key: FileKey) {
       note: r.note ?? "",
       sentAt: r.sentAt ? r.sentAt.toISOString() : "",
       createdAt: r.createdAt.toISOString(),
+    })),
+    // Move-in and move-out inspections (a32), signature and photos with
+    // them: the record a deposit deduction rests on is exactly what a
+    // backup is for. Photos are links, signed like every other file here.
+    inspections: (t.inspections ?? []).map((i) => ({
+      kind: i.kind,
+      inspectedOn: i.inspectedOn.toISOString().slice(0, 10),
+      note: i.note ?? "",
+      sharedAt: i.sharedAt ? i.sharedAt.toISOString() : "",
+      acknowledgedAt: i.acknowledgedAt ? i.acknowledgedAt.toISOString() : "",
+      acknowledgedName: i.acknowledgedName ?? "",
+      tenantComment: i.tenantComment ?? "",
+      items: i.items.map((it) => ({
+        room: it.room,
+        name: it.name,
+        condition: it.condition,
+        note: it.note ?? "",
+        photos: it.photos.map((p) => ({
+          url: p.url,
+          key: key(p.url),
+          filename: p.filename,
+          contentType: p.contentType,
+          size: p.size,
+        })),
+      })),
     })),
     lateFeeWaivers: (t.lateFeeWaivers ?? []).map((w) => ({
       month: w.month,
@@ -559,6 +610,7 @@ export async function GET() {
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
               lateFeeWaivers: { orderBy: { month: "asc" } }, // a21
               renewals: { orderBy: { createdAt: "asc" } }, // a25
+              inspections: INSPECTION_INCLUDE, // a32
             },
           },
           rentChanges: { where: { unitId: null }, orderBy: { effectiveFrom: "asc" } },
@@ -588,6 +640,7 @@ export async function GET() {
               rules: { orderBy: { createdAt: "asc" }, include: { runs: { orderBy: { month: "asc" } } } },
               lateFeeWaivers: { orderBy: { month: "asc" } }, // a21
               renewals: { orderBy: { createdAt: "asc" } }, // a25
+              inspections: INSPECTION_INCLUDE, // a32
                 },
               },
               rentChanges: { orderBy: { effectiveFrom: "asc" } },

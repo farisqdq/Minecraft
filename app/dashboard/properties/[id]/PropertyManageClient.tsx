@@ -20,6 +20,8 @@ import DepreciationPanel from "../../../components/DepreciationPanel";
 import type { AssetDTO } from "@/lib/assets-db";
 import ReturnsPanel from "../../../components/ReturnsPanel"; // investment returns (a31)
 import type { Purchase, Valuation } from "@/lib/returns";
+import { KIND_LABEL, type InspectionKind } from "@/lib/inspections"; // inspections (a32)
+import type { InspectionSummary } from "@/lib/inspections-db";
 import { MarkReturnedDialog, MoveOutDialog, MoveOutSummary } from "../../../components/MoveOut";
 import { RenewDialog } from "../../../components/RenewLease"; // lease renewals (a25)
 import type { RenewalDTO } from "@/lib/renewals-db";
@@ -150,6 +152,7 @@ export default function PropertyManageClient({
   initialAssets,
   initialPurchase,
   initialValuations,
+  inspections = {},
   storageReady,
   rentChanges: initialRentChanges,
   transactions: initialTransactions,
@@ -185,6 +188,8 @@ export default function PropertyManageClient({
   initialPurchase: Purchase;
   /** What it's been worth since, oldest first (a31). */
   initialValuations: Valuation[];
+  /** Move-in and move-out inspections by tenant id, oldest first (a32). */
+  inspections?: Record<string, InspectionSummary[]>;
   storageReady: boolean;
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
@@ -591,6 +596,24 @@ export default function PropertyManageClient({
   }, []);
   const [returningFor, setReturningFor] = useState("");
   const [statementFor, setStatementFor] = useState<TenantDTO | null>(null);
+
+  // Starting an inspection (a32) lands on its checklist; there's nothing to fill in first.
+  const [inspectionBusy, setInspectionBusy] = useState("");
+  async function startInspection(t: TenantDTO, kind: InspectionKind) {
+    setInspectionBusy(t.id);
+    const res = await fetch(`/api/tenants/${t.id}/inspections`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kind, inspectedOn: todayKey }),
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+      setInspectionBusy("");
+      push(data?.error || "Couldn't start that.", "bad");
+      return;
+    }
+    router.push(`/dashboard/inspections/${data.id}`);
+  }
 
   const [portal, setPortal] = useState<Record<string, PortalAccess>>(initialPortal);
   const [portalBusy, setPortalBusy] = useState("");
@@ -1655,6 +1678,42 @@ export default function PropertyManageClient({
                   })()}
 
                   {t.active && renewals[t.id] && renewalLine(t, renewals[t.id])}
+
+                  {((inspections[t.id]?.length ?? 0) > 0 || !viewOnly) && (
+                    <div className={styles.portalRow}>
+                      <span className={styles.portalWho}>
+                        {(inspections[t.id] ?? []).length === 0
+                          ? "No inspection on file — a move-in record is what a deposit deduction rests on."
+                          : (inspections[t.id] ?? []).map((i, n) => (
+                              <span key={i.id}>
+                                {n > 0 ? " · " : ""}
+                                <Link className={styles.portalLink} href={`/dashboard/inspections/${i.id}`}>
+                                  {KIND_LABEL[i.kind].replace(" inspection", "")} {formatDay(i.inspectedOn)}
+                                </Link>{" "}
+                                {i.status === "acknowledged"
+                                  ? "(signed)"
+                                  : i.status === "shared"
+                                    ? "(awaiting tenant)"
+                                    : `(${i.progress.checked}/${i.progress.total} checked)`}
+                              </span>
+                            ))}
+                      </span>
+                      {!viewOnly && (
+                        <button
+                          type="button"
+                          className={styles.portalLink}
+                          disabled={inspectionBusy === t.id}
+                          onClick={() => startInspection(t, (inspections[t.id] ?? []).some((i) => i.kind === "move_in") || !t.active ? "move_out" : "move_in")}
+                        >
+                          {inspectionBusy === t.id
+                            ? "Starting\u2026"
+                            : (inspections[t.id] ?? []).some((i) => i.kind === "move_in") || !t.active
+                              ? "+ Move-out inspection"
+                              : "+ Move-in inspection"}
+                        </button>
+                      )}
+                    </div>
+                  )}
 
                   {!viewOnly && <div className={styles.propActions}>
                     {/* The commonest reason to be looking at a tenant: they

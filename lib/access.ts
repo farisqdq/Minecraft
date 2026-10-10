@@ -159,6 +159,17 @@ export async function requireAsset(userId: string, assetId: string, role: Role =
   return membership ? asset : null;
 }
 
+/** An inspection of a tenant's place the user can reach (a32), with its tenant and property. */
+export async function requireInspection(userId: string, inspectionId: string, role: Role = "member") {
+  const inspection = await prisma.inspection.findUnique({
+    where: { id: inspectionId },
+    include: { tenant: { include: { property: true } } },
+  });
+  if (!inspection) return null;
+  const membership = await requireCompany(userId, inspection.tenant.property.companyId, role);
+  return membership ? inspection : null;
+}
+
 /** A valuation of a property the user can reach (a31). */
 export async function requireValuation(userId: string, valuationId: string, role: Role = "member") {
   const valuation = await prisma.propertyValuation.findUnique({ where: { id: valuationId }, include: { property: true } });

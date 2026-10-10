@@ -34,12 +34,16 @@ export async function logAdmin(
  * else references: rows cascade on their own, blobs don't.
  */
 export async function companyFileUrls(db: Db, companyId: string): Promise<string[]> {
-  const [attachments, documents, photos] = await Promise.all([
+  const [attachments, documents, photos, inspectionPhotos] = await Promise.all([
     db.attachment.findMany({ where: { transaction: { property: { companyId } } }, select: { url: true } }),
     db.document.findMany({ where: { companyId }, select: { url: true } }),
     db.maintenancePhoto.findMany({ where: { request: { property: { companyId } } }, select: { url: true } }),
+    db.inspectionPhoto.findMany({
+      where: { item: { inspection: { tenant: { property: { companyId } } } } },
+      select: { url: true },
+    }),
   ]);
-  return [...attachments, ...documents, ...photos].map((f) => f.url);
+  return [...attachments, ...documents, ...photos, ...inspectionPhotos].map((f) => f.url);
 }
 
 export type AdminAccount = {

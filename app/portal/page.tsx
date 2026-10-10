@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { requireTenantSession } from "@/lib/tenant-access";
@@ -10,6 +11,7 @@ import { requestInclude, serializeRequest } from "@/lib/requests";
 import { statementForTenant } from "@/lib/statements";
 import { monthName } from "@/lib/notices";
 import { threadForTenant } from "@/lib/messages-db";
+import { KIND_LABEL, normalizeKind } from "@/lib/inspections";
 import PortalShell from "./PortalShell";
 import PortalRequests from "./PortalRequests";
 import PortalNotices from "./PortalNotices";
@@ -68,6 +70,13 @@ export default async function PortalHome() {
   // with the company's name inside threadForTenant.
   const thread = await threadForTenant(tenant.id, "tenant");
 
+  // Inspections the landlord has shared with them (a32), newest first.
+  const inspections = await prisma.inspection.findMany({
+    where: { tenantId: tenant.id, sharedAt: { not: null } },
+    select: { id: true, kind: true, inspectedOn: true, acknowledgedAt: true },
+    orderBy: { inspectedOn: "desc" },
+  });
+
   const status = leaseStatus(
     {
       active: tenant.active,
@@ -109,6 +118,21 @@ export default async function PortalHome() {
           thing — words from the landlord — and a reply belongs beside them. */}
       {thread && (
         <PortalMessages initial={thread} storageReady={blobConfigured()} serverNow={new Date().toISOString()} />
+      )}
+
+      {inspections.length > 0 && (
+        <section className={styles.card} id="inspections">
+          <h2>Inspections</h2>
+          <div className={styles.contactRow} style={{ flexDirection: "column", alignItems: "stretch" }}>
+            {inspections.map((i) => (
+              <Link key={i.id} className={styles.contactBtn} href={`/portal/inspections/${i.id}`}>
+                {KIND_LABEL[normalizeKind(i.kind) ?? "move_in"]} · {formatDay(i.inspectedOn.toISOString().slice(0, 10))}
+                {" — "}
+                {i.acknowledgedAt ? "acknowledged" : "please review and acknowledge"}
+              </Link>
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Reporting next. It is the reason a tenant has this login at all, and

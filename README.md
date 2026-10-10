@@ -309,6 +309,38 @@ they're current again. It's refused if someone else now lives there. The
 income and charges can't be deleted on their own from the ledger or the
 statement, for the same reason as a mortgage payment's parts.
 
+### Move-in and move-out inspections
+
+A deposit deduction is only as good as the evidence for it. "The carpet was
+ruined" is an argument; "the carpet was Good on the move-in report the tenant
+signed, and here it is now" isn't. Each tenant's card has **+ Move-in
+inspection** (and, once there is one or they've moved out, **+ Move-out
+inspection**), which opens a checklist of rooms and items: entry and living
+room, kitchen, bathroom, bedroom and the whole place (smoke and CO detectors,
+heating, water heater, keys). Rename or remove rooms, add your own lines
+("Bedroom 2 · Ceiling fan"), and for each line pick **Good / Fair / Poor /
+Damaged / N/A**, add a note and photos. Everything saves as you tap, so a
+walk-through done on a phone survives a dropped connection; rapid taps on
+the same line always end on the last one. Photos go to private storage and
+open only for your team and, once shared, that tenant.
+
+**Share with tenant** puts it in their portal and says so in their Messages
+thread (which emails and pushes them). They read it room by room, write
+anything they see differently, and **acknowledge** it by typing their name.
+That signature, the moment and their note are kept with the report, their
+note also lands in Messages — and from then on the report can't be changed
+by anyone: every edit is refused, and only an owner can delete it. A tenant
+without a portal login (or one who has already moved out and lost it) signs
+the **Printable report** on paper instead.
+
+A move-out inspection starts from the tenant's move-in, line for line, and
+shows each line's move-in condition, note and photos beside it. Lines that
+got worse are tinted and listed at the top — "Kitchen · Floors: Good →
+Damaged" — which is exactly what a deposit deduction rests on. The printable
+move-out report has Move-in and Now columns side by side.
+
+Inspections, their photos and signatures are in backups.
+
 ### Listing an empty place, and applications
 
 A vacancy is the costliest line on a rent roll, and the app used to stop at

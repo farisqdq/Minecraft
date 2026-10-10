@@ -18,6 +18,7 @@ import { loansWhere } from "@/lib/loans-db";
 import { moveOutInclude, serializeMoveOut } from "@/lib/move-outs-db";
 import { serializeAsset } from "@/lib/assets-db";
 import { purchaseOf, serializeValuation } from "@/lib/returns-db";
+import { summariesFor } from "@/lib/inspections-db";
 import PropertyManageClient from "./PropertyManageClient";
 
 // Enough to see the shape of a place's troubles without turning the page
@@ -79,6 +80,8 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   ]);
 
   const balances = await balancesForTenants(tenants.map((t) => t.id));
+  // Move-in and move-out inspections per tenant (a32), for the line on their card.
+  const inspections = await summariesFor(tenants.map((t) => t.id));
   // The property's own documents and its tenants' — both carry its id.
   const documents = await documentsWhere({ propertyId: property.id });
   const loans = await loansWhere({ propertyId: property.id });
@@ -147,6 +150,7 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       initialLoans={loans}
       initialAssets={assets.map(serializeAsset)}
       initialPurchase={purchaseOf(property)}
+      inspections={inspections}
       initialValuations={valuations.map(serializeValuation)}
       initialMoveOuts={Object.fromEntries(moveOuts.map((m) => [m.tenantId, serializeMoveOut(m)]))}
       unreadMessages={unreadMessages}

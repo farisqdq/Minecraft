@@ -24,11 +24,12 @@ export async function releaseBlob(url: string): Promise<boolean> {
 
 /** How many rows, in any account, still link to this stored file. */
 export async function blobReferences(url: string): Promise<number> {
-  const [attachments, photos, documents, messageFiles] = await Promise.all([
+  const [attachments, photos, documents, messageFiles, inspectionPhotos] = await Promise.all([
     prisma.attachment.count({ where: { url } }),
     prisma.maintenancePhoto.count({ where: { url } }),
     prisma.document.count({ where: { url } }),
     prisma.messageAttachment.count({ where: { url } }),
+    prisma.inspectionPhoto.count({ where: { url } }),
   ]);
-  return attachments + photos + documents + messageFiles;
+  return attachments + photos + documents + messageFiles + inspectionPhotos;
 }

@@ -1,0 +1,143 @@
+/* The inspection as a document (a32): paper-coloured in either theme, laid
+   out to print, as the move-out statement is. */
+
+.sheet {
+  max-width: 820px;
+  margin: 0 auto;
+  background: #fff;
+  color: #0f172a;
+  border-radius: 6px;
+  box-shadow: var(--shadow-lg);
+  padding: 48px 56px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.letterhead {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+}
+.from {
+  display: flex;
+  flex-direction: column;
+}
+.muted {
+  color: #64748b;
+}
+
+.sheet h1 {
+  font-size: 22px;
+  margin: 28px 0 4px;
+}
+.facts {
+  margin: 0 0 20px;
+  color: #334155;
+}
+
+.room {
+  margin-top: 20px;
+  break-inside: auto;
+}
+.room h2 {
+  font-size: 15px;
+  margin: 0 0 4px;
+  padding-bottom: 4px;
+  border-bottom: 2px solid #0f172a;
+}
+
+.items {
+  width: 100%;
+  border-collapse: collapse;
+}
+.items th {
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  padding: 6px 8px 4px 0;
+}
+.items td {
+  padding: 7px 8px 7px 0;
+  border-bottom: 1px solid #e2e8f0;
+  vertical-align: top;
+}
+.items tr {
+  break-inside: avoid;
+}
+.cond {
+  white-space: nowrap;
+  font-weight: 600;
+}
+.bad {
+  color: #b91c1c;
+}
+.unchecked {
+  color: #94a3b8;
+  font-weight: 400;
+}
+.worse td {
+  background: #fef2f2;
+}
+
+.photos {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.photos img {
+  width: 120px;
+  height: 90px;
+  object-fit: cover;
+  border-radius: 4px;
+  border: 1px solid #e2e8f0;
+}
+
+.ack {
+  margin-top: 28px;
+  padding: 14px 16px;
+  border: 1px solid #86efac;
+  background: #f0fdf4;
+  border-radius: 6px;
+}
+.ack p {
+  margin: 4px 0 0;
+}
+
+.signatures {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 40px;
+  margin-top: 56px;
+}
+.sign {
+  padding-top: 8px;
+  border-top: 1px solid #0f172a;
+  font-size: 13px;
+  color: #334155;
+}
+
+@media (max-width: 600px) {
+  .sheet {
+    padding: 24px 16px;
+  }
+  .photos img {
+    width: 88px;
+    height: 66px;
+  }
+  .signatures {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media print {
+  .sheet {
+    box-shadow: none;
+    padding: 0;
+    max-width: none;
+  }
+}
