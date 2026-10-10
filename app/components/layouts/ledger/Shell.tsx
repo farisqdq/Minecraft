@@ -17,6 +17,7 @@ import {
   IconBuilding,
   IconCalendar,
   IconTrend,
+  IconCar,
   IconChevronDown,
   IconDownload,
   IconFolder,
@@ -60,6 +61,7 @@ function secondary(admin: boolean): NavItem[] {
   return [
     { href: "/dashboard/calendar", label: "Calendar", Icon: IconCalendar },
     { href: "/dashboard/returns", label: "Returns", Icon: IconTrend },
+    { href: "/dashboard/mileage", label: "Mileage", Icon: IconCar },
     { href: "/dashboard/team", label: "Team", Icon: IconUsers },
     { href: "/dashboard/reminders", label: "Reminders", Icon: IconBell },
     { href: "/dashboard/backup", label: "Backup", Icon: IconArchive },

@@ -599,6 +599,7 @@ export async function GET() {
           loans: { orderBy: { createdAt: "asc" }, include: { payments: { orderBy: { month: "asc" } } } },
           assets: { orderBy: { createdAt: "asc" } },
           valuations: { orderBy: [{ asOf: "asc" }, { createdAt: "asc" }] }, // a31
+          trips: { orderBy: [{ date: "asc" }, { createdAt: "asc" }] }, // a33
           tenants: {
             where: { unitId: null },
             orderBy: { createdAt: "asc" },
@@ -706,6 +707,13 @@ export async function GET() {
           asOf: v.asOf.toISOString().slice(0, 10),
           source: v.source ?? "",
           note: v.note ?? "",
+        })),
+        // The mileage log (a33): a deduction that exists nowhere else.
+        trips: p.trips.map((t) => ({
+          date: t.date.toISOString().slice(0, 10),
+          miles: t.miles,
+          purpose: t.purpose,
+          note: t.note ?? "",
         })),
         tenants: serializeTenants(p.tenants, key),
         rentChanges: serializeRentChanges(p.rentChanges),

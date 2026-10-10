@@ -905,11 +905,30 @@ tests. Each year is the difference of two rounded running totals, so a
 schedule adds up to exactly its basis. It is deliberately not in the
 overview's profit, which is money in and out; it is on the tax export.
 
+**Mileage.** Driving to a rental for its business — a repair, a showing, a
+run for supplies — is deductible on Schedule E (line 6, auto and travel) at
+the IRS standard mileage rate, and needs a log kept at the time: date,
+where, why, how far. The **Mileage** page is that log. Pick the property
+(it remembers how far the last trip there was), the miles there and back,
+and what it was for; **Again today** logs any past trip again in one tap,
+and each property page has **Log a trip**. The rate is the one in force on
+the day of the trip — the IRS sometimes changes it mid-year (July 1, 2022,
+and July 1, 2026: 72.5¢ to 76¢), so the table in `lib/mileage.ts` is by
+date. A year whose rate isn't in that table yet uses the latest one and says
+so. The year's deduction multiplies each rate's total miles once, per
+property, and the LLC's is the sum of its properties'. No money moves, so
+trips aren't in the ledger or the overview's profit; they're on the tax
+export, below. The standard rate can't be used for a car whose actual costs
+or depreciation are deducted; parking and tolls go in the ledger as
+expenses. Trips are in backups.
+
 **Tax-year export.** The **Export** page downloads a CSV for one LLC and
 one year — every transaction, a summary totalling rental income and each
 expense category, and, when the LLC owns more than one house, the same
 breakdown per property. Schedule E is filled in per property, so that last
-block is the one an accountant actually wants. A final block lists each mortgage's
+block is the one an accountant actually wants. Mileage adds an auto-and-travel line
+(Schedule E line 6), per property too, and a final block listing every
+trip with its rate and deduction — the log itself. A final block lists each mortgage's
 interest, escrow and principal for the year and its balance at year end —
 the interest line is the one to check against the lender's Form 1098. When anything is being depreciated, the summary
 gains a depreciation line (Schedule E line 18) and a net after depreciation,

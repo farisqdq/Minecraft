@@ -170,6 +170,14 @@ export async function requireInspection(userId: string, inspectionId: string, ro
   return membership ? inspection : null;
 }
 
+/** A logged trip to a property the user can reach (a33). */
+export async function requireTrip(userId: string, tripId: string, role: Role = "member") {
+  const trip = await prisma.trip.findUnique({ where: { id: tripId }, include: { property: true } });
+  if (!trip) return null;
+  const membership = await requireCompany(userId, trip.property.companyId, role);
+  return membership ? trip : null;
+}
+
 /** A valuation of a property the user can reach (a31). */
 export async function requireValuation(userId: string, valuationId: string, role: Role = "member") {
   const valuation = await prisma.propertyValuation.findUnique({ where: { id: valuationId }, include: { property: true } });

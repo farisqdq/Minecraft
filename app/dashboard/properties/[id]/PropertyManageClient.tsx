@@ -1290,6 +1290,10 @@ export default function PropertyManageClient({
       actions={
         viewOnly ? undefined : (
           <>
+            {/* Driving here for its business is deductible (a33). */}
+            <Link className={styles.btn} href={`/dashboard/mileage?property=${property.id}`}>
+              Log a trip
+            </Link>
             <button type="button" className={styles.btn} onClick={() => openTenant()}>
               + Add a tenant
             </button>

@@ -17,6 +17,7 @@ import { parseAssetInput, type AssetInput } from "@/lib/depreciation";
 import { parsePurchaseInput, parseValuationInput, type Purchase, type ValuationInput } from "@/lib/returns";
 import { dateOf, latestDay } from "@/lib/returns-db";
 import { parseBackupInspections, type BackupInspection } from "@/lib/inspections";
+import { parseTripInput, type TripInput } from "@/lib/mileage";
 import { parseSettings, settingsToRow, type ReminderSettingsDTO } from "@/lib/reminders";
 import { parseLateFeeMode, parsePolicy, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
 
@@ -236,6 +237,8 @@ type CleanProperty = {
   /** a31; all null in a backup from before it. */
   purchase: Purchase;
   valuations: ValuationInput[];
+  /** The mileage log (a33). */
+  trips: TripInput[];
   tenants: CleanTenant[];
   rentChanges: CleanRentChange[];
   requests: CleanRequest[];
@@ -875,6 +878,11 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           const parsed = parseValuationInput(raw, restoreDay);
           return parsed.ok ? [parsed.value] : [];
         }),
+        // The same checks as the log's form (a33).
+        trips: (Array.isArray(p.trips) ? p.trips : []).slice(0, 5000).flatMap((raw) => {
+          const parsed = parseTripInput(raw, restoreDay);
+          return parsed.ok ? [parsed.value] : [];
+        }),
         tenants: parseTenants(p.tenants),
         rentChanges: parseRentChanges(p.rentChanges),
         requests: parseRequests(p.requests),
@@ -984,6 +992,7 @@ export async function POST(req: Request) {
     assets: 0,
     valuations: 0,
     inspections: 0,
+    trips: 0,
     propertyOwners: 0,
   };
 
@@ -1440,6 +1449,19 @@ export async function POST(req: Request) {
             })),
           });
           created.valuations += property.valuations.length;
+        }
+        if (property.trips.length > 0) {
+          await tx.trip.createMany({
+            data: property.trips.map((t) => ({
+              propertyId: prop.id,
+              date: dateOf(t.date),
+              miles: t.miles,
+              purpose: t.purpose,
+              note: t.note || null,
+              createdById: userId,
+            })),
+          });
+          created.trips += property.trips.length;
         }
         propertyIdsByPosition.push(prop.id);
 

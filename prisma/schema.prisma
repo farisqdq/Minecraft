@@ -71,6 +71,7 @@ model User {
   valuationsAdded     PropertyValuation[]
   inspectionsDone     Inspection[]
   inspectionPhotos    InspectionPhoto[]
+  tripsLogged         Trip[]
   adminActions        AdminLog[]
   passwordResets      PasswordReset[]
   pushSubscriptions   PushSubscription[]
@@ -165,6 +166,7 @@ model Property {
   loans             Loan[]
   assets            DepreciableAsset[]
   valuations        PropertyValuation[]
+  trips             Trip[]
   ownerAccess       PropertyOwnerAccess[]
   listings          Listing[]
 
@@ -1016,6 +1018,27 @@ model InspectionPhoto {
   createdAt    DateTime       @default(now())
 
   @@index([itemId])
+}
+
+// A drive to a property for its business — a repair, a showing, supplies —
+// deducted at the IRS standard mileage rate in force that day (a33). No
+// money moves, so it's on the tax export, not in the ledger. See
+// lib/mileage.ts.
+model Trip {
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  date        DateTime
+  /// There and back, to a tenth of a mile.
+  miles       Float
+  /// Why: the IRS accepts a mileage log only with a reason for each trip.
+  purpose     String
+  note        String?
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId, date])
 }
 
 // What an admin did to whom. An admin can delete any account and rewrite any

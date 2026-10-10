@@ -7,6 +7,7 @@ import { csvRow } from "@/lib/csv";
 import { balanceAt, yearTotals } from "@/lib/loans";
 import { taxYearLines } from "@/lib/tax-spread";
 import { accumulatedThrough, depreciationFor, normalizeClass, RECOVERY_YEARS } from "@/lib/depreciation";
+import { deductionFor, rateOn, yearSummary } from "@/lib/mileage";
 
 const fmt = (n: number) => n.toFixed(2);
 
@@ -51,12 +52,12 @@ export async function GET(req: Request) {
 
   // Schedule E is filled in per property — a column each — so the summary
   // below carries the same breakdown rather than only an LLC-wide total.
-  type PropertyTotals = { rent: number; expenses: Map<string, number>; expenseTotal: number; depreciation: number };
+  type PropertyTotals = { rent: number; expenses: Map<string, number>; expenseTotal: number; depreciation: number; mileage: number };
   const byProperty = new Map<string, PropertyTotals>();
   const propertyFor = (name: string) => {
     let totals = byProperty.get(name);
     if (!totals) {
-      totals = { rent: 0, expenses: new Map(), expenseTotal: 0, depreciation: 0 };
+      totals = { rent: 0, expenses: new Map(), expenseTotal: 0, depreciation: 0, mileage: 0 };
       byProperty.set(name, totals);
     }
     return totals;
@@ -113,6 +114,35 @@ export async function GET(req: Request) {
   }
   const depreciationTotal = depreciationCents / 100;
 
+  // Mileage (a33): drives to the properties at the IRS standard rate in
+  // force each day — Schedule E line 6. No money moved, so like
+  // depreciation it isn't in the ledger; per property, and the LLC's total
+  // is exactly the sum of its properties'.
+  const trips = await prisma.trip.findMany({
+    where: { property: { companyId }, date: { gte: start, lt: end } },
+    include: { property: { select: { name: true } } },
+    orderBy: [{ date: "asc" }, { createdAt: "asc" }],
+  });
+  const tripLines = trips.map((t) => ({
+    propertyId: t.propertyId,
+    name: t.property.name,
+    date: t.date.toISOString().slice(0, 10),
+    miles: t.miles,
+    purpose: t.purpose,
+  }));
+  const mileage = yearSummary(tripLines, year);
+  for (const [propertyId, d] of mileage.byProperty) {
+    const name = tripLines.find((t) => t.propertyId === propertyId)!.name;
+    propertyFor(name).mileage = d.amount;
+  }
+  const mileageTotal = mileage.amount;
+  const afterLabel =
+    mileageTotal > 0 && depreciationTotal > 0
+      ? "Net after mileage and depreciation"
+      : mileageTotal > 0
+        ? "Net after mileage"
+        : "Net after depreciation";
+
   rows.push("\r\n");
   rows.push(csvRow(["Summary", String(year)]));
   rows.push(csvRow(["Rental Income", fmt(rentTotal)]));
@@ -122,9 +152,14 @@ export async function GET(req: Request) {
   }
   rows.push(csvRow(["Total Expenses", fmt(-expenseTotal)]));
   rows.push(csvRow(["Net Profit", fmt(rentTotal - expenseTotal)]));
+  if (mileageTotal > 0) {
+    rows.push(csvRow([`Auto and travel, standard mileage, ${mileage.miles} mi (Schedule E line 6)`, fmt(-mileageTotal)]));
+  }
   if (depreciationTotal > 0) {
     rows.push(csvRow(["Depreciation (Schedule E line 18)", fmt(-depreciationTotal)]));
-    rows.push(csvRow(["Net after depreciation", fmt(rentTotal - expenseTotal - depreciationTotal)]));
+  }
+  if (mileageTotal > 0 || depreciationTotal > 0) {
+    rows.push(csvRow([afterLabel, fmt(rentTotal - expenseTotal - mileageTotal - depreciationTotal)]));
   }
 
   // Per-property columns, in the order they appear in the ledger. A category
@@ -150,6 +185,9 @@ export async function GET(req: Request) {
     rows.push(
       csvRow(["Total Expenses", "", ...propertyNames.map((n) => fmt(-byProperty.get(n)!.expenseTotal))])
     );
+    if (mileageTotal > 0) {
+      rows.push(csvRow(["Auto and travel (mileage)", "", ...propertyNames.map((n) => fmt(-byProperty.get(n)!.mileage))]));
+    }
     if (depreciationTotal > 0) {
       rows.push(
         csvRow(["Depreciation", "", ...propertyNames.map((n) => fmt(-byProperty.get(n)!.depreciation))])
@@ -165,14 +203,14 @@ export async function GET(req: Request) {
         }),
       ])
     );
-    if (depreciationTotal > 0) {
+    if (mileageTotal > 0 || depreciationTotal > 0) {
       rows.push(
         csvRow([
-          "Net after depreciation",
+          afterLabel,
           "",
           ...propertyNames.map((n) => {
             const totals = byProperty.get(n)!;
-            return fmt(totals.rent - totals.expenseTotal - totals.depreciation);
+            return fmt(totals.rent - totals.expenseTotal - totals.mileage - totals.depreciation);
           }),
         ])
       );
@@ -211,6 +249,24 @@ export async function GET(req: Request) {
           fmt(taken),
         ])
       );
+    }
+  }
+
+  // The mileage log itself: date, where, why, how far — what the IRS asks a
+  // log to show, so this block can be handed over as the record.
+  if (tripLines.length > 0) {
+    rows.push("\r\n");
+    rows.push(csvRow(["Mileage log", String(year), "Property", "Purpose", "Miles", "Rate (cents/mi)", "Deduction"]));
+    for (const t of tripLines) {
+      rows.push(
+        csvRow([t.date, "", t.name, t.purpose, String(t.miles), String(rateOn(t.date)?.cents ?? ""), fmt(deductionFor([t]).amount)])
+      );
+    }
+    for (const r of deductionFor(tripLines).byRate) {
+      rows.push(csvRow([`Total at ${r.cents} cents (from ${r.from})`, "", "", "", String(r.miles), String(r.cents), fmt(r.amount)]));
+    }
+    if (mileage.unpublished) {
+      rows.push(csvRow([`The IRS rate for ${year} wasn't known when this was made; the latest known rate is used.`]));
     }
   }
 

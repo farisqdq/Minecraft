@@ -218,6 +218,16 @@ export const IconReceipt = make("IconReceipt", (
   </>
 ));
 
+/** A car: the mileage log (a33). */
+export const IconCar = make("IconCar", (
+  <>
+    <path d="M5 16.5h14" />
+    <path d="M6.5 16.5V18a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-4.5L6 9h12l2 4.5V18a1 1 0 0 1-1 1h-.5a1 1 0 0 1-1-1v-1.5" />
+    <path d="M7.5 9 8.6 6.2A1.5 1.5 0 0 1 10 5.2h4a1.5 1.5 0 0 1 1.4 1L16.5 9" />
+    <path d="M7.5 13h1M15.5 13h1" />
+  </>
+));
+
 /** A line climbing past a baseline: returns, growth (a31). */
 export const IconTrend = make("IconTrend", (
   <>
