@@ -339,6 +339,10 @@ got worse are tinted and listed at the top — "Kitchen · Floors: Good →
 Damaged" — which is exactly what a deposit deduction rests on. The printable
 move-out report has Move-in and Now columns side by side.
 
+**Move out** then offers each of those lines as a deduction, worded for the
+itemized letter ("Kitchen, floors: damaged (good at move-in)"): tap the
+ones you're charging for and put in what each cost.
+
 Inspections, their photos and signatures are in backups.
 
 ### Listing an empty place, and applications

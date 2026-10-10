@@ -10,6 +10,8 @@ import { serializeLedgerEntry } from "@/lib/loans-db";
 import { serializeTenant } from "@/lib/tenants";
 import { clearVacancy, markVacantAfterMoveOut } from "@/lib/vacancy-db";
 import { vacancyStart } from "@/lib/vacancy";
+import { deductionSuggestions } from "@/lib/inspections";
+import { inspectionInclude, moveInFor, serializeInspection } from "@/lib/inspections-db";
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/;
 
@@ -56,12 +58,30 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
     },
     _sum: { amount: true },
   });
+  // The latest move-out inspection (a32): what got worse since move-in is
+  // offered as deductions, worded for the itemized letter.
+  const [moveOutRow, moveIn] = await Promise.all([
+    prisma.inspection.findFirst({
+      where: { tenantId: id, kind: "move_out" },
+      orderBy: [{ inspectedOn: "desc" }, { createdAt: "desc" }],
+      include: inspectionInclude,
+    }),
+    moveInFor(id),
+  ]);
+  const moveOutInspection = moveOutRow ? serializeInspection(moveOutRow) : null;
   return NextResponse.json({
     deposit: tenant.deposit,
     owed,
     suggestedRent: suggestRentDeduction(tenant.deposit, owed),
     problem: result?.problem ?? "",
     receivedAfter: Math.round((later._sum.amount ?? 0) * 100) / 100,
+    inspection: moveOutInspection
+      ? {
+          id: moveOutInspection.id,
+          suggestions: deductionSuggestions(moveOutInspection.items, moveIn?.items ?? []).map((s) => s.label),
+        }
+      : null,
+    hasMoveIn: Boolean(moveIn),
   });
 }
 

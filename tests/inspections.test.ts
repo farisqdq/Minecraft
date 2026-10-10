@@ -13,6 +13,7 @@ import {
   normalizeKind,
   parseAcknowledgement,
   parseBackupInspections,
+  deductionSuggestions,
   parseHeaderInput,
   parseItemInput,
   progress,
@@ -215,4 +216,23 @@ test("inspections without a kind or a real day are skipped; a bad line is droppe
   assert.equal(back.length, 1);
   assert.equal(back[0].items.length, 2);
   assert.deepEqual(parseBackupInspections(undefined, () => true), []);
+});
+
+test("the move-out form is offered what got worse, worded for the tenant's letter", () => {
+  const before = [
+    { id: "a", room: "Kitchen", name: "Floors", condition: "good" as const, note: "" },
+    { id: "b", room: "Bathroom", name: "Toilet", condition: "poor" as const, note: "" },
+  ];
+  const now = [
+    { id: "x", room: "Kitchen", name: "Floors", condition: "damaged" as const, note: "Gouges by the fridge" },
+    { id: "y", room: "Bathroom", name: "Toilet", condition: "poor" as const, note: "" },
+    { id: "z", room: "Garage", name: "Door opener", condition: "damaged" as const, note: "" },
+    { id: "w", room: "Garage", name: "Floor", condition: "good" as const, note: "" },
+  ];
+  assert.deepEqual(deductionSuggestions(now, before), [
+    { itemId: "x", label: "Kitchen, floors: damaged (good at move-in)" },
+    { itemId: "z", label: "Garage, door opener: damaged" },
+  ]);
+  const long = deductionSuggestions([{ id: "l", room: "R".repeat(60), name: "N".repeat(80), condition: "damaged", note: "" }], []);
+  assert.equal(long[0].label.length, 120);
 });

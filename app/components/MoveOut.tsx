@@ -14,7 +14,16 @@ import { useViewOnly } from "./ViewOnly";
 
 type Line = { key: number; kind: "rent" | "charge"; label: string; amount: string };
 
-type Preview = { deposit: number; owed: number; suggestedRent: number; problem: string; receivedAfter: number };
+type Preview = {
+  deposit: number;
+  owed: number;
+  suggestedRent: number;
+  problem: string;
+  receivedAfter: number;
+  /** Their latest move-out inspection and what it found worse than at move-in (a32). */
+  inspection?: { id: string; suggestions: string[] } | null;
+  hasMoveIn?: boolean;
+};
 
 export type MoveOutResult = {
   moveOut: MoveOutDTO;
@@ -271,6 +280,51 @@ export function MoveOutDialog({
                   </button>
                 )}
               </div>
+
+              {preview?.inspection && (() => {
+                const offered = preview.inspection.suggestions.filter((label) => !lines.some((l) => l.label === label));
+                return (
+                  <div className={styles.helpText}>
+                    {preview.inspection.suggestions.length === 0 ? (
+                      <>
+                        The{" "}
+                        <Link className={styles.portalLink} href={`/dashboard/inspections/${preview.inspection.id}`}>
+                          move-out inspection
+                        </Link>{" "}
+                        found nothing worse than at move-in.
+                      </>
+                    ) : (
+                      <>
+                        Worse than at move-in, from the{" "}
+                        <Link className={styles.portalLink} href={`/dashboard/inspections/${preview.inspection.id}/report`}>
+                          move-out inspection
+                        </Link>
+                        {offered.length === 0 ? " — all added above." : ". Add any you're charging for, then put in what it cost:"}
+                        {offered.length > 0 && (
+                          <span style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+                            {offered.map((label) => (
+                              <button
+                                key={label}
+                                type="button"
+                                className={`${styles.btn} ${styles.small}`}
+                                onClick={() => setLines((prev) => [...prev, { key: ++lineKey, kind: "charge", label, amount: "" }])}
+                              >
+                                + {label}
+                              </button>
+                            ))}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  </div>
+                );
+              })()}
+              {!preview?.inspection && preview?.hasMoveIn && (
+                <p className={styles.helpText}>
+                  There&apos;s a move-in inspection for {first}. A move-out one, from their card, would show what got
+                  worse — the evidence for anything kept here.
+                </p>
+              )}
 
               <div className={styles.moResult}>
                 {result.ok ? (

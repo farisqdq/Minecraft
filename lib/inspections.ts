@@ -174,6 +174,28 @@ export function statusOf(i: { sharedAt: string | null; acknowledgedAt: string | 
   return i.acknowledgedAt ? "acknowledged" : i.sharedAt ? "shared" : "draft";
 }
 
+/**
+ * What a move-out inspection gives the move-out form: one suggested
+ * deduction per line that got worse since move-in, or that is poor or
+ * damaged with no move-in line to say it was already so. Worded for the
+ * itemized letter the tenant receives, and short enough for its 120
+ * characters: "Kitchen, floors: damaged (good at move-in)".
+ */
+export function deductionSuggestions(
+  now: { id: string; room: string; name: string; condition: Condition; note: string }[],
+  before: { id: string; room: string; name: string; condition: Condition; note: string }[]
+): { itemId: string; label: string }[] {
+  const lower = (c: Condition) => CONDITION_LABEL[c].toLowerCase();
+  return compareItems(now, before)
+    .filter((c) => c.change === "worse" || (c.change === "new" && (c.condition === "poor" || c.condition === "damaged")))
+    .map((c) => {
+      const what = `${c.room.trim()}, ${c.name.trim().charAt(0).toLowerCase()}${c.name.trim().slice(1)}`;
+      const was = c.before ? ` (${lower(c.before.condition)} at move-in)` : "";
+      const label = `${what}: ${lower(c.condition)}${was}`;
+      return { itemId: c.id, label: label.length > 120 ? `${label.slice(0, 119)}…` : label };
+    });
+}
+
 /* ---- input ---- */
 
 type Parsed<T> = { ok: true; value: T } | { ok: false; error: string };
