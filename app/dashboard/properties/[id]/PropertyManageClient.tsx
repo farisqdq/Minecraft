@@ -18,6 +18,8 @@ import DocumentsPanel from "../../../components/DocumentsPanel";
 import LoansPanel from "../../../components/LoansPanel";
 import DepreciationPanel from "../../../components/DepreciationPanel";
 import type { AssetDTO } from "@/lib/assets-db";
+import ReturnsPanel from "../../../components/ReturnsPanel"; // investment returns (a31)
+import type { Purchase, Valuation } from "@/lib/returns";
 import { MarkReturnedDialog, MoveOutDialog, MoveOutSummary } from "../../../components/MoveOut";
 import { RenewDialog } from "../../../components/RenewLease"; // lease renewals (a25)
 import type { RenewalDTO } from "@/lib/renewals-db";
@@ -146,6 +148,8 @@ export default function PropertyManageClient({
   initialLoans,
   initialMoveOuts,
   initialAssets,
+  initialPurchase,
+  initialValuations,
   storageReady,
   rentChanges: initialRentChanges,
   transactions: initialTransactions,
@@ -177,6 +181,10 @@ export default function PropertyManageClient({
   initialMoveOuts: Record<string, MoveOutDTO>;
   /** The building and improvements being depreciated. */
   initialAssets: AssetDTO[];
+  /** What was paid, when, and the cash that went in (a31). */
+  initialPurchase: Purchase;
+  /** What it's been worth since, oldest first (a31). */
+  initialValuations: Valuation[];
   storageReady: boolean;
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
@@ -2034,6 +2042,25 @@ export default function PropertyManageClient({
           }}
           onToast={push}
           onLoansChange={setLoanState}
+        />
+      </section>
+
+      <section className={styles.block} id="investment">
+        <div className={styles.blockHead}>
+          <h2>Investment</h2>
+        </div>
+        <p className={styles.helpText} style={{ marginTop: 0 }}>
+          What this place is worth, what&apos;s owed on it, and what it earns — on its own and on the cash you put in.
+          Built from the ledger and the mortgages above, so it moves as you record.
+        </p>
+        <ReturnsPanel
+          propertyId={property.id}
+          initialPurchase={initialPurchase}
+          initialValuations={initialValuations}
+          entries={transactions}
+          loans={loanState}
+          today={todayKey}
+          onToast={push}
         />
       </section>
 

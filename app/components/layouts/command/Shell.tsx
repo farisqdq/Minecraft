@@ -16,6 +16,7 @@ import {
   IconBell,
   IconBuilding,
   IconCalendar,
+  IconTrend,
   IconCheck,
   IconChevronDown,
   IconChevronLeft,
@@ -68,6 +69,7 @@ const NAV: NavItem[] = [
   { href: "/dashboard#tenants", label: "Tenants", Icon: IconUsers, match: (p, h) => p === "/dashboard" && h === "#tenants" },
   { href: "/dashboard#payments", label: "Payments", Icon: IconReceipt, match: (p, h) => p === "/dashboard" && h === "#payments" },
   { href: "/dashboard/calendar", label: "Calendar", Icon: IconCalendar, match: (p) => p.startsWith("/dashboard/calendar") },
+  { href: "/dashboard/returns", label: "Returns", Icon: IconTrend, match: (p) => p.startsWith("/dashboard/returns") },
   { href: "/dashboard/repairs", label: "Repairs", Icon: IconWrench, badge: "repairs", match: (p) => p.startsWith("/dashboard/repairs") },
   {
     href: "/dashboard/messages",

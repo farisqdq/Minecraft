@@ -719,6 +719,47 @@ delete them like any other. Backups carry both fields, so a restored LLC
 still knows which lines it has. The matching is `lib/bank-match.ts`, the CSV
 reading `lib/bank-csv.ts`, both pure and covered by tests.
 
+## Returns: is it a good investment?
+
+The ledger says what a place made; the **Returns** tab (and the
+**Investment** section on each property page) says what that's worth to you
+as an investor — the figures a lender, a partner or a buyer asks for.
+
+Each property needs three numbers only you know, entered under
+**Investment → Purchase**: what you paid, the day you bought it, and the cash
+you put in (down payment, closing costs and any work before the first tenant —
+not what the mortgage paid for). Any of them can be left blank; each figure
+that needs one says so. From time to time, **+ Update value** records what the
+place is worth on a day — an appraisal, a broker's opinion, an online
+estimate, noted as such. The latest one is the value; older ones stay as its
+history, each with its change from the one before. Until there is one, the
+purchase price stands in.
+
+| Figure | How it's worked out |
+| --- | --- |
+| Equity | Value − principal still owed on the active mortgages entered on the property |
+| Net operating income | Rent − operating expenses over the twelve months ending this month (the property page's months). Mortgage interest is financing, so it's left out; property tax and insurance are in |
+| Cap rate | NOI ÷ value — what it earns as if bought for cash |
+| Cash flow | NOI − mortgage interest − principal: what was actually left |
+| Cash-on-cash | Cash flow ÷ cash invested |
+| Total return | Every dollar of cash flow since the books began, plus equity over the cash put in — what selling today would come to, before selling costs and tax |
+| IRR | The same as a yearly rate that weighs when each dollar moved; shown after a year of ownership |
+
+Twelve-month figures count each month's share of a spread entry, exactly as
+the property page does, so the two never disagree. A place owned for less
+than a year is scaled up from the months owned (marked `*`), and shows no
+rate at all until it has three. Since-purchase figures go by the date money
+moved. When the ledger starts well after the purchase, the page says so: the
+earlier cash flow isn't in the books, so the total return and IRR run low.
+
+Across properties, rates are worked out from the totals — never averaged —
+and only from properties that have both halves, so a house with no value
+entered can't drag the portfolio's cap rate toward zero.
+
+Members can enter and correct purchase details and values, like any other
+property detail; viewers see the figures. None of it touches the ledger or
+the tax export, and all of it is in backups.
+
 ## Viewing by month, year, or all time
 
 The dashboard opens on the current month: the totals, the charts, the
@@ -1050,7 +1091,7 @@ preference, not LLC data, so a restore leaves everyone on the defaults.
 
 The **Backup** page downloads a single JSON file with every LLC, property,
 unit, tenant, recurring expense, mortgage and its payments, rent change,
-repair report and ledger entry you can see, and restores one back into the
+purchase details and valuation, repair report and ledger entry you can see, and restores one back into the
 app. Ledger entries a mortgage payment wrote are re-linked to that payment on
 restore, so they stay protected from being edited on their own. Proof files and repair
 photos are referenced by link rather than copied into the file.

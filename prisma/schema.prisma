@@ -68,6 +68,7 @@ model User {
   loanPayments        LoanPayment[]
   moveOuts            MoveOut[]
   assetsAdded         DepreciableAsset[]
+  valuationsAdded     PropertyValuation[]
   adminActions        AdminLog[]
   passwordResets      PasswordReset[]
   pushSubscriptions   PushSubscription[]
@@ -144,6 +145,12 @@ model Property {
   /// When it went empty — or rather, when rent stopped coming in. Null when
   /// occupied, and on places marked vacant before this was recorded.
   vacantSince DateTime?
+  /// What was paid for it, when, and how much of the owner's own cash went
+  /// in (down payment, closing costs, the work done before the first
+  /// tenant). Null until entered; see lib/returns.ts (a31).
+  purchasePrice Float?
+  purchasedOn   DateTime?
+  cashInvested  Float?
   createdAt   DateTime  @default(now())
 
   units             Unit[]
@@ -155,6 +162,7 @@ model Property {
   documents         Document[]
   loans             Loan[]
   assets            DepreciableAsset[]
+  valuations        PropertyValuation[]
   ownerAccess       PropertyOwnerAccess[]
   listings          Listing[]
 
@@ -918,6 +926,27 @@ model DepreciableAsset {
   basis       Float
   /// YYYY-MM it was first ready and available to rent.
   inService   String
+  note        String?
+  createdById String?
+  createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime @default(now())
+
+  @@index([propertyId])
+}
+
+// What a property was worth on a given day, by whatever measure the owner
+// trusts: an appraisal, a broker's opinion, a website's estimate, the tax
+// assessment. The latest one is the value the returns are worked out on; the
+// older ones are its history. Nothing here touches the ledger or the tax
+// export — it's an opinion of price, not money that moved (a31).
+model PropertyValuation {
+  id          String   @id @default(cuid())
+  propertyId  String
+  property    Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  value       Float
+  asOf        DateTime
+  /// "Appraisal", "Zillow estimate", … — free text, shown beside the figure.
+  source      String?
   note        String?
   createdById String?
   createdBy   User?    @relation(fields: [createdById], references: [id], onDelete: SetNull)

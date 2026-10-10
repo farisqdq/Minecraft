@@ -42,6 +42,7 @@ const LANDLORD_AREA = [
   "/api/tenants",
   "/api/transactions",
   "/api/units",
+  "/api/valuations",
   "/api/vendors",
 ];
 

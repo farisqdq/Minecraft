@@ -14,6 +14,8 @@ import { normalizeCategory as normalizeRequestCategory, normalizeStatus } from "
 import { MAX_AMOUNT } from "@/lib/money";
 import { REF_PATTERN } from "@/lib/bank-csv";
 import { parseAssetInput, type AssetInput } from "@/lib/depreciation";
+import { parsePurchaseInput, parseValuationInput, type Purchase, type ValuationInput } from "@/lib/returns";
+import { dateOf, latestDay } from "@/lib/returns-db";
 import { parseSettings, settingsToRow, type ReminderSettingsDTO } from "@/lib/reminders";
 import { parseLateFeeMode, parsePolicy, type LateFeePolicyDTO } from "@/lib/late-fee-policy";
 
@@ -228,6 +230,9 @@ type CleanProperty = {
   recurringExpenses: CleanRecurring[];
   loans: CleanLoan[];
   assets: AssetInput[];
+  /** a31; all null in a backup from before it. */
+  purchase: Purchase;
+  valuations: ValuationInput[];
   tenants: CleanTenant[];
   rentChanges: CleanRentChange[];
   requests: CleanRequest[];
@@ -300,6 +305,8 @@ const stamp = (v: unknown) => {
 
 /** Reshape an uploaded file into exactly what we're willing to store. */
 function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boolean) {
+  /** Purchases and valuations can't be from after this (a31). */
+  const restoreDay = latestDay();
   if (!raw || typeof raw !== "object") throw new Error("That file isn't a Rent Roll backup.");
   const body = raw as Record<string, unknown>;
   if (body.format !== BACKUP_FORMAT) {
@@ -854,6 +861,16 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           const parsed = parseAssetInput(raw);
           return parsed.ok ? [parsed.value] : [];
         }),
+        // The same checks as the forms (a31). A purchase that fails them is
+        // left blank rather than failing the whole restore.
+        purchase: (() => {
+          const parsed = parsePurchaseInput(p.purchase, restoreDay);
+          return parsed.ok ? parsed.value : { purchasePrice: null, purchasedOn: null, cashInvested: null };
+        })(),
+        valuations: (Array.isArray(p.valuations) ? p.valuations : []).slice(0, 500).flatMap((raw) => {
+          const parsed = parseValuationInput(raw, restoreDay);
+          return parsed.ok ? [parsed.value] : [];
+        }),
         tenants: parseTenants(p.tenants),
         rentChanges: parseRentChanges(p.rentChanges),
         requests: parseRequests(p.requests),
@@ -961,6 +978,7 @@ export async function POST(req: Request) {
     loanPayments: 0,
     moveOuts: 0,
     assets: 0,
+    valuations: 0,
     propertyOwners: 0,
   };
 
@@ -1358,9 +1376,25 @@ export async function POST(req: Request) {
             monthlyRent: property.monthlyRent,
             vacant: property.vacant,
             vacantSince: property.vacantSince,
+            purchasePrice: property.purchase.purchasePrice,
+            purchasedOn: property.purchase.purchasedOn ? dateOf(property.purchase.purchasedOn) : null,
+            cashInvested: property.purchase.cashInvested,
           },
         });
         created.properties += 1;
+        if (property.valuations.length > 0) {
+          await tx.propertyValuation.createMany({
+            data: property.valuations.map((v) => ({
+              propertyId: prop.id,
+              value: v.value,
+              asOf: dateOf(v.asOf),
+              source: v.source || null,
+              note: v.note || null,
+              createdById: userId,
+            })),
+          });
+          created.valuations += property.valuations.length;
+        }
         propertyIdsByPosition.push(prop.id);
 
         // Loans before the ledger, so interest entries can point at the

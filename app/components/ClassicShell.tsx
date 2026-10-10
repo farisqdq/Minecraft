@@ -94,6 +94,17 @@ function IconCalendar(props: { className?: string }) {
   );
 }
 
+function IconReturns(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M3 20h18" />
+      <path d="M4 16l5-5 4 3 7-8" />
+      <path d="M15 6h5v5" />
+    </svg>
+  );
+}
+
 function IconRepairs(props: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
@@ -160,6 +171,7 @@ const NAV: {
 }[] = [
   { href: "/dashboard", label: "Overview", short: "Home", Icon: IconHome },
   { href: "/dashboard/calendar", label: "Calendar", short: "Calendar", Icon: IconCalendar },
+  { href: "/dashboard/returns", label: "Returns", short: "Returns", Icon: IconReturns },
   { href: "/dashboard/repairs", label: "Repairs", short: "Repairs", Icon: IconRepairs, badge: "repairs" },
   { href: "/dashboard/messages", label: "Messages", short: "Inbox", Icon: IconMessages, badge: "messages" },
   { href: "/dashboard/files", label: "Files", short: "Files", Icon: IconFiles },

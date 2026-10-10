@@ -218,6 +218,15 @@ export const IconReceipt = make("IconReceipt", (
   </>
 ));
 
+/** A line climbing past a baseline: returns, growth (a31). */
+export const IconTrend = make("IconTrend", (
+  <>
+    <path d="M3 20h18" />
+    <path d="M4 16l5-5 4 3 7-8" />
+    <path d="M15 6h5v5" />
+  </>
+));
+
 export const IconTable = make("IconTable", (
   <>
     <rect x="3" y="4" width="18" height="16" rx="2" />

@@ -6,9 +6,10 @@ import { backupFileKey } from "@/lib/backup-files";
 import { storageAccessOf } from "@/lib/file-links";
 import { settingsFromRow } from "@/lib/reminders";
 import { policyDTO } from "@/lib/statements";
+import { purchaseOf } from "@/lib/returns-db";
 
 export const BACKUP_FORMAT = "rent-roll-backup";
-export const BACKUP_VERSION = 16;
+export const BACKUP_VERSION = 17;
 
 /** Signs a private file's link for the account exporting it; see lib/backup-files. */
 type FileKey = (url: string) => string | undefined;
@@ -546,6 +547,7 @@ export async function GET() {
           recurringExpenses: { where: { unitId: null }, orderBy: { createdAt: "asc" } },
           loans: { orderBy: { createdAt: "asc" }, include: { payments: { orderBy: { month: "asc" } } } },
           assets: { orderBy: { createdAt: "asc" } },
+          valuations: { orderBy: [{ asOf: "asc" }, { createdAt: "asc" }] }, // a31
           tenants: {
             where: { unitId: null },
             orderBy: { createdAt: "asc" },
@@ -642,6 +644,15 @@ export async function GET() {
           basis: a.basis,
           inService: a.inService,
           note: a.note ?? "",
+        })),
+        // What was paid and what it's worth since (a31), so a restore keeps
+        // the returns; without them every figure on the Returns page is "—".
+        purchase: purchaseOf(p),
+        valuations: p.valuations.map((v) => ({
+          value: v.value,
+          asOf: v.asOf.toISOString().slice(0, 10),
+          source: v.source ?? "",
+          note: v.note ?? "",
         })),
         tenants: serializeTenants(p.tenants, key),
         rentChanges: serializeRentChanges(p.rentChanges),

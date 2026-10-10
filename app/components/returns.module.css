@@ -1,0 +1,358 @@
+/* Investment returns: the property page's panel and the Returns page (a31). */
+
+.stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--space-3);
+  margin: var(--space-4) 0;
+}
+
+.stat {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: var(--space-3) var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-12);
+  box-shadow: var(--shadow-sm);
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  font-weight: 500;
+  color: var(--muted);
+}
+
+.statValue {
+  font-size: var(--text-2xl);
+  font-weight: 600;
+  letter-spacing: var(--tracking-tight);
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+  line-height: 1.25;
+}
+
+.statSub {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.pos {
+  color: var(--success, var(--good));
+}
+.neg {
+  color: var(--danger-text, var(--expense));
+}
+.zero {
+  color: var(--muted);
+}
+
+/* Value split into what's owed and what's yours. */
+.equityBar {
+  display: flex;
+  height: 8px;
+  margin-top: var(--space-2);
+  border-radius: var(--radius-6);
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.equityBar .owed {
+  background: var(--chart-out, var(--faint, var(--line-strong)));
+  opacity: 0.55;
+}
+.equityBar .owned {
+  background: var(--chart-in, var(--accent));
+}
+.equityLegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-3);
+  margin-top: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+.equityLegend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 5px;
+  border-radius: 2px;
+  vertical-align: 0;
+}
+.equityLegend .owed {
+  background: var(--chart-out, var(--faint, var(--line-strong)));
+  opacity: 0.55;
+}
+.equityLegend .owned {
+  background: var(--chart-in, var(--accent));
+}
+
+/* Rent down to cash flow, one line at a time. */
+.columns {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.card {
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-12);
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
+}
+
+.cardHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+.cardHead h3 {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+  letter-spacing: var(--tracking-title);
+}
+.cardHead span {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.steps li {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: 6px 0;
+  font-size: var(--text-base);
+}
+.steps li span:first-child {
+  color: var(--ink-2);
+}
+.steps li span:last-child {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.steps .total {
+  margin-top: 2px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+  font-weight: 600;
+}
+.steps .total span:first-child {
+  color: var(--ink);
+}
+.steps .minus span:first-child {
+  padding-left: var(--space-3);
+}
+
+.facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px var(--space-4);
+  font-size: var(--text-base);
+}
+.facts dt {
+  color: var(--muted);
+}
+.facts dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.valuations {
+  list-style: none;
+  margin: var(--space-2) 0 0;
+  padding: 0;
+}
+.valuations li {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 8px 0;
+  font-size: var(--text-base);
+}
+.valuations li + li {
+  border-top: 1px solid var(--line);
+}
+.valMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.valMain small {
+  font-size: var(--text-xs);
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.valAmount {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.valChange {
+  font-size: var(--text-xs);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.missing {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2) var(--space-3);
+  margin: var(--space-4) 0 0;
+  padding: var(--space-3) var(--space-4);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-12);
+  font-size: var(--text-sm);
+  color: var(--ink-2);
+}
+.missing p {
+  margin: 0;
+  flex: 1 1 260px;
+}
+
+.caveat {
+  margin: var(--space-3) 0 0;
+  font-size: var(--text-xs);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+/* ---------- The Returns page ---------- */
+
+.filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.chip {
+  height: var(--control-h-sm);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-8);
+  background: var(--surface);
+  color: var(--ink-2);
+  font: inherit;
+  font-size: var(--text-sm);
+  font-weight: 500;
+  cursor: pointer;
+}
+.chip:hover {
+  background: var(--surface-2);
+}
+.chip[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.propName {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.propName a {
+  color: var(--ink);
+  font-weight: 600;
+  text-decoration: none;
+}
+.propName a:hover {
+  color: var(--accent-text);
+  text-decoration: underline;
+}
+.propName small {
+  font-size: var(--text-xs);
+  color: var(--muted);
+}
+
+.miniBar {
+  display: flex;
+  width: 96px;
+  height: 6px;
+  margin: 4px 0 0 auto;
+  border-radius: var(--radius-6);
+  overflow: hidden;
+  background: var(--surface-3);
+}
+.miniBar .owed {
+  background: var(--chart-out, var(--faint, var(--line-strong)));
+  opacity: 0.55;
+}
+.miniBar .owned {
+  background: var(--chart-in, var(--accent));
+}
+
+.addLink {
+  color: var(--accent-text);
+  font-size: var(--text-sm);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.addLink:hover {
+  text-decoration: underline;
+}
+
+.explain {
+  margin-top: var(--space-6);
+}
+.explain dl {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: var(--space-3) var(--space-6);
+  margin: 0;
+}
+.explain dt {
+  font-weight: 600;
+  font-size: var(--text-sm);
+}
+.explain dd {
+  margin: 2px 0 0;
+  font-size: var(--text-sm);
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+@media (max-width: 720px) {
+  .columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .statValue {
+    font-size: var(--text-xl);
+  }
+  /* Stacked into cards, the figure says it; the bar would only crowd it. */
+  .miniBar {
+    display: none;
+  }
+}

@@ -16,6 +16,7 @@ import {
   IconBell,
   IconBuilding,
   IconCalendar,
+  IconTrend,
   IconChevronDown,
   IconDownload,
   IconFolder,
@@ -58,6 +59,7 @@ const APPEARANCE_HREF = "/dashboard/settings/appearance";
 function secondary(admin: boolean): NavItem[] {
   return [
     { href: "/dashboard/calendar", label: "Calendar", Icon: IconCalendar },
+    { href: "/dashboard/returns", label: "Returns", Icon: IconTrend },
     { href: "/dashboard/team", label: "Team", Icon: IconUsers },
     { href: "/dashboard/reminders", label: "Reminders", Icon: IconBell },
     { href: "/dashboard/backup", label: "Backup", Icon: IconArchive },
