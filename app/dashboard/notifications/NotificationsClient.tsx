@@ -92,7 +92,7 @@ export default function NotificationsClient({
                   {i.urgent && <span className={styles.urgentTag}>Urgent</span>}
                 </span>
                 <span className={`${styles.repairStatus} ${i.action ? styles.rs_open : ""}`}>
-                  {i.action ? "Needs you" : KIND_LABEL[i.kind]}
+                  {i.action ? "Needs you" : "Heads-up"}
                 </span>
                 <span className={styles.repairMeta}>
                   {KIND_LABEL[i.kind]}
