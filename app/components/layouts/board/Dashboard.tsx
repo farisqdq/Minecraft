@@ -670,7 +670,7 @@ export default function BoardDashboard({
   const lanes = LANES.filter((l) => l !== "due" || board.lanes.due.length > 0);
 
   function jumpTo(lane: Lane) {
-    document.getElementById(`lane-${lane}`)?.scrollIntoView({ behavior: "smooth", inline: "start", block: "nearest" });
+    document.getElementById(`lane-${lane}`)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   return (

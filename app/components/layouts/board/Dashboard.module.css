@@ -150,12 +150,12 @@
 
 .llcScroll {
   max-width: 100%;
-  overflow-x: auto;
-  scrollbar-width: none;
 }
 
-.llcScroll::-webkit-scrollbar {
-  display: none;
+/* Many LLCs wrap onto more lines rather than sliding sideways. */
+.llcScroll .segment {
+  flex-wrap: wrap;
+  max-width: 100%;
 }
 
 .segment {
@@ -267,14 +267,14 @@
 
 /* ---------- The board ---------- */
 
+/* The lanes share the width and wrap onto a new row when they run out of
+   it, so the page never scrolls sideways: five across on a wide screen,
+   fewer per row on a laptop or tablet, one under another on a phone. */
 .board {
   display: grid;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(260px, 1fr);
+  grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr));
   gap: var(--space-4);
   align-items: start;
-  overflow-x: auto;
-  padding-bottom: var(--space-2);
   margin-bottom: var(--space-8);
 }
 
@@ -999,15 +999,8 @@ a.placeName:hover {
   /* Lane chips jump the board sideways to a lane. */
   .laneJump {
     display: flex;
+    flex-wrap: wrap;
     gap: 6px;
-    overflow-x: auto;
-    scrollbar-width: none;
-    margin: 0 calc(var(--space-4) * -1);
-    padding: 0 var(--space-4);
-  }
-
-  .laneJump::-webkit-scrollbar {
-    display: none;
   }
 
   .jump {
@@ -1050,24 +1043,14 @@ a.placeName:hover {
     color: var(--success);
   }
 
-  /* One lane at a time, swiped sideways, with the next one peeking in. */
+  /* Lanes one under another; the chips above jump down to each. */
   .board {
-    grid-auto-columns: 86%;
     gap: var(--space-3);
-    margin: 0 calc(var(--space-4) * -1) var(--space-6);
-    padding: 0 var(--space-4) var(--space-2);
-    scroll-snap-type: x mandatory;
-    scroll-padding: 0 var(--space-4);
-    overscroll-behavior-x: contain;
-    scrollbar-width: none;
-  }
-
-  .board::-webkit-scrollbar {
-    display: none;
+    margin-bottom: var(--space-6);
   }
 
   .lane {
-    scroll-snap-align: start;
+    scroll-margin-top: var(--space-4);
   }
 
   .cardActions .btn {

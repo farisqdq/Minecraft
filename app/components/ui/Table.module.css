@@ -167,3 +167,61 @@
     display: none;
   }
 }
+
+/* Status board layout: a stacking table also stacks whenever its own box is
+   too narrow for its columns — a tablet, a laptop beside the rail — not
+   only on a phone, so it never scrolls sideways. Only the board layout
+   makes the wrap a size container, so these rules can't fire anywhere else. */
+:global(:root[data-layout="board"]) .stack {
+  container-type: inline-size;
+}
+
+@container (max-width: 900px) {
+  .stack .table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+  .stack .table,
+  .stack .table tbody,
+  .stack .table tr,
+  .stack .table td {
+    display: block;
+    width: 100%;
+  }
+  .stack .table tr {
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .stack .table tr:last-child {
+    border-bottom: 0;
+  }
+  .stack .table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    height: auto;
+    min-height: 32px;
+    padding: 2px var(--space-4);
+    border-bottom: 0;
+    text-align: right;
+  }
+  .stack .table td::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: var(--text-xs);
+    font-weight: 500;
+    text-align: left;
+  }
+  .stack .table td:first-child {
+    font-weight: 500;
+    text-align: left;
+    justify-content: flex-start;
+  }
+  .stack .table td:first-child::before {
+    display: none;
+  }
+}

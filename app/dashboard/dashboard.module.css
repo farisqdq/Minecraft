@@ -4605,3 +4605,34 @@ tr:hover .rowDel {
   display: flex;
   gap: 6px;
 }
+
+/* ---------- Status board layout: nothing slides sideways ----------
+   The board layout fits every page to the screen: chip rows wrap onto a
+   second line, and ledger tables give up their 560px floor and wrap their
+   text instead of scrolling inside a strip. Scoped to that layout, so the
+   others keep the scrolling strips they were designed with. */
+:global(:root[data-layout="board"]) .companyBar {
+  flex-wrap: wrap;
+  overflow-x: visible;
+  padding-right: 0;
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+
+:global(:root[data-layout="board"]) .ledger {
+  min-width: 0;
+}
+
+:global(:root[data-layout="board"]) .ledger th,
+:global(:root[data-layout="board"]) .ledger td {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 720px) {
+  :global(:root[data-layout="board"]) .ledger th,
+  :global(:root[data-layout="board"]) .ledger td {
+    padding-left: 10px;
+    padding-right: 10px;
+  }
+}

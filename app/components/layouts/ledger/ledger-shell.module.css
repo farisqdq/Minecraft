@@ -391,7 +391,9 @@
     gap: var(--space-2);
     padding: 0 var(--space-4);
   }
-  .searchWrap :global([class*="searchField"]) {
+  .searchWrap :global([class*="searchField"]),
+  .searchWrap :global([class*="search"]:focus-within [class*="searchField"]) {
+    /* No room to widen on focus here: it would slide over More. */
     width: 150px;
   }
 }
@@ -399,6 +401,14 @@
 @media (max-width: 860px) and (min-width: 721px) {
   .navLink {
     padding: 0 7px;
+  }
+  /* A narrow tablet: five sections, More and search share ~720px. */
+  .searchWrap :global([class*="searchField"]),
+  .searchWrap :global([class*="search"]:focus-within [class*="searchField"]) {
+    width: 116px;
+  }
+  .searchWrap :global([class*="searchHint"]) {
+    display: none;
   }
 }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ComponentType, type ReactNode } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useSession } from "next-auth/react";
@@ -12,6 +12,7 @@ import { useShellInfo } from "./ShellContext";
 import { useViewOnly } from "./ViewOnly";
 import { useLivePulse } from "./useLivePulse";
 import { MESSAGES_READ_EVENT } from "./messages-client";
+import OverflowMenu from "./ui/OverflowMenu";
 import styles from "./shell.module.css";
 
 /** The pill beside a page title that opens its edit form. */
@@ -259,6 +260,50 @@ export default function ClassicShell({
   const countFor = (badge?: Badge) =>
     badge === "repairs" ? openRepairs : badge === "messages" ? unreadMessages : 0;
 
+  // The nav takes whatever the bar has left after the brand, search and the
+  // account buttons, and fits itself into it: every section with its label
+  // when they fit, icons alone when they don't, and the sections that still
+  // don't fit folded into More. Widths come from a hidden copy of the links
+  // (measured, not guessed, so fonts and badges count), and are re-checked
+  // whenever the space changes — the window, or search widening on focus.
+  // Nothing is ever drawn underneath the search box.
+  const navArea = useRef<HTMLDivElement>(null);
+  const measurer = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ labels: boolean; count: number }>({ labels: false, count: nav.length });
+  const badgeKey = `${openRepairs}|${unreadMessages}`;
+  useLayoutEffect(() => {
+    const area = navArea.current;
+    const m = measurer.current;
+    if (!area || !m) return;
+    const GAP = 2;
+    const widths = (kind: string) =>
+      [...m.querySelectorAll<HTMLElement>(`[data-measure="${kind}"]`)].map((el) => el.getBoundingClientRect().width);
+    const span = (ws: number[]) => ws.reduce((a, b) => a + b, 0) + GAP * Math.max(0, ws.length - 1);
+    const measure = () => {
+      const avail = area.clientWidth;
+      if (avail <= 0) return;
+      const labelled = widths("label");
+      const icons = widths("icon");
+      const more = m.querySelector<HTMLElement>('[data-measure="more"]')?.getBoundingClientRect().width ?? 36;
+      let next: { labels: boolean; count: number };
+      if (span(labelled) <= avail) next = { labels: true, count: labelled.length };
+      else if (span(icons) <= avail) next = { labels: false, count: icons.length };
+      else {
+        let k = icons.length;
+        while (k > 0 && span(icons.slice(0, k)) + GAP + more > avail) k--;
+        next = { labels: false, count: k };
+      }
+      setFit((prev) => (prev.labels === next.labels && prev.count === next.count ? prev : next));
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(area);
+    document.fonts?.ready.then(measure).catch(() => {});
+    return () => observer.disconnect();
+  }, [nav.length, badgeKey]);
+  const shown = nav.slice(0, fit.count);
+  const folded = nav.slice(fit.count);
+
   // "/dashboard" must not light up for every page nested under it.
   const isOn = (href: string) =>
     href === "/dashboard" ? pathname === "/dashboard" : pathname.startsWith(href);
@@ -275,17 +320,55 @@ export default function ClassicShell({
             <span className={styles.brandShort}>Rent Roll</span>
           </Link>
 
-          <nav className={`${styles.nav} ${nav.length > 8 ? styles.navCrowded : ""}`} aria-label="Sections">
-            {nav.map(({ href, label, Icon, badge }) => (
-              <Link key={href} href={href} className={`${styles.navLink} ${isOn(href) ? styles.on : ""}`} title={label}>
-                <Icon className={styles.navIcon} />
-                <span className={styles.navLabel}>{label}</span>
-                {countFor(badge) > 0 && <span className={styles.badge}>{countFor(badge)}</span>}
-              </Link>
-            ))}
-          </nav>
+          <div ref={navArea} className={styles.navArea}>
+            <nav className={styles.nav} aria-label="Sections">
+              {shown.map(({ href, label, Icon, badge }) => (
+                <Link
+                  key={href}
+                  href={href}
+                  className={`${styles.navLink} ${fit.labels ? "" : styles.navIconOnly} ${isOn(href) ? styles.on : ""}`}
+                  title={label}
+                  aria-label={fit.labels ? undefined : label}
+                >
+                  <Icon className={styles.navIcon} />
+                  {fit.labels && <span className={styles.navLabel}>{label}</span>}
+                  {countFor(badge) > 0 && <span className={styles.badge}>{countFor(badge)}</span>}
+                </Link>
+              ))}
+            </nav>
+            {folded.length > 0 && (
+              <OverflowMenu
+                label="More sections"
+                align="end"
+                triggerClassName={`${styles.navLink} ${styles.navIconOnly} ${
+                  folded.some((f) => isOn(f.href)) ? styles.on : ""
+                }`}
+                items={folded.map(({ href, label, badge }) => ({
+                  label: countFor(badge) > 0 ? `${label} (${countFor(badge)})` : label,
+                  href,
+                }))}
+              />
+            )}
+            {/* The yardstick: every link both ways, and the More button,
+                laid out exactly as the real ones but never seen. */}
+            <div ref={measurer} className={styles.navMeasure} aria-hidden="true">
+              {nav.map(({ href, label, Icon, badge }) => (
+                <span key={`l-${href}`} data-measure="label" className={styles.navLink}>
+                  <Icon className={styles.navIcon} />
+                  <span className={styles.navLabel}>{label}</span>
+                  {countFor(badge) > 0 && <span className={styles.badge}>{countFor(badge)}</span>}
+                </span>
+              ))}
+              {nav.map(({ href, Icon, badge }) => (
+                <span key={`i-${href}`} data-measure="icon" className={`${styles.navLink} ${styles.navIconOnly}`}>
+                  <Icon className={styles.navIcon} />
+                  {countFor(badge) > 0 && <span className={styles.badge}>{countFor(badge)}</span>}
+                </span>
+              ))}
+              <span data-measure="more" className={`${styles.navLink} ${styles.navIconOnly}`} style={{ width: 36 }} />
+            </div>
+          </div>
 
-          <span className={styles.spacer} />
           <PropertySearch />
           {/* On every page: pages that don't pass a name get it from the
               session, and failing both it's simply "Account". */}

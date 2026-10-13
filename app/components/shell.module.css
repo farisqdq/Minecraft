@@ -59,12 +59,47 @@
   flex: none;
 }
 
-.nav {
+/* The space the sections may use: everything the brand, search and account
+   buttons leave. ClassicShell fits the links into it (labels, icons, More). */
+.navArea {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: 2px;
   margin-left: 8px;
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
   min-width: 0;
+  /* Only ever clips before the page's script has measured the space. */
+  overflow: hidden;
+}
+
+/* An icon-only link, when labels don't fit. */
+.navIconOnly {
+  padding: 7px 8px;
+}
+.navIconOnly .navIcon {
+  width: 18px;
+  height: 18px;
+}
+
+.navMeasure {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 2px;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .navLink {
@@ -130,8 +165,7 @@
   position: relative;
   display: flex;
   align-items: center;
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: none;
 }
 
 .searchField {
@@ -430,16 +464,6 @@
 
 /* Small laptops: sections go down to their icons (name as tooltip). */
 @media (max-width: 1100px) and (min-width: 721px) {
-  .navLabel {
-    display: none;
-  }
-  .navLink {
-    padding: 7px 8px;
-  }
-  .navIcon {
-    width: 18px;
-    height: 18px;
-  }
   .searchField {
     width: 120px;
   }
@@ -451,6 +475,11 @@
 @media (max-width: 720px) {
   .nav,
   .searchHint {
+    display: none;
+  }
+
+  /* The tab bar carries the sections on a phone; the area stays as space. */
+  .navArea > * {
     display: none;
   }
 
@@ -777,15 +806,4 @@
 }
 
 /* An admin's ninth section: icons only until there is clear room. */
-@media (max-width: 1360px) and (min-width: 721px) {
-  .navCrowded .navLabel {
-    display: none;
-  }
-  .navCrowded .navLink {
-    padding: 7px 8px;
-  }
-  .navCrowded .navIcon {
-    width: 18px;
-    height: 18px;
-  }
-}
+
