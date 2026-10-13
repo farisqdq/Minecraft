@@ -315,6 +315,20 @@ export default function ClassicShell({
     document.fonts?.ready.then(measure).catch(() => {});
     return () => observer.disconnect();
   }, [nav.length, badgeKey]);
+  // Icons alone don't say what they are, so hovering or tabbing to one
+  // opens its name in a little pill under it. One pill for the whole bar,
+  // placed under whichever icon you're on, so it can't be clipped.
+  const [tip, setTip] = useState<{ label: string; left: number } | null>(null);
+  const openTip = (label: string, el: HTMLElement) => {
+    const area = navArea.current;
+    if (fit.labels || !area) return;
+    const a = area.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    setTip({ label, left: r.left - a.left + r.width / 2 });
+  };
+  const closeTip = () => setTip(null);
+  useEffect(closeTip, [pathname, fit.labels]);
+
   const shown = nav.slice(0, fit.count);
   const folded = nav.slice(fit.count);
 
@@ -341,8 +355,12 @@ export default function ClassicShell({
                   key={href}
                   href={href}
                   className={`${styles.navLink} ${fit.labels ? "" : styles.navIconOnly} ${isOn(href) ? styles.on : ""}`}
-                  title={label}
+                  title={fit.labels ? label : undefined}
                   aria-label={fit.labels ? undefined : label}
+                  onMouseEnter={(e) => openTip(label, e.currentTarget)}
+                  onMouseLeave={closeTip}
+                  onFocus={(e) => openTip(label, e.currentTarget)}
+                  onBlur={closeTip}
                 >
                   <Icon className={styles.navIcon} />
                   {fit.labels && <span className={styles.navLabel}>{label}</span>}
@@ -350,6 +368,11 @@ export default function ClassicShell({
                 </Link>
               ))}
             </nav>
+            {tip && (
+              <span key={tip.label} className={styles.navTip} style={{ left: tip.left }} aria-hidden="true">
+                {tip.label}
+              </span>
+            )}
             {folded.length > 0 && (
               <OverflowMenu
                 label="More sections"
