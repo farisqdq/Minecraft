@@ -13,6 +13,7 @@ import { useShellInfo } from "../../ShellContext";
 import { useLivePulse } from "../../useLivePulse";
 import { MESSAGES_READ_EVENT } from "../../messages-client";
 import {
+  IconFile,
   IconArchive,
   IconBuilding,
   IconCalendar,
@@ -49,6 +50,8 @@ const RAIL: NavItem[] = [
   { href: "/dashboard/repairs", label: "Repairs", short: "Repairs", Icon: IconWrench, badge: "repairs" },
   { href: "/dashboard/messages", label: "Messages", short: "Inbox", Icon: IconMessage, badge: "messages" },
   { href: "/dashboard/files", label: "Files", short: "Files", Icon: IconFolder },
+  { href: "/dashboard/listings", label: "Listings", short: "Listings", Icon: IconFile },
+  { href: "/dashboard/notifications", label: "Notifications", short: "Alerts", Icon: IconBell },
 ];
 
 /** On a phone four of those sit in the tab bar; the rest live under More. */

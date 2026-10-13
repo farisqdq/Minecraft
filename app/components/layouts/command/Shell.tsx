@@ -12,6 +12,7 @@ import { useLivePulse } from "../../useLivePulse";
 import { MESSAGES_READ_EVENT } from "../../messages-client";
 import OverflowMenu, { type MenuItem } from "../../ui/OverflowMenu";
 import {
+  IconFile,
   IconArchive,
   IconBell,
   IconBuilding,
@@ -81,6 +82,13 @@ const NAV: NavItem[] = [
     match: (p) => p.startsWith("/dashboard/messages"),
   },
   { href: "/dashboard/files", label: "Files", Icon: IconFolder, match: (p) => p.startsWith("/dashboard/files") },
+  { href: "/dashboard/listings", label: "Listings", Icon: IconFile, match: (p) => p.startsWith("/dashboard/listings") },
+  {
+    href: "/dashboard/notifications",
+    label: "Notifications",
+    Icon: IconBell,
+    match: (p) => p.startsWith("/dashboard/notifications"),
+  },
 ];
 
 const SETTINGS: { href: string; label: string; Icon: ComponentType<IconProps>; adminOnly?: boolean }[] = [

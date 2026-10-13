@@ -13,6 +13,7 @@ import { useViewOnly } from "./ViewOnly";
 import { useLivePulse } from "./useLivePulse";
 import { MESSAGES_READ_EVENT } from "./messages-client";
 import OverflowMenu from "./ui/OverflowMenu";
+import NotificationBell from "./NotificationBell";
 import styles from "./shell.module.css";
 
 /** The pill beside a page title that opens its edit form. */
@@ -171,6 +172,17 @@ function IconMessages(props: { className?: string }) {
   );
 }
 
+function IconListings(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <path d="M6 21V5" />
+      <path d="M6 5h13l-2 3.5 2 3.5H6" />
+      <path d="M4 21h6" />
+    </svg>
+  );
+}
+
 /** Which count a tab carries: repairs waiting on you, or messages you haven't read. */
 type Badge = "repairs" | "messages";
 
@@ -188,6 +200,8 @@ const NAV: {
   { href: "/dashboard/mileage", label: "Mileage", short: "Mileage", Icon: IconMileage },
   { href: "/dashboard/repairs", label: "Repairs", short: "Repairs", Icon: IconRepairs, badge: "repairs" },
   { href: "/dashboard/messages", label: "Messages", short: "Inbox", Icon: IconMessages, badge: "messages" },
+  // Places up for rent and who applied (a27); the bell says when someone does.
+  { href: "/dashboard/listings", label: "Listings", short: "Listings", Icon: IconListings },
   { href: "/dashboard/files", label: "Files", short: "Files", Icon: IconFiles },
   { href: "/dashboard/team", label: "Team", short: "Team", Icon: IconTeam },
   { href: "/dashboard/backup", label: "Backup", short: "Backup", Icon: IconBackup },
@@ -370,6 +384,12 @@ export default function ClassicShell({
           </div>
 
           <PropertySearch />
+          {/* Everything waiting on you (a34), with how much needs doing now. */}
+          <NotificationBell
+            className={styles.accountBtn}
+            onClassName={styles.on}
+            iconClassName={styles.accountIcon}
+          />
           {/* On every page: pages that don't pass a name get it from the
               session, and failing both it's simply "Account". */}
           <Link

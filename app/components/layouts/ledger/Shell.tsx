@@ -12,6 +12,7 @@ import { useShellInfo } from "../../ShellContext";
 import { useLivePulse } from "../../useLivePulse";
 import { MESSAGES_READ_EVENT } from "../../messages-client";
 import {
+  IconFile,
   IconArchive,
   IconBell,
   IconBuilding,
@@ -59,6 +60,8 @@ const APPEARANCE_HREF = "/dashboard/settings/appearance";
 /** Everything else, in the "More" menu (and the phone's More sheet). */
 function secondary(admin: boolean): NavItem[] {
   return [
+    { href: "/dashboard/notifications", label: "Notifications", Icon: IconBell },
+    { href: "/dashboard/listings", label: "Listings", Icon: IconFile },
     { href: "/dashboard/calendar", label: "Calendar", Icon: IconCalendar },
     { href: "/dashboard/returns", label: "Returns", Icon: IconTrend },
     { href: "/dashboard/mileage", label: "Mileage", Icon: IconCar },
