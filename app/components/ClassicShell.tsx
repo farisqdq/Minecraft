@@ -207,6 +207,7 @@ const NAV: {
   { href: "/dashboard/backup", label: "Backup", short: "Backup", Icon: IconBackup },
   { href: "/dashboard/export", label: "Export", short: "Export", Icon: IconExport },
   // Site admins only; the layout says who those are.
+  { href: "/dashboard/phones", label: "Phones", short: "Phones", Icon: IconBackup, adminOnly: true },
   { href: "/dashboard/admin", label: "Admin", short: "Admin", Icon: IconAdmin, adminOnly: true },
 ];
 
