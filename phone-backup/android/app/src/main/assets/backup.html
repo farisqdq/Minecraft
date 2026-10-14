@@ -1,0 +1,200 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Phone Backup</title>
+<style>
+  :root{
+    --brand:#2E6A48; --brand-d:#1F4A32; --door:#B8862F;
+    --bg:#F6F5F1; --card:#FFFFFF; --ink:#23281F; --mut:#6B7169; --line:#E4E2DA;
+    --ok:#2E6A48; --warn:#A6651B; --bad:#B23A3A;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --bg:#15170F; --card:#1E2018; --ink:#ECEDE6; --mut:#9AA093; --line:#30332A; }
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font:16px/1.45 system-ui,-apple-system,Roboto,sans-serif;background:var(--bg);color:var(--ink);
+    padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+  header{background:var(--brand);color:#fff;padding:20px 18px 18px;display:flex;align-items:center;gap:12px}
+  header .logo{width:34px;height:34px;flex:none}
+  header h1{font-size:19px;margin:0;font-weight:650}
+  header p{margin:1px 0 0;font-size:13px;opacity:.85}
+  main{padding:16px 16px 40px;max-width:620px;margin:0 auto}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px;margin:0 0 14px}
+  h2{font-size:14px;letter-spacing:.02em;text-transform:uppercase;color:var(--mut);margin:0 0 12px;font-weight:600}
+  .row{display:flex;align-items:center;gap:12px;padding:11px 0;border-top:1px solid var(--line)}
+  .row:first-of-type{border-top:0}
+  .row .t{flex:1;min-width:0}
+  .row .t b{font-weight:550;display:block}
+  .row .t small{color:var(--mut);font-size:13px}
+  .muted{color:var(--mut)}
+  .status{font-size:12.5px;margin-top:2px}
+  .status.ok{color:var(--ok)} .status.warn{color:var(--warn)} .status.bad{color:var(--bad)}
+  /* toggle */
+  .sw{position:relative;width:46px;height:28px;flex:none}
+  .sw input{opacity:0;width:0;height:0;position:absolute}
+  .sw span{position:absolute;inset:0;background:#C9C6BD;border-radius:28px;transition:.18s}
+  .sw span::before{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;background:#fff;border-radius:50%;transition:.18s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+  .sw input:checked + span{background:var(--brand)}
+  .sw input:checked + span::before{transform:translateX(18px)}
+  button{font:inherit;cursor:pointer}
+  .btn{display:block;width:100%;border:0;background:var(--brand);color:#fff;padding:14px;border-radius:12px;font-weight:600;font-size:16px}
+  .btn:active{background:var(--brand-d)}
+  .btn[disabled]{opacity:.5}
+  .btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--line)}
+  .link{background:none;border:0;color:var(--brand);padding:0;font-size:14px;text-decoration:underline}
+  .fix{background:var(--door);color:#fff;border:0;border-radius:8px;padding:6px 11px;font-size:13px;font-weight:600;flex:none}
+  input.code{width:100%;padding:14px;font-size:22px;letter-spacing:4px;text-align:center;text-transform:uppercase;
+    border:1.5px solid var(--line);border-radius:12px;background:var(--bg);color:var(--ink);font-family:ui-monospace,monospace}
+  .err{color:var(--bad);font-size:14px;margin:8px 2px 0;min-height:1px}
+  .folder{display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--line);font-size:14px}
+  .folder:first-child{border-top:0}
+  .folder .x{margin-left:auto;color:var(--bad);background:none;border:0;font-size:20px;line-height:1}
+  .prog{background:var(--brand);color:#fff;border-radius:12px;padding:13px 15px;margin:0 0 14px;font-size:14px;display:flex;align-items:center;gap:11px}
+  .spin{width:16px;height:16px;border:2.5px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:s .8s linear infinite;flex:none}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .big{font-size:15px}
+  .sub{font-size:13px;color:var(--mut);margin:7px 0 0}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:4px}
+  .stat{background:var(--bg);border:1px solid var(--line);border-radius:10px;padding:9px 11px}
+  .stat b{font-size:17px;display:block}
+  .stat small{color:var(--mut);font-size:12px}
+  .hide{display:none}
+  code{background:var(--bg);padding:1px 5px;border-radius:5px;border:1px solid var(--line);font-size:13px}
+</style>
+</head>
+<body>
+<header>
+  <svg class="logo" viewBox="0 0 24 24" aria-hidden="true"><path fill="#fff" d="M19.35 10.04A7.49 7.49 0 0 0 12 4C9.11 4 6.6 5.64 5.35 8.04A5.994 5.994 0 0 0 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+  <div><h1>Phone Backup</h1><p>Company backups to the Rent Roll server</p></div>
+</header>
+<main id="app"><div class="card">Loading…</div></main>
+
+<script>
+var S = null;
+
+function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c];});}
+function bytes(n){ if(n==null)return""; if(n<1024)return n+" B"; var u=["KB","MB","GB","TB"],i=-1; do{n/=1024;i++;}while(n>=1024&&i<u.length-1); return n.toFixed(1)+" "+u[i]; }
+function ago(ms){ if(!ms)return""; var s=(Date.now()-ms)/1000; if(s<90)return"just now"; if(s<5400)return Math.round(s/60)+" min ago"; if(s<129600)return Math.round(s/3600)+" hr ago"; return Math.round(s/86400)+" days ago"; }
+
+var LABELS = {
+  photos:["Photos","Camera roll and saved pictures"],
+  videos:["Videos","Clips and recordings"],
+  files:["Files & documents","Folders you choose below"],
+  contacts:["Contacts","Names and numbers"],
+  calls:["Call log","Who called and when"],
+  texts:["Text messages","SMS (picture messages aren't included)"],
+  apps:["App list","So a new phone can be set up the same"]
+};
+var ORDER = ["photos","videos","files","contacts","calls","texts","apps"];
+
+function toggleRow(key){
+  var t = S.toggles[key], L = LABELS[key];
+  var warn = "";
+  if (t.on && !t.ok) warn = '<div class="status bad">Permission needed — <button class="link" onclick="Android.fixPermission(\''+key+'\')">allow</button></div>';
+  else if (t.on && t.limited) warn = '<div class="status warn">Only the photos you picked. <button class="link" onclick="Android.fixPermission(\''+key+'\')">choose more</button></div>';
+  else if (t.on) warn = '<div class="status ok">On</div>';
+  return '<div class="row"><div class="t"><b>'+esc(L[0])+'</b><small>'+esc(L[1])+'</small>'+warn+'</div>'+
+    '<label class="sw"><input type="checkbox" '+(t.on?"checked":"")+' onchange="Android.setToggle(\''+key+'\',this.checked)"><span></span></label></div>';
+}
+
+function folderList(){
+  var inner = "";
+  (S.folders||[]).forEach(function(f){
+    inner += '<div class="folder">📁 '+esc(f.name)+'<button class="x" onclick="Android.removeFolder('+JSON.stringify(f.uri).replace(/"/g,'&quot;')+')">×</button></div>';
+  });
+  if(!inner) inner = '<div class="muted" style="font-size:14px;padding:4px 0">No folders chosen yet. Pick Downloads, WhatsApp, or any folder you want kept.</div>';
+  return '<div class="card"><h2>Folders to back up</h2>'+inner+
+    '<button class="btn ghost" style="margin-top:10px" onclick="Android.addFolder()">+ Add a folder</button></div>';
+}
+
+function reportCard(){
+  var r = S.lastReport;
+  if(!r) return "";
+  if(r.error && (!r.sentFiles)){
+    return '<div class="card"><h2>Last backup</h2><div class="status bad big">'+esc(r.error)+'</div>'+
+      '<div class="sub">'+ago(r.at)+'</div></div>';
+  }
+  var c = r.counts||{};
+  var cells = "";
+  [["photos","Photos"],["videos","Videos"],["files","Files"],["contacts","Contacts"],["calls","Calls"],["texts","Texts"]].forEach(function(p){
+    if(c[p[0]]>=0 && c[p[0]]!=null) cells += '<div class="stat"><b>'+c[p[0]]+'</b><small>'+p[1]+'</small></div>';
+  });
+  var probs = (r.problems&&r.problems.length)? '<div class="status warn" style="margin-top:8px">'+r.problems.length+" file(s) couldn't be copied this time.</div>" : "";
+  var skip = (r.skipped&&r.skipped.length)? '<div class="sub">Not included: '+esc(r.skipped.join(", "))+'</div>' : "";
+  return '<div class="card"><h2>Last backup</h2>'+
+    '<div class="big">Sent '+(r.sentFiles||0)+' new file'+((r.sentFiles==1)?"":"s")+', '+bytes(r.sentBytes||0)+'.</div>'+
+    '<div class="sub">'+ago(r.at)+'</div>'+
+    (cells?'<div class="grid">'+cells+'</div>':"")+probs+skip+'</div>';
+}
+
+function render(state){
+  if(state) S = state;
+  if(!S) return;
+  var app = document.getElementById("app");
+
+  if(!S.paired){
+    app.innerHTML =
+      '<div class="card"><h2>Set up this phone</h2>'+
+      '<p style="margin:0 0 14px">On a computer, open Rent Roll, go to <b>Phones</b>, and add this phone. '+
+      'It shows an 8-character setup code. Type it here.</p>'+
+      '<input class="code" id="code" maxlength="9" autocapitalize="characters" autocomplete="one-time-code" placeholder="ABCD2345" oninput="onCode(this)">'+
+      '<div class="err" id="err"></div>'+
+      '<button class="btn" id="go" style="margin-top:12px" disabled onclick="doPair()">Connect this phone</button></div>'+
+      '<div class="card muted" style="font-size:13.5px">Your photos, files and contacts go only to your company\'s own server. Nothing is shared with anyone else.</div>';
+    return;
+  }
+
+  var busy = S.progress && S.progress.length;
+  var toggles = ORDER.map(toggleRow).join("");
+  app.innerHTML =
+    (busy? '<div class="prog"><div class="spin"></div><div>'+esc(S.progress)+'</div></div>' : "")+
+    '<button class="btn" '+(busy?"disabled":"")+' onclick="Android.backupNow()">'+(busy?"Backing up…":"Back up now")+'</button>'+
+    '<div class="sub" style="text-align:center;margin:8px 0 16px">Also runs on its own every 12 hours'+
+      (S.wifiOnly?", on Wi-Fi":"")+(S.chargingOnly?", while charging":"")+'.</div>'+
+    reportCard()+
+    '<div class="card"><h2>What gets backed up</h2>'+toggles+'</div>'+
+    folderList()+
+    '<div class="card"><h2>When to back up</h2>'+
+      '<div class="row"><div class="t"><b>Only on Wi-Fi</b><small>Don\'t use mobile data</small></div>'+
+        '<label class="sw"><input type="checkbox" id="wifi" '+(S.wifiOnly?"checked":"")+' onchange="sched()"><span></span></label></div>'+
+      '<div class="row"><div class="t"><b>Only while charging</b><small>Saves battery</small></div>'+
+        '<label class="sw"><input type="checkbox" id="chg" '+(S.chargingOnly?"checked":"")+' onchange="sched()"><span></span></label></div>'+
+    '</div>'+
+    '<div class="card"><h2>This phone</h2>'+
+      '<div class="row"><div class="t"><b>'+esc(S.deviceName||"This phone")+'</b><small>Backing up to '+esc(S.server.replace(/^https?:\/\//,""))+'</small></div></div>'+
+      '<button class="btn ghost" style="margin-top:10px" onclick="if(confirm(\'Stop backing up this phone? Files already backed up stay on the server.\'))Android.unpair()">Disconnect this phone</button>'+
+    '</div>';
+}
+
+function sched(){
+  Android.setSchedule(document.getElementById("wifi").checked, document.getElementById("chg").checked);
+}
+function onCode(el){
+  var v = el.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8);
+  el.value = v;
+  document.getElementById("go").disabled = v.length < 8;
+}
+function doPair(){
+  var btn=document.getElementById("go");
+  btn.disabled=true; btn.textContent="Connecting…";
+  document.getElementById("err").textContent="";
+  Android.pair(document.getElementById("code").value);
+}
+function paired(res){
+  if(res && res.ok) return;
+  var btn=document.getElementById("go");
+  if(btn){ btn.disabled=false; btn.textContent="Connect this phone"; }
+  var e=document.getElementById("err"); if(e) e.textContent = (res&&res.error)||"Couldn't connect.";
+}
+function prefillCode(code){
+  var el=document.getElementById("code");
+  if(el){ el.value=code; onCode(el); }
+}
+window.render=render; window.paired=paired; window.prefillCode=prefillCode;
+Android.refresh();
+setInterval(function(){ if(S && S.paired && S.progress) Android.refresh(); }, 1500);
+</script>
+</body>
+</html>
