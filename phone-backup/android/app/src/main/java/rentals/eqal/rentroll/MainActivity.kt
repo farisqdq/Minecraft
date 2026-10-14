@@ -3,8 +3,13 @@ package rentals.eqal.rentroll
 import android.annotation.SuppressLint
 import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.Gravity
+import android.view.View
+import android.widget.FrameLayout
+import android.widget.TextView
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.URLUtil
@@ -28,7 +33,25 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         web = WebView(this)
-        setContentView(web)
+
+        // One screen: the Rent Roll site, with a small "Backup" chip floating
+        // in the corner that opens the Phone Backup screen. Keeps it one app
+        // with one icon, backup tucked inside.
+        val frame = FrameLayout(this)
+        frame.addView(web, FrameLayout.LayoutParams(-1, -1))
+        val chip = TextView(this).apply {
+            text = "☁  Backup"
+            setTextColor(0xFFFFFFFF.toInt())
+            textSize = 13f
+            setPadding(dp(14), dp(9), dp(14), dp(9))
+            background = pillBackground()
+            elevation = dp(4).toFloat()
+            setOnClickListener { startActivity(Intent(this@MainActivity, BackupActivity::class.java)) }
+        }
+        val lp = FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END)
+        lp.setMargins(0, 0, dp(14), dp(22))
+        frame.addView(chip, lp)
+        setContentView(frame)
 
         web.settings.apply {
             javaScriptEnabled = true
@@ -83,6 +106,16 @@ class MainActivity : AppCompatActivity() {
         })
 
         if (savedInstanceState == null) web.loadUrl(Prefs.SITE)
+        Updater.checkInBackground(this)
+    }
+
+    private fun dp(v: Int): Int = (v * resources.displayMetrics.density).toInt()
+
+    private fun pillBackground(): android.graphics.drawable.GradientDrawable {
+        return android.graphics.drawable.GradientDrawable().apply {
+            cornerRadius = dp(22).toFloat()
+            setColor(0xFF2E6A48.toInt())
+        }
     }
 
     override fun onSaveInstanceState(outState: Bundle) {

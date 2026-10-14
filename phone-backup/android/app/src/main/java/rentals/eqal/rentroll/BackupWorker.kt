@@ -62,6 +62,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             if (me.optBoolean("lowOnSpace")) throw ServerFull()
 
             val items = ArrayList<Item>()
+            // (me.backupNow is handled by the heartbeat worker, which starts a full run.)
             collectSnapshots(items, counts, skipped)
             collectMedia(items, counts, skipped)
 
@@ -318,6 +319,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         private const val DONE_NOTIF = 43
         const val PERIODIC = "phone_backup_periodic"
         const val ONE_OFF = "phone_backup_now"
+        const val HEARTBEAT = "phone_backup_heartbeat"
 
         fun pct(done: Long, all: Long) = if (all <= 0) 100 else ((done * 100) / all).toInt().coerceIn(0, 100)
         fun plural(n: Int, one: String, many: String) = if (n == 1) one else many
@@ -346,6 +348,32 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
         fun cancel(ctx: Context) {
             WorkManager.getInstance(ctx).cancelUniqueWork(PERIODIC)
+        }
+
+        /**
+         * A light check every 15 minutes: ask the server whether Rent Roll
+         * requested a backup, and if so start one. This is what makes the
+         * website's "Back up now" button reach the phone. It's a tiny request
+         * with no constraints so it still runs on mobile data; the backup it
+         * starts obeys the Wi-Fi/charging settings.
+         */
+        fun heartbeat(ctx: Context) {
+            val work = PeriodicWorkRequestBuilder<HeartbeatWorker>(15, TimeUnit.MINUTES)
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build()
+            WorkManager.getInstance(ctx).enqueueUniquePeriodicWork(HEARTBEAT, ExistingPeriodicWorkPolicy.KEEP, work)
+        }
+
+        fun cancelHeartbeat(ctx: Context) {
+            WorkManager.getInstance(ctx).cancelUniqueWork(HEARTBEAT)
+        }
+
+        /** Checks once, right now, whether a backup was requested (called when the app opens). */
+        fun checkRequested(ctx: Context) {
+            val work = OneTimeWorkRequestBuilder<HeartbeatWorker>()
+                .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+                .build()
+            WorkManager.getInstance(ctx).enqueueUniqueWork("phone_backup_heartbeat_once", ExistingWorkPolicy.REPLACE, work)
         }
 
         /** Runs a backup right now (the "Back up now" button). */

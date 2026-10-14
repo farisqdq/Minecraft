@@ -72,6 +72,10 @@ type Device struct {
 	Model       string          `json:"model,omitempty"`
 	LastSeen    *time.Time      `json:"lastSeen,omitempty"`
 	Report      json.RawMessage `json:"report,omitempty"`
+	// Set when Rent Roll asks this phone to back up; the phone clears it by
+	// starting a run the next time it checks in.
+	BackupRequested bool       `json:"backupRequested,omitempty"`
+	RequestedAt     *time.Time `json:"requestedAt,omitempty"`
 }
 
 type Server struct {
@@ -421,6 +425,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("GET /api/admin/summary", s.admin(s.handleSummary))
 	mux.HandleFunc("POST /api/admin/devices", s.admin(s.handleCreate))
 	mux.HandleFunc("POST /api/admin/devices/{id}/code", s.admin(s.handleNewCode))
+	mux.HandleFunc("POST /api/admin/devices/{id}/request", s.admin(s.handleRequestBackup))
 	mux.HandleFunc("PATCH /api/admin/devices/{id}", s.admin(s.handleRename))
 	mux.HandleFunc("DELETE /api/admin/devices/{id}", s.admin(s.handleDelete))
 	mux.HandleFunc("GET /api/admin/devices/{id}/list", s.admin(s.handleList))
@@ -501,8 +506,17 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	s.touch(d)
+	// A pending "back up now" from Rent Roll is handed to the phone once, then cleared.
+	s.mu.Lock()
+	requested := d.BackupRequested
+	if requested {
+		d.BackupRequested = false
+		d.RequestedAt = nil
+		s.save()
+	}
+	s.mu.Unlock()
 	free, total, _ := diskSpace(s.cfg.DataDir)
-	writeJSON(w, 200, map[string]any{"deviceId": d.ID, "name": d.Name, "serverFree": free, "serverTotal": total, "lowOnSpace": s.lowOnSpace()})
+	writeJSON(w, 200, map[string]any{"deviceId": d.ID, "name": d.Name, "serverFree": free, "serverTotal": total, "lowOnSpace": s.lowOnSpace(), "backupNow": requested})
 }
 
 type checkFile struct {
@@ -705,10 +719,12 @@ type deviceView struct {
 	Report      json.RawMessage `json:"report,omitempty"`
 	Bytes       int64           `json:"bytes"`
 	Files       int64           `json:"files"`
+	BackupRequested bool        `json:"backupRequested"`
+	RequestedAt     *time.Time  `json:"requestedAt,omitempty"`
 }
 
 func (s *Server) view(d *Device) deviceView {
-	v := deviceView{ID: d.ID, Name: d.Name, CreatedAt: d.CreatedAt, Paired: d.TokenHash != "", PairedAt: d.PairedAt, Model: d.Model, LastSeen: d.LastSeen, Report: d.Report}
+	v := deviceView{ID: d.ID, Name: d.Name, CreatedAt: d.CreatedAt, Paired: d.TokenHash != "", PairedAt: d.PairedAt, Model: d.Model, LastSeen: d.LastSeen, Report: d.Report, BackupRequested: d.BackupRequested, RequestedAt: d.RequestedAt}
 	if d.PairCode != "" && time.Now().Before(d.PairExpires) {
 		v.PairCode = d.PairCode
 		t := d.PairExpires
@@ -785,6 +801,29 @@ func (s *Server) handleNewCode(w http.ResponseWriter, r *http.Request) {
 	d.PairCode = randomCode()
 	d.PairExpires = time.Now().Add(7 * 24 * time.Hour).UTC()
 	d.TokenHash = ""
+	if err := s.save(); err != nil {
+		fail(w, 500, "couldn't save")
+		return
+	}
+	writeJSON(w, 200, s.view(d))
+}
+
+// handleRequestBackup flags a phone to run a backup the next time it checks in.
+func (s *Server) handleRequestBackup(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.findDevice(r.PathValue("id"))
+	if d == nil {
+		fail(w, 404, "no such phone")
+		return
+	}
+	if d.TokenHash == "" {
+		fail(w, 409, "This phone hasn't been set up yet, so it can't be asked to back up.")
+		return
+	}
+	now := time.Now().UTC()
+	d.BackupRequested = true
+	d.RequestedAt = &now
 	if err := s.save(); err != nil {
 		fail(w, 500, "couldn't save")
 		return

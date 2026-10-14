@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- What the backup reads. Each is asked for only when its switch is turned on. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -46,18 +47,13 @@
             </intent-filter>
         </activity>
 
+        <!-- One app, one icon (Rent Roll). Phone Backup opens from a button
+             inside Rent Roll, and from a rentroll://backup setup link. -->
         <activity
             android:name=".BackupActivity"
             android:exported="true"
             android:label="@string/backup_name"
-            android:icon="@mipmap/ic_backup"
-            android:roundIcon="@mipmap/ic_backup"
-            android:taskAffinity="rentals.eqal.rentroll.backup"
             android:launchMode="singleTask">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
             <!-- rentroll://backup?code=ABCD2345 from the Phones page in Rent Roll -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />

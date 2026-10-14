@@ -64,6 +64,7 @@ class BackupActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (::web.isInitialized) pushState()
+        if (prefs.paired) { BackupWorker.heartbeat(this); BackupWorker.checkRequested(this) }
     }
 
     /** rentroll://backup?code=ABCD2345 from the Phones page pre-fills the code. */
@@ -146,6 +147,7 @@ class BackupActivity : AppCompatActivity() {
                 }
                 if (res.optBoolean("ok")) {
                     BackupWorker.schedule(this@BackupActivity)
+                    BackupWorker.heartbeat(this@BackupActivity)
                     askPerms.launch(permsFor("photos") + Manifest.permission.READ_CONTACTS)
                 }
                 web.evaluateJavascript("window.paired(${res})", null)
@@ -204,6 +206,7 @@ class BackupActivity : AppCompatActivity() {
 
         @JavascriptInterface fun unpair() {
             BackupWorker.cancel(this@BackupActivity)
+            BackupWorker.cancelHeartbeat(this@BackupActivity)
             prefs.unpair()
             pushState()
         }
