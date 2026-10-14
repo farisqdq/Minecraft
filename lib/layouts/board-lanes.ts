@@ -18,6 +18,7 @@ import { allocate, spreadForReports } from "../spread.ts";
 import { rentTargetOf, unitIdsCountingToward } from "../rent-target.ts";
 import { dateFromISO, daysLate, leaseStatus } from "../lease.ts";
 import { vacantDays } from "../vacancy.ts";
+import { withFreeRent, type FreeRentMonth } from "../free-rent.ts";
 
 export type BoardProperty = {
   id: string;
@@ -182,6 +183,8 @@ export function rentIndex(txns: readonly BoardTxn[]): Map<string, number> {
 }
 
 export type BoardInput<T extends BoardTenant> = {
+  /** Free months (lib/free-rent): count as covered, never as money in. */
+  freeRent?: readonly FreeRentMonth[];
   month: string;
   /** YYYY-MM-DD */
   today: string;
@@ -210,7 +213,7 @@ export type Board<T extends BoardTenant> = {
 export function buildBoard<T extends BoardTenant>(input: BoardInput<T>): Board<T> {
   const { month, today, properties, units, tenants, transactions, rentChanges, lateFees } = input;
   const now = dateFromISO(today);
-  const index = rentIndex(transactions);
+  const index = withFreeRent(rentIndex(transactions), input.freeRent);
   const byId = new Map(properties.map((p) => [p.id, p]));
   const unitsOf = (propertyId: string) => units.filter((u) => u.propertyId === propertyId);
 

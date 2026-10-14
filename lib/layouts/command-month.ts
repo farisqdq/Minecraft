@@ -22,6 +22,7 @@ import { rentForMonth, type RentChangeDTO } from "../rent.ts";
 import { allocate, spreadForReports } from "../spread.ts";
 import { rentTargetOf, unitIdsCountingToward } from "../rent-target.ts";
 import { daysLate, leaseStatus } from "../lease.ts";
+import { withFreeRent, type FreeRentMonth } from "../free-rent.ts";
 
 export type MonthCompany = { id: string; name: string };
 export type MonthProperty = {
@@ -220,6 +221,8 @@ export function monthModel<T extends MonthTenant>(input: {
   month: string;
   /** YYYY-MM-DD, the viewer's today. */
   today: string;
+  /** Free months (lib/free-rent): count as covered, never as money in. */
+  freeRent?: readonly FreeRentMonth[];
 }): MonthModel<T> {
   const { companies, properties, units, tenants, transactions, rentChanges, lateFees, company, month, today } = input;
   const [ty, tm, td] = today.split("-").map(Number);
@@ -237,7 +240,7 @@ export function monthModel<T extends MonthTenant>(input: {
   const unitsFor = (id: string) => unitsOf.get(id) ?? [];
 
   // Rent per place per month, summed in ledger order like Classic's index.
-  const rentIndex = new Map<string, number>();
+  let rentIndex = new Map<string, number>();
   let rentReceived = 0;
   let expenses = 0;
   let expenseCount = 0;
@@ -249,6 +252,7 @@ export function monthModel<T extends MonthTenant>(input: {
       }
     }
   }
+  rentIndex = withFreeRent(rentIndex, input.freeRent);
   // The month's figures count a spread entry's share (lib/spread).
   for (const t of spreadForReports(transactions)) {
     if (t.date.slice(0, 7) === month && visibleIds.has(t.propertyId)) {

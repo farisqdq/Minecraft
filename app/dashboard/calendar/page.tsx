@@ -68,9 +68,18 @@ export default async function CalendarPage() {
   const lateFees: Record<string, number> = {};
   for (const r of lateFeeRows) lateFees[`${r.tenantId}|${r.month}`] = Math.round((r._sum.amount ?? 0) * 100) / 100;
 
+  // Free months of rent (a35), so the calendar shows them as covered.
+  const freeRent = (
+    await prisma.tenantCharge.findMany({
+      where: { freeRent: true, tenant: { property: { companyId: { in: companyIds } } } },
+      select: { tenantId: true, month: true, amount: true, tenant: { select: { propertyId: true, unitId: true } } },
+    })
+  ).map((c) => ({ tenantId: c.tenantId, propertyId: c.tenant.propertyId, unitId: c.tenant.unitId, month: c.month, amount: c.amount }));
+
   return (
     <CalendarClient
       lateFees={lateFees}
+      freeRent={freeRent}
       storageReady={blobConfigured()}
       openRepairs={openRepairs}
       serverToday={isoDay(new Date())}

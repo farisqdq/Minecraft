@@ -1,5 +1,6 @@
 "use client";
 
+import type { FreeRentMonth } from "@/lib/free-rent";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -55,8 +56,11 @@ export default function CalendarClient({
   payments: initialPayments,
   rules,
   lateFees = {},
+  freeRent = [],
   storageReady = false,
 }: {
+  /** Free months of rent (a35), which count as covered. */
+  freeRent?: FreeRentMonth[];
   /** Late fees on the books, keyed "tenantId|YYYY-MM". */
   lateFees?: Record<string, number>;
   storageReady?: boolean;
@@ -134,8 +138,9 @@ export default function CalendarClient({
       rules,
       payments,
       today,
+      free: freeRent,
     });
-  }, [month, targets, tenants, rentChanges, rules, payments, today, units, properties]);
+  }, [month, targets, tenants, rentChanges, rules, payments, today, units, properties, freeRent]);
 
   const selectedDay = cal.days.find((d) => d.date === selected) ?? null;
   const agenda = cal.days.filter((d) => d.items.length > 0);

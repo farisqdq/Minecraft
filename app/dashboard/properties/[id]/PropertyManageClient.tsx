@@ -239,6 +239,8 @@ export default function PropertyManageClient({
   const [entryOpen, setEntryOpen] = useState(false);
   // Late fee waivers (a21): null until the "Waive late fee" box is touched.
   const [waiveLateFee, setWaiveLateFee] = useState<boolean | null>(null);
+  // A free month (a35): rent given, not paid — a statement credit, not a ledger entry.
+  const [freeMonth, setFreeMonth] = useState(false);
   // "Record rent" opens with the lease's rent filled in; landing in it with
   // the figure selected makes Enter record it and typing replace it.
   const entryAmount = useRef<HTMLInputElement>(null);
@@ -785,6 +787,7 @@ export default function PropertyManageClient({
   function openEntry(t: LedgerEntry) {
     setError("");
     setWaiveLateFee(null); // a21
+    setFreeMonth(false); // a35
     setEntry({
       id: t.id,
       type: t.type,
@@ -838,6 +841,7 @@ export default function PropertyManageClient({
     const unitId = prefill?.unitId ?? "";
     setError("");
     setWaiveLateFee(null); // a21
+    setFreeMonth(false); // a35
     setEntry({
       id: "",
       type,
@@ -887,6 +891,30 @@ export default function PropertyManageClient({
     }
     setEntrySaving(true);
     setError("");
+
+    if (!entry.id && entry.type === "rent" && freeMonth) {
+      const res = await fetch("/api/free-rent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          propertyId: property.id,
+          unitId: entry.unitId || null,
+          month: entry.appliesTo || entry.date.slice(0, 7),
+          amount,
+          reason: entry.note,
+        }),
+      }).catch(() => null);
+      const data = res ? await res.json().catch(() => ({})) : {};
+      setEntrySaving(false);
+      if (!res || !res.ok) {
+        setError(data?.error || "Couldn't save the free month.");
+        return;
+      }
+      setEntryOpen(false);
+      push(`${data.tenantName ? `${data.tenantName}: ` : ""}free month of ${money(amount)} saved. It's on their statement as a credit.`);
+      router.refresh();
+      return;
+    }
 
     const isNew = !entry.id;
     const res = await fetch(isNew ? "/api/transactions" : `/api/transactions/${entry.id}`, {
@@ -2516,18 +2544,27 @@ export default function PropertyManageClient({
                 onChange={(e) => setEntry((f) => ({ ...f, date: e.target.value }))}
               />
             </div>
+            {entry.type === "rent" && !entry.id && (
+              <label className={`${styles.checkboxField} ${styles.span4}`}>
+                <input type="checkbox" checked={freeMonth} onChange={(e) => setFreeMonth(e.target.checked)} />
+                <span>
+                  <strong>Free month</strong> — rent we gave them, not paid. The month shows as covered and
+                  nothing counts as money in.
+                </span>
+              </label>
+            )}
             {entry.type === "rent" && (
               <AppliesToField
                 id="e-applies"
                 className={styles.field}
-                label={entry.spreadMonths > 1 ? "First month" : "Counts toward"}
+                label={(entry.type === "rent" && !entry.id && freeMonth) ? "Month that's free" : entry.spreadMonths > 1 ? "First month" : "Counts toward"}
                 date={entry.date}
                 value={entry.appliesTo}
                 onChange={(m) => setEntry((f) => ({ ...f, appliesTo: m }))}
               />
             )}
             <div className={styles.field}>
-              <label htmlFor="e-amount">Amount ($)</label>
+              <label htmlFor="e-amount">{(entry.type === "rent" && !entry.id && freeMonth) ? "Rent given free ($)" : "Amount ($)"}</label>
               <input
                 id="e-amount"
                 ref={entryAmount}
@@ -2558,6 +2595,7 @@ export default function PropertyManageClient({
                 </select>
               </div>
             )}
+            {!(entry.type === "rent" && !entry.id && freeMonth) && (
             <div className={`${styles.field} ${styles.wide}`}>
               <label htmlFor="e-detail">
                 {entry.type === "rent" ? "Paid by (tenant)" : "Description"}
@@ -2569,8 +2607,9 @@ export default function PropertyManageClient({
                 onChange={(e) => setEntry((f) => ({ ...f, detail: e.target.value }))}
               />
             </div>
+            )}
             <div className={`${styles.field} ${styles.span4}`}>
-              <label htmlFor="e-note">Note</label>
+              <label htmlFor="e-note">{(entry.type === "rent" && !entry.id && freeMonth) ? "Reason (optional)" : "Note"}</label>
               <input
                 id="e-note"
                 type="text"
@@ -2578,6 +2617,7 @@ export default function PropertyManageClient({
                 onChange={(e) => setEntry((f) => ({ ...f, note: e.target.value }))}
               />
             </div>
+            {!(entry.type === "rent" && !entry.id && freeMonth) && (
             <SpreadField
               idPrefix="e"
               type={entry.type}
@@ -2592,8 +2632,9 @@ export default function PropertyManageClient({
               checkboxClass={styles.checkboxField}
               noteClass={styles.note}
             />
+            )}
             {/* Late fee waivers (a21) */}
-            {entry.type === "rent" && (
+            {entry.type === "rent" && !(entry.type === "rent" && !entry.id && freeMonth) && (
               <WaiveLateFeeField
                 className={styles.span4}
                 propertyId={property.id}
@@ -2605,6 +2646,7 @@ export default function PropertyManageClient({
             )}
           </div>
           {/* Attach proof: queued here, uploaded once the entry is saved. */}
+          {!(entry.type === "rent" && !entry.id && freeMonth) && (
           <div className={styles.field} style={{ marginTop: 14 }}>
             {storageReady ? (
               <>
@@ -2632,6 +2674,7 @@ export default function PropertyManageClient({
             )}
             {proofError && <div className={styles.errorBar}>{proofError}</div>}
           </div>
+          )}
           {error && <div className={styles.errorBar}>{error}</div>}
           <div className={`${styles.formFoot} ${styles.stickyFoot}`}>
             <button type="button" className={styles.btn} onClick={() => setEntryOpen(false)}>
@@ -2644,7 +2687,9 @@ export default function PropertyManageClient({
                   : "Saving\u2026"
                 : entry.id
                   ? "Save changes"
-                  : entry.type === "rent"
+                  : (entry.type === "rent" && !entry.id && freeMonth)
+                    ? "Give free month"
+                    : entry.type === "rent"
                     ? "Record payment"
                     : "Record expense"}
             </button>

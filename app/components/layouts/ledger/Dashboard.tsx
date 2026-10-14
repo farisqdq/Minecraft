@@ -1,5 +1,6 @@
 "use client";
 
+import { withFreeRent } from "@/lib/free-rent";
 import { useEffect, useMemo, useRef, useState, type MouseEvent } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -71,6 +72,7 @@ export default function LedgerDashboard(props: DashboardProps) {
     expiringDocs,
     initialChases,
     lateFees = {},
+    freeRent,
     userLabel,
     storageReady,
     serverToday,
@@ -131,7 +133,8 @@ export default function LedgerDashboard(props: DashboardProps) {
   const months = useMemo(() => monthRange(transactions, thisMonth), [transactions, thisMonth]);
   const monthIndex = months.indexOf(month);
 
-  const index = useMemo(() => rentIndex(transactions), [transactions]);
+  // Free months (a35) count as covered, not as money in (lib/free-rent).
+  const index = useMemo(() => withFreeRent(rentIndex(transactions), freeRent), [transactions, freeRent]);
   const targets = useMemo(() => buildTargets(properties, units), [properties, units]);
 
   const rows: Row[] = useMemo(

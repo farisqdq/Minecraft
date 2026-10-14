@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import AppShell from "../../components/AppShell";
 import Modal from "../../components/Modal";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
@@ -248,9 +249,14 @@ export default function AdminClient({
       title="Admin"
       tagline="Every account and LLC on this site, and what's been done to them."
       actions={
-        <button type="button" className={`${styles.btn} ${styles.accent}`} onClick={openCreate}>
-          + Create an LLC
-        </button>
+        <>
+          <Link href="/dashboard/admin/activity" className={styles.btn}>
+            Activity log
+          </Link>
+          <button type="button" className={`${styles.btn} ${styles.accent}`} onClick={openCreate}>
+            + Create an LLC
+          </button>
+        </>
       }
     >
       <div className={`${styles.field} ${styles.adminSearch}`}>

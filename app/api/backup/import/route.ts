@@ -126,6 +126,8 @@ type CleanCharge = {
   rule: number;
   /** Paid from the deposit at move-out. */
   moveOut: boolean;
+  /** A free month of rent (a35). Only ever on a credit. */
+  freeRent: boolean;
 };
 type CleanRule = {
   kind: string;
@@ -534,6 +536,7 @@ function parseBackup(raw: unknown, acceptFile: (url: string, key: string) => boo
           createdAt: stamp(c.createdAt) ?? new Date(),
           rule: Number.isFinite(ruleAt) && ruleAt >= 0 ? ruleAt : -1,
           moveOut: c.moveOut === true,
+          freeRent: c.kind === "credit" && c.freeRent === true,
         });
       }
 

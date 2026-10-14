@@ -836,6 +836,12 @@ model TenantCharge {
   /// Set on a damage or cleaning charge a move-out raised against the deposit.
   moveOutId  String?
   moveOut    MoveOut?          @relation(fields: [moveOutId], references: [id], onDelete: SetNull)
+  /// A free month (a35): a credit for that month's rent, given rather than
+  /// paid. It squares the month on the statement, so late fees, reminders
+  /// and the portal treat it as covered, and — being a credit, not a ledger
+  /// entry — it is never counted as money received. The dashboards read it
+  /// to show the month as covered (lib/free-rent.ts).
+  freeRent   Boolean           @default(false)
   createdAt  DateTime          @default(now())
 
   @@index([tenantId])
@@ -1445,4 +1451,29 @@ model RentalApplication {
 
   @@index([listingId])
   @@index([tenantId])
+}
+
+/// The activity log (a34): one row per page a signed-in person opens and per
+/// change they make, written by proxy.ts; sign-ins by lib/auth.ts. Who did it
+/// is kept as plain fields, not a relation, because the three kinds of
+/// account live in three tables — and so a deleted account's history stays.
+/// Read back on the admin's Activity page; rows older than a year are dropped.
+model ActivityLog {
+  id         String   @id @default(cuid())
+  /// "user" (landlord or team), "tenant" or "owner".
+  actorKind  String
+  actorId    String
+  actorEmail String
+  actorName  String?
+  /// HTTP method, or "EVENT" for a sign-in or sign-out.
+  method     String
+  path       String
+  /// Only harmless query keys (lib/activity.ts safeQuery).
+  query      String?
+  ip         String?
+  device     String?
+  createdAt  DateTime @default(now())
+
+  @@index([actorKind, actorId, createdAt])
+  @@index([createdAt])
 }

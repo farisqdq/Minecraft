@@ -77,6 +77,7 @@ export default function BoardDashboard({
   initialChases,
   lateFees = {},
   waivedLateFees = {},
+  freeRent,
   lateFeePolicies = {},
   userLabel,
   storageReady,
@@ -163,8 +164,9 @@ export default function BoardDashboard({
         transactions,
         rentChanges,
         lateFees,
+        freeRent,
       }),
-    [month, todayKey, visibleProperties, units, tenants, transactions, rentChanges, lateFees]
+    [month, todayKey, visibleProperties, units, tenants, transactions, rentChanges, lateFees, freeRent]
   );
 
   const unitsOf = useCallback((propertyId: string) => units.filter((u) => u.propertyId === propertyId), [units]);

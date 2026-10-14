@@ -91,6 +91,7 @@ export default function CommandDashboard(props: DashboardProps) {
     initialChases,
     lateFees = {},
     waivedLateFees = {},
+    freeRent,
     userLabel,
     storageReady,
     serverToday,
@@ -163,8 +164,9 @@ export default function CommandDashboard(props: DashboardProps) {
         company: llc,
         month,
         today: todayKey,
+        freeRent,
       }),
-    [companies, properties, units, tenants, transactions, rentChanges, lateFees, llc, month, todayKey]
+    [companies, properties, units, tenants, transactions, rentChanges, lateFees, llc, month, todayKey, freeRent]
   );
 
   const visibleIds = useMemo(

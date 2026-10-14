@@ -12,6 +12,7 @@
 
 import { monthlyChargesFor, type ChargeRule } from "./charge-rules.ts";
 import { allocate } from "./spread.ts";
+import type { FreeRentMonth } from "./free-rent.ts";
 
 export type CalTarget = {
   key: string;
@@ -117,6 +118,8 @@ export function buildMonth(opts: {
   payments: CalPayment[];
   /** YYYY-MM-DD in the viewer's own timezone. */
   today: string;
+  /** Free months (lib/free-rent): the month counts as covered; nothing is marked as received. */
+  free?: readonly FreeRentMonth[];
 }): CalMonth {
   const { month, targets, tenants, rentFor, rules = [], payments, today } = opts;
   const [y, m] = month.split("-").map(Number);
@@ -148,6 +151,10 @@ export function buildMonth(opts: {
     allocate({ ...p, type: "rent" })
       .filter((a) => a.month === month)
       .map((a) => ({ ...p, amount: a.amount }))
+  ).concat(
+    (opts.free ?? [])
+      .filter((f) => f.month === month)
+      .map((f) => ({ propertyId: f.propertyId, unitId: f.unitId, date: `${month}-01`, amount: f.amount }))
   );
 
   let expected = 0;

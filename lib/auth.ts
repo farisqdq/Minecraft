@@ -8,6 +8,7 @@ import { cookieFrom, readTrustToken, trustCookieName } from "@/lib/device-trust"
 import { open } from "@/lib/sealed";
 import { hashRecoveryCode, looksLikeRecoveryCode, verifyTotp } from "@/lib/totp";
 import { TWO_FACTOR_INVALID, TWO_FACTOR_REQUIRED } from "@/lib/auth-messages";
+import { recordActivity } from "@/lib/activity-db";
 
 /**
  * Who a session belongs to. Two different kinds of person sign in here and
@@ -237,6 +238,31 @@ export const authOptions: AuthOptions = {
       },
     }),
   ],
+  // The activity log (a34): sign-ins and sign-outs, for all three kinds of account.
+  events: {
+    async signIn({ user }) {
+      const kind = (user as { kind?: SessionKind }).kind;
+      await recordActivity({
+        actorKind: kind === "tenant" || kind === "owner" ? kind : "user",
+        actorId: user.id,
+        actorEmail: user.email ?? "",
+        actorName: user.name ?? null,
+        method: "EVENT",
+        path: "sign-in",
+      });
+    },
+    async signOut({ token }) {
+      if (!token || typeof token.id !== "string") return;
+      await recordActivity({
+        actorKind: token.kind === "tenant" || token.kind === "owner" ? token.kind : "user",
+        actorId: token.id,
+        actorEmail: typeof token.email === "string" ? token.email : "",
+        actorName: typeof token.name === "string" ? token.name : null,
+        method: "EVENT",
+        path: "sign-out",
+      });
+    },
+  },
   callbacks: {
     async jwt({ token, user }) {
       if (user) {

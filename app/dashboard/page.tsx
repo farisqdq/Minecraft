@@ -112,6 +112,16 @@ export default async function DashboardPage() {
   const lateFees: Record<string, number> = {};
   for (const r of lateFeeRows) lateFees[`${r.tenantId}|${r.month}`] = Math.round((r._sum.amount ?? 0) * 100) / 100;
 
+  // Free months of rent (a35): covered without being paid, so the cards show
+  // the month as square. They're statement credits, not ledger entries, so
+  // no money-in figure counts them. See lib/free-rent.
+  const freeRent = (
+    await prisma.tenantCharge.findMany({
+      where: { freeRent: true, tenant: { property: { companyId: { in: companyIds } } } },
+      select: { tenantId: true, month: true, amount: true, tenant: { select: { propertyId: true, unitId: true } } },
+    })
+  ).map((c) => ({ tenantId: c.tenantId, propertyId: c.tenant.propertyId, unitId: c.tenant.unitId, month: c.month, amount: c.amount }));
+
   // Proof on ledger entries, by entry, oldest first as before.
   const attachmentRows = await prisma.attachment.findMany({
     where: { transaction: { property: { companyId: { in: companyIds } } } },
@@ -142,6 +152,7 @@ export default async function DashboardPage() {
       lateFees={lateFees}
       // Late fee waivers (a21): "tenantId|YYYY-MM" → true for months waived.
       waivedLateFees={await waivedLateFeesFor(companyIds)}
+      freeRent={freeRent}
       // Each company's late-fee policy, so a card can say what the fee is
       // made of and how close it is to the cap.
       lateFeePolicies={Object.fromEntries(

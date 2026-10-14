@@ -1,5 +1,6 @@
 "use client";
 
+import { freeKeys, withFreeRent, type FreeRentMonth } from "@/lib/free-rent";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { allocate, spreadForReports, spreadSummary } from "@/lib/spread";
 import { monthLabel } from "@/lib/rent-month";
@@ -231,6 +232,7 @@ export default function DashboardClient({
   initialChases,
   lateFees = {},
   waivedLateFees = {}, // a21
+  freeRent = [], // a35
   lateFeePolicies = {},
   userLabel,
   storageReady,
@@ -259,6 +261,8 @@ export default function DashboardClient({
   lateFees?: Record<string, number>;
   /** Late fee waivers (a21): months whose late fee was waived, keyed "tenantId|YYYY-MM". */
   waivedLateFees?: Record<string, true>;
+  /** Free months of rent (a35): covered without being paid. See lib/free-rent. */
+  freeRent?: FreeRentMonth[];
   /** Each company's late-fee policy, by company id. */
   lateFeePolicies?: Record<string, LateFeePolicyDTO>;
   userLabel: string;
@@ -429,6 +433,7 @@ export default function DashboardClient({
   // map instead of rescanning every entry once per card, per unit, per
   // recurring bill. Sums run in ledger order, so the figures are the same to
   // the last floating-point bit as the scans they replace.
+  const freeMonths = useMemo(() => freeKeys(freeRent), [freeRent]);
   const ledgerIndex = useMemo(() => {
     const rent = new Map<string, number>();
     const recurringLogged = new Set<string>();
@@ -443,8 +448,9 @@ export default function DashboardClient({
       }
       if (t.recurringExpenseId) recurringLogged.add(`${t.recurringExpenseId}|${month}`);
     }
-    return { rent, recurringLogged };
-  }, [transactions]);
+    // Free months (a35) count toward the month being covered, not toward money in.
+    return { rent: withFreeRent(rent, freeRent), recurringLogged };
+  }, [transactions, freeRent]);
 
   function unitsForProperty(propertyId: string) {
     return units.filter((u) => u.propertyId === propertyId);
@@ -2024,7 +2030,11 @@ export default function DashboardClient({
                             : `Nothing received of ${money(expected)}`}
                           {fees > 0.005 ? ` · includes ${money(fees)} in late fees` : ""}
                           {/* a21 */}
-                          {tenant && waivedLateFees[`${tenant.id}|${barMonth}`] ? " · Late fee waived" : ""}
+                          {tenant && freeMonths[`${tenant.id}|${barMonth}`]
+                            ? " · Free month"
+                            : tenant && waivedLateFees[`${tenant.id}|${barMonth}`]
+                              ? " · Late fee waived"
+                              : ""}
                         </div>
                       </div>
                       <span className={`${styles.attnAmt} ${late > 0 ? styles.neg : styles.due} num`}>

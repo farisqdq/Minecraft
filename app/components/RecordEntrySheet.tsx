@@ -21,6 +21,7 @@
  */
 
 import { useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import AppliesToField from "./AppliesToField";
 import SpreadField from "./SpreadField";
 import Modal from "./Modal";
@@ -109,6 +110,10 @@ export default function RecordEntrySheet({
   // 0: not spread. Otherwise the number of months (lib/spread).
   const [spreadMonths, setSpreadMonths] = useState(draft.prefill.spreadMonths ?? 0);
   const [waive, setWaive] = useState<boolean | null>(null);
+  // A free month (a35): rent given, not paid. Saved as a credit on the
+  // tenant's statement instead of a ledger entry (app/api/free-rent).
+  const [free, setFree] = useState(false);
+  const router = useRouter();
   const [pending, setPending] = useState<PendingProof[]>([]);
   const [existing, setExisting] = useState(draft.existingProof ?? 0);
   const [saving, setSaving] = useState(false);
@@ -119,6 +124,8 @@ export default function RecordEntrySheet({
 
   const isRent = type === "rent";
   const editing = Boolean(editingId);
+  const canFree = isRent && !editing && !draft.recurring;
+  const isFree = canFree && free;
   const target = targets.find((t) => t.key === targetKey) ?? (quick ? null : targets[0] ?? null);
   const labels = entryLabels(type, { editing, recurring: Boolean(draft.recurring) });
   const bounds = draft.recurring ? monthBounds(draft.recurring.month) : null;
@@ -141,6 +148,37 @@ export default function RecordEntrySheet({
     }
     setError("");
     setSaving(true);
+
+    if (isFree) {
+      let res: Response;
+      try {
+        res = await fetch("/api/free-rent", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            propertyId: target.propertyId,
+            unitId: target.unitId,
+            month: appliesTo || date.slice(0, 7),
+            amount: amt,
+            reason: note,
+          }),
+        });
+      } catch {
+        setSaving(false);
+        setError("Couldn't reach the server — check your connection and try again.");
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      setSaving(false);
+      if (!res.ok) {
+        setError(data?.error || "Couldn't save the free month.");
+        return;
+      }
+      // Free months come with the page, not the ledger: reload what it shows.
+      router.refresh();
+      onClose();
+      return;
+    }
 
     const fields = {
       date,
@@ -285,8 +323,17 @@ export default function RecordEntrySheet({
                 </select>
               </div>
             )}
+            {canFree && (
+              <label className={`${styles.checkboxField} ${styles.span4}`}>
+                <input type="checkbox" checked={free} onChange={(e) => setFree(e.target.checked)} />
+                <span>
+                  <strong>Free month</strong> — rent we gave them, not paid. The month shows as covered and
+                  nothing counts as money in.
+                </span>
+              </label>
+            )}
             <div className={styles.field}>
-              <label htmlFor="f-amount">Amount ($)</label>
+              <label htmlFor="f-amount">{isFree ? "Rent given free ($)" : "Amount ($)"}</label>
               <input
                 id="f-amount"
                 ref={amountRef}
@@ -302,7 +349,7 @@ export default function RecordEntrySheet({
               />
             </div>
             <div className={styles.field}>
-              <label htmlFor="f-date">Date</label>
+              <label htmlFor="f-date">{isFree ? "Date given" : "Date"}</label>
               <input
                 id="f-date"
                 type="date"
@@ -317,13 +364,13 @@ export default function RecordEntrySheet({
               <AppliesToField
                 id="f-applies"
                 className={`${styles.field} ${styles.wide}`}
-                label={spreadMonths > 1 ? "First month" : "Counts toward"}
+                label={isFree ? "Month that's free" : spreadMonths > 1 ? "First month" : "Counts toward"}
                 date={date}
                 value={appliesTo}
                 onChange={setAppliesTo}
               />
             )}
-            {!draft.recurring && (
+            {!draft.recurring && !isFree && (
               <SpreadField
                 idPrefix="f"
                 type={type}
@@ -352,6 +399,7 @@ export default function RecordEntrySheet({
                 </select>
               </div>
             )}
+            {!isFree && (
             <div className={`${styles.field} ${styles.wide}`}>
               <label htmlFor="f-detail">{labels.detail}</label>
               <input
@@ -362,17 +410,19 @@ export default function RecordEntrySheet({
                 onChange={(e) => setDetail(e.target.value)}
               />
             </div>
+            )}
             <div className={`${styles.field} ${styles.span4}`}>
-              <label htmlFor="f-note">Note (optional)</label>
+              <label htmlFor="f-note">{isFree ? "Reason (optional)" : "Note (optional)"}</label>
               <input
                 id="f-note"
                 type="text"
-                placeholder={isRent ? "e.g. September rent, check #1042" : "e.g. Invoice #123, paid by card"}
+                maxLength={isFree ? 100 : undefined}
+                placeholder={isFree ? "e.g. Move-in special, repair inconvenience" : isRent ? "e.g. September rent, check #1042" : "e.g. Invoice #123, paid by card"}
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
             </div>
-            {isRent && target && (
+            {isRent && target && !isFree && (
               <WaiveLateFeeField
                 className={styles.span4}
                 propertyId={target.propertyId}
@@ -383,6 +433,7 @@ export default function RecordEntrySheet({
                 onChange={setWaive}
               />
             )}
+            {!isFree && (
             <div className={`${styles.field} ${styles.span4}`}>
               {storageReady ? (
                 <ProofPicker
@@ -398,6 +449,7 @@ export default function RecordEntrySheet({
               )}
               {proofError && <span className={styles.proofWarn}>{proofError}</span>}
             </div>
+            )}
           </div>
           {error && <div className={styles.errorBar}>{error}</div>}
           <div className={`${styles.formFoot} ${styles.stickyFoot}`}>
@@ -413,7 +465,9 @@ export default function RecordEntrySheet({
                 ? uploading
                   ? "Uploading proof…"
                   : "Saving…"
-                : labels.submit}
+                : isFree
+                  ? "Give free month"
+                  : labels.submit}
             </button>
           </div>
         </form>

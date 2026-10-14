@@ -335,7 +335,12 @@ export async function runReminders(now: Date, origin: string): Promise<RunReport
           const amount = rentForMonth(dtos, t.propertyId, targetUnitId, plan.month, targetUnit?.monthlyRent ?? t.property.monthlyRent);
           // Nothing to remind about when there's no rent, or it's already covered by credit.
           const prepaid = trusted && balance <= -amount + 0.005;
-          if (amount > 0 && !prepaid) {
+          // A month given free (a35) isn't due at all.
+          const free = await prisma.tenantCharge.findFirst({
+            where: { tenantId: t.id, month: plan.month, freeRent: true },
+            select: { id: true },
+          });
+          if (amount > 0 && !prepaid && !free) {
             const n = rentDueNotification({
               tenantName: t.name,
               place,

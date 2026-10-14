@@ -1,8 +1,11 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { getToken } from "next-auth/jwt";
 import { crossSiteMutation } from "./lib/origin";
 import { buildCsp, makeNonce } from "./lib/csp";
 import { isViewOnly } from "./lib/access";
+import { deviceLabel, safeQuery, shouldLog, type ActorKind } from "./lib/activity";
+import { recordActivity } from "./lib/activity-db";
+import { clientIp } from "./lib/throttle-rules";
 
 /**
  * Runs in front of every page and API route. Three jobs, in this order:
@@ -13,6 +16,9 @@ import { isViewOnly } from "./lib/access";
  *      handlers check again — this is the outer wall, not the only lock.
  *   3. Give each page a fresh random nonce and a Content-Security-Policy
  *      that only lets scripts carrying it run.
+ *
+ * Along the way, a request that got past the session check is written to
+ * the activity log (lib/activity.ts) — after the response, so it adds no wait.
  */
 
 const under = (path: string, bases: string[]) =>
@@ -29,6 +35,7 @@ const LANDLORD_AREA = [
   "/api/companies",
   "/api/documents",
   "/api/export",
+  "/api/free-rent",
   "/api/import",
   "/api/inspections",
   "/api/invites",
@@ -99,7 +106,7 @@ const LOGIN_FOR: Record<Exclude<Area, "public" | "either">, string> = {
   owner: "/owners/login",
 };
 
-export default async function proxy(req: NextRequest) {
+export default async function proxy(req: NextRequest, event?: NextFetchEvent) {
   const path = req.nextUrl.pathname;
 
   // 1. Anything that changes data must come from this site. The session
@@ -151,6 +158,27 @@ export default async function proxy(req: NextRequest) {
       (await isViewOnly(token.id))
     ) {
       return NextResponse.json({ error: "That can't be changed from this account." }, { status: 403 });
+    }
+
+    // 2c. The activity log: who opened what, who changed what.
+    const prefetch =
+      req.headers.get("next-router-prefetch") === "1" ||
+      req.headers.get("purpose") === "prefetch" ||
+      (req.headers.get("sec-purpose") ?? "").includes("prefetch");
+    if (token && typeof token.id === "string" && shouldLog({ method: req.method, path, prefetch })) {
+      const write = recordActivity({
+        actorKind: kind as ActorKind,
+        actorId: token.id,
+        actorEmail: typeof token.email === "string" ? token.email : "",
+        actorName: typeof token.name === "string" ? token.name : null,
+        method: req.method,
+        path,
+        query: safeQuery(req.nextUrl.search),
+        ip: clientIp(req.headers),
+        device: deviceLabel(req.headers.get("user-agent")),
+      });
+      if (event) event.waitUntil(write);
+      else void write;
     }
   }
 

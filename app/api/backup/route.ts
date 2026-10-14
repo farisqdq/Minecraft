@@ -195,6 +195,7 @@ type TenantRow = {
     createdAt: Date;
     ruleId: string | null;
     moveOutId: string | null;
+    freeRent?: boolean;
   }[];
   moveOut?: {
     movedOutOn: Date;
@@ -297,6 +298,8 @@ function serializeTenants(rows: TenantRow[], key: FileKey) {
       rule: c.ruleId ? (t.rules ?? []).findIndex((r) => r.id === c.ruleId) : -1,
       // A charge the deposit paid at move-out, so a restore keeps the pair.
       moveOut: Boolean(c.moveOutId),
+      // A free month of rent (a35), so it comes back as one.
+      ...(c.freeRent ? { freeRent: true } : {}),
     })),
     // How the tenancy ended and where the deposit went. The part of it kept
     // is in the ledger already; this is the rest — the itemized list, what
