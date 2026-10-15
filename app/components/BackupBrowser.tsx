@@ -77,7 +77,7 @@ export default function BackupBrowser({ urls, startDir = "" }: { urls: BrowserUr
             <button key={f.path} onClick={() => load(f.path)} style={folderTile}>
               <span style={{ fontSize: 26 }}>📁</span>
               <span style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%" }}>{f.name}</span>
-              <span style={{ color: "#6B7169", fontSize: 12 }}>{f.count ?? 0} item{f.count === 1 ? "" : "s"}</span>
+              <span style={{ opacity: .65, fontSize: 12 }}>{f.count ?? 0} item{f.count === 1 ? "" : "s"}</span>
             </button>
           ))}
         </div>
@@ -166,7 +166,7 @@ function Lightbox({ entry, urls, onClose }: { entry: Entry; urls: BrowserUrls; o
 const crumbBtn: React.CSSProperties = { background: "none", border: 0, color: "#2E6A48", font: "inherit", cursor: "pointer", padding: 0, fontWeight: 600 };
 const folderTile: React.CSSProperties = {
   display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "14px 10px",
-  background: "#fff", border: "1px solid #E4E2DA", borderRadius: 10, cursor: "pointer", font: "inherit", color: "inherit", textAlign: "center",
+  background: "rgba(127,127,127,.08)", border: "1px solid rgba(127,127,127,.3)", borderRadius: 10, cursor: "pointer", font: "inherit", color: "inherit", textAlign: "center",
 };
 const mediaTile: React.CSSProperties = {
   position: "relative", aspectRatio: "1 / 1", padding: 0, border: "1px solid #E4E2DA", borderRadius: 8,

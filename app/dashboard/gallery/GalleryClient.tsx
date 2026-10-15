@@ -54,7 +54,7 @@ export default function GalleryClient({
               <select
                 value={phoneId}
                 onChange={(e) => setPhoneId(e.target.value)}
-                style={{ padding: "10px 12px", border: "1px solid var(--line,#e4e2da)", borderRadius: 10, font: "inherit", background: "var(--card,#fff)", color: "inherit", minWidth: 220 }}
+                style={{ padding: "10px 12px", border: "1px solid var(--line,#e4e2da)", borderRadius: 10, font: "inherit", background: "transparent", color: "inherit", colorScheme: "light dark", minWidth: 220 }}
               >
                 {phones.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
