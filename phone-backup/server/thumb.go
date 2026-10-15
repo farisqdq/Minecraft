@@ -24,11 +24,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/jdeng/goheif"
+	"github.com/jdeng/goheif/heif"
 	"golang.org/x/image/draw"
 	_ "golang.org/x/image/webp"
 )
 
-const thumbSize = 360 // longest side, px
+const thumbSize = 360    // grid tiles: longest side, px
+const previewSize = 1600 // full-screen view of photos browsers can't open (HEIC)
 
 // At most a few big decodes at once so the VPS stays responsive.
 var thumbSlots = make(chan struct{}, 3)
@@ -59,12 +62,16 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", rel, info.Size(), info.ModTime().UnixNano(), thumbSize)))
+	size := thumbSize
+	if q.Get("w") == "1600" {
+		size = previewSize
+	}
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", rel, info.Size(), info.ModTime().UnixNano(), size)))
 	cache := filepath.Join(s.cfg.DataDir, "thumbs", dev, hex.EncodeToString(h[:12])+".jpg")
 
 	if _, err := os.Stat(cache); err != nil {
 		thumbSlots <- struct{}{}
-		err = makeThumb(full, cache)
+		err = makeThumb(full, cache, size)
 		<-thumbSlots
 		if err != nil {
 			// Can't decode (HEIC, odd format): send the original instead.
@@ -85,7 +92,7 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	http.ServeContent(w, r, "thumb.jpg", st.ModTime(), f)
 }
 
-func makeThumb(src, dst string) error {
+func makeThumb(src, dst string, size int) error {
 	f, err := os.Open(src)
 	if err != nil {
 		return err
@@ -102,8 +109,11 @@ func makeThumb(src, dst string) error {
 		return err
 	}
 	orient := 1
-	if format == "jpeg" {
+	switch format {
+	case "jpeg":
 		orient = exifOrientation(head)
+	case "heic":
+		orient = heicOrientation(f)
 	}
 
 	b := img.Bounds()
@@ -111,7 +121,7 @@ func makeThumb(src, dst string) error {
 	if w == 0 || h == 0 {
 		return fmt.Errorf("empty image")
 	}
-	scale := float64(thumbSize) / float64(max(w, h))
+	scale := float64(size) / float64(max(w, h))
 	if scale > 1 {
 		scale = 1
 	}
@@ -133,6 +143,33 @@ func makeThumb(src, dst string) error {
 	}
 	return os.Rename(tmp, dst)
 }
+
+// heicOrientation: HEIC stores rotation as an "irot" box (counter-clockwise
+// quarter turns), which the decoder doesn't apply; some phones use an EXIF
+// orientation instead. Returned as an EXIF-style value for orientImage.
+func heicOrientation(ra io.ReaderAt) int {
+	hf := heif.Open(ra)
+	if it, err := hf.PrimaryItem(); err == nil {
+		switch it.Rotations() % 4 {
+		case 1:
+			return 8
+		case 2:
+			return 3
+		case 3:
+			return 6
+		}
+	}
+	if ex, err := hf.EXIF(); err == nil {
+		for _, sig := range []string{"II*\x00", "MM\x00*"} {
+			if i := bytes.Index(ex, []byte(sig)); i >= 0 {
+				return tiffOrientation(ex[i:])
+			}
+		}
+	}
+	return 1
+}
+
+var _ = goheif.Decode // registers the "heic" image format
 
 // Keep the decoders registered even if nothing else references them.
 var _ = gif.Decode

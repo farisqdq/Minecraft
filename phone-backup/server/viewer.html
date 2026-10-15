@@ -189,7 +189,7 @@ function lightbox(items, i){
   function draw(){
     var e = items[i];
     var media = VID.test(e.name) ? '<video src="'+fileUrl(e.path)+'" controls autoplay playsinline></video>'
-      : HEIC.test(e.name) ? '<img src="'+fileUrl(e.path,"&thumb=1")+'" alt="">'
+      : HEIC.test(e.name) ? '<img src="'+fileUrl(e.path,"&thumb=1&w=1600")+'" alt="">'
       : '<img src="'+fileUrl(e.path)+'" alt="">';
     box.innerHTML = '<button class="x" aria-label="Close">×</button>'+
       '<button class="nav" style="left:10px" data-d="-1">‹</button><button class="nav" style="right:10px" data-d="1">›</button>'+

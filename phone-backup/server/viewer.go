@@ -156,6 +156,9 @@ func (s *Server) handleViewerFile(w http.ResponseWriter, r *http.Request) {
 	target := "/dl"
 	if q.Get("thumb") == "1" {
 		target = "/thumb"
+		if q.Get("w") == "1600" {
+			v.Set("w", "1600")
+		}
 	} else if q.Get("a") == "1" {
 		v.Set("a", "1")
 	}
