@@ -461,6 +461,7 @@ func (s *Server) routes() http.Handler {
 
 	// Rent Roll side.
 	mux.HandleFunc("GET /api/admin/summary", s.admin(s.handleSummary))
+	mux.HandleFunc("POST /api/admin/update", s.admin(s.handleSelfUpdate))
 	mux.HandleFunc("POST /api/admin/devices", s.admin(s.handleCreate))
 	mux.HandleFunc("POST /api/admin/devices/{id}/code", s.admin(s.handleNewCode))
 	mux.HandleFunc("POST /api/admin/devices/{id}/request", s.admin(s.handleRequestBackup))
