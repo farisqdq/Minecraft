@@ -107,6 +107,10 @@ class Api(private val server: String, private val token: String?) {
         call(req("/api/device/report").post(report.toString().toRequestBody(json)).build())
     }
 
+    fun postLocation(body: JSONObject) {
+        call(req("/api/device/location").post(body.toString().toRequestBody(json)).build())
+    }
+
     companion object {
         val client: OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)

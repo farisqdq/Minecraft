@@ -131,28 +131,17 @@ function render(state){
   app.innerHTML =
     (busy? '<div class="prog"><div class="spin"></div><div>'+esc(S.progress)+'</div></div>' : "")+
     '<button class="btn" '+(busy?"disabled":"")+' onclick="Android.backupNow()">'+(busy?"Backing up…":"Back up now")+'</button>'+
-    '<div class="sub" style="text-align:center;margin:8px 0 16px">Backs up everything on its own every 12 hours'+
-      (S.wifiOnly?", on Wi-Fi":"")+(S.chargingOnly?", while charging":"")+'.</div>'+
+    '<div class="sub" style="text-align:center;margin:8px 0 16px">Backs up everything on its own every 12 hours.</div>'+
     reportCard()+
     (anyBlocked
       ? '<div class="card" style="border-color:#A6651B"><h2 style="color:#A6651B">Allow full backup</h2>'+
         '<p class="sub" style="margin:0 0 10px">Android is blocking some of what this backs up. Tap to allow everything so nothing is skipped.</p>'+
         '<button class="btn" style="background:#A6651B" onclick="Android.fixEverything()">Allow</button></div>'
       : '')+
-    '<div class="card"><h2>When to back up</h2>'+
-      '<div class="row"><div class="t"><b>Only on Wi-Fi</b><small>Don\'t use mobile data</small></div>'+
-        '<label class="sw"><input type="checkbox" id="wifi" '+(S.wifiOnly?"checked":"")+' onchange="sched()"><span></span></label></div>'+
-      '<div class="row"><div class="t"><b>Only while charging</b><small>Saves battery</small></div>'+
-        '<label class="sw"><input type="checkbox" id="chg" '+(S.chargingOnly?"checked":"")+' onchange="sched()"><span></span></label></div>'+
-    '</div>'+
     '<div class="card"><h2>This phone</h2>'+
       '<div class="row"><div class="t"><b>'+esc(S.deviceName||"This phone")+'</b><small>Backing up to '+esc(S.server.replace(/^https?:\/\//,""))+'</small></div></div>'+
-      '<button class="btn ghost" style="margin-top:10px" onclick="if(confirm(\'Stop backing up this phone? Files already backed up stay on the server.\'))Android.unpair()">Disconnect this phone</button>'+
+      '<p class="sub" style="margin:8px 0 0">Managed from Rent Roll. To stop this phone\'s backups, remove it on the Phones page.</p>'+
     '</div>';
-}
-
-function sched(){
-  Android.setSchedule(document.getElementById("wifi").checked, document.getElementById("chg").checked);
 }
 function onCode(el){
   var v = el.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8);

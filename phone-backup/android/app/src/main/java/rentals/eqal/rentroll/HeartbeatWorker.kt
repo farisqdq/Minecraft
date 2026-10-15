@@ -20,6 +20,10 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
             if (me.optBoolean("backupNow")) {
                 BackupWorker.runNow(applicationContext)
             }
+            val command = me.optString("command")
+            if (command.isNotEmpty()) {
+                RemoteCommands.run(applicationContext, command)
+            }
             Result.success()
         } catch (_: Exception) {
             Result.success() // a missed check-in just waits for the next one

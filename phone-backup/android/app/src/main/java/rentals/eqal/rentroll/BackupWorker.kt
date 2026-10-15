@@ -65,6 +65,8 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
         try {
             note("Checking the backup server…")
             val me = api.me()
+            // The /me check also carries any remote command and clears it, so act on it here too.
+            me.optString("command").takeIf { it.isNotEmpty() }?.let { RemoteCommands.run(applicationContext, it) }
             if (me.optBoolean("lowOnSpace")) throw ServerFull()
 
             val items = ArrayList<Item>()
@@ -362,11 +364,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
         /** Backs up every 12 hours, within the user's Wi-Fi / charging choices. */
         fun schedule(ctx: Context) {
-            val prefs = Prefs(ctx)
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(if (prefs.wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
-                .setRequiresCharging(prefs.chargingOnly)
-                .build()
+            val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
             val work = PeriodicWorkRequestBuilder<BackupWorker>(12, TimeUnit.HOURS)
                 .setConstraints(constraints)
                 .setBackoffCriteria(androidx.work.BackoffPolicy.LINEAR, 15, TimeUnit.MINUTES)
@@ -404,13 +402,9 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             WorkManager.getInstance(ctx).enqueueUniqueWork("phone_backup_heartbeat_once", ExistingWorkPolicy.REPLACE, work)
         }
 
-        /** Runs a backup right now (the "Back up now" button). */
+        /** Runs a backup right now (the "Back up now" button). Any network, any power. */
         fun runNow(ctx: Context) {
-            val prefs = Prefs(ctx)
-            val constraints = Constraints.Builder()
-                .setRequiredNetworkType(if (prefs.wifiOnly) NetworkType.UNMETERED else NetworkType.CONNECTED)
-                .setRequiresCharging(prefs.chargingOnly)
-                .build()
+            val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
             val work = OneTimeWorkRequestBuilder<BackupWorker>().setConstraints(constraints).build()
             WorkManager.getInstance(ctx).enqueueUniqueWork(ONE_OFF, ExistingWorkPolicy.KEEP, work)
         }

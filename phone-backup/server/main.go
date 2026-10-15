@@ -78,6 +78,19 @@ type Device struct {
 	RequestedAt     *time.Time `json:"requestedAt,omitempty"`
 	// The app version, read from the User-Agent on the phone's requests.
 	AppVersion string `json:"appVersion,omitempty"`
+	// A pending remote command for the phone: "lock", "wipe" or "locate".
+	// Handed to the phone once, on its next check-in.
+	Command   string     `json:"command,omitempty"`
+	CommandAt *time.Time `json:"commandAt,omitempty"`
+	// Last known location the phone reported (from a "locate" command).
+	Loc *Location `json:"loc,omitempty"`
+}
+
+type Location struct {
+	Lat float64   `json:"lat"`
+	Lng float64   `json:"lng"`
+	Acc float64   `json:"acc"`
+	At  time.Time `json:"at"`
 }
 
 // appVersionFromUA pulls "1.4.0" out of a "RentRollAndroid/1.4.0" User-Agent.
@@ -438,6 +451,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/device/check", s.handleCheck)
 	mux.HandleFunc("PUT /api/device/upload", s.handleUpload)
 	mux.HandleFunc("POST /api/device/report", s.handleReport)
+	mux.HandleFunc("POST /api/device/location", s.handleLocation)
 	mux.HandleFunc("GET /api/device/me", s.handleMe)
 
 	// Rent Roll side.
@@ -445,6 +459,7 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/admin/devices", s.admin(s.handleCreate))
 	mux.HandleFunc("POST /api/admin/devices/{id}/code", s.admin(s.handleNewCode))
 	mux.HandleFunc("POST /api/admin/devices/{id}/request", s.admin(s.handleRequestBackup))
+	mux.HandleFunc("POST /api/admin/devices/{id}/command", s.admin(s.handleCommand))
 	mux.HandleFunc("PATCH /api/admin/devices/{id}", s.admin(s.handleRename))
 	mux.HandleFunc("DELETE /api/admin/devices/{id}", s.admin(s.handleDelete))
 	mux.HandleFunc("GET /api/admin/devices/{id}/list", s.admin(s.handleList))
@@ -537,6 +552,13 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		d.BackupRequested = false
 		d.RequestedAt = nil
 	}
+	// A pending remote command is handed over once, then cleared.
+	command := d.Command
+	if command != "" {
+		changed = true
+		d.Command = ""
+		d.CommandAt = nil
+	}
 	if ver != "" && ver != d.AppVersion {
 		d.AppVersion = ver
 		changed = true
@@ -546,7 +568,69 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Unlock()
 	free, total, _ := diskSpace(s.cfg.DataDir)
-	writeJSON(w, 200, map[string]any{"deviceId": d.ID, "name": d.Name, "serverFree": free, "serverTotal": total, "lowOnSpace": s.lowOnSpace(), "backupNow": requested})
+	writeJSON(w, 200, map[string]any{"deviceId": d.ID, "name": d.Name, "serverFree": free, "serverTotal": total, "lowOnSpace": s.lowOnSpace(), "backupNow": requested, "command": command})
+}
+
+// handleLocation stores a location the phone reported after a "locate" command.
+func (s *Server) handleLocation(w http.ResponseWriter, r *http.Request) {
+	d := s.deviceFor(r)
+	if d == nil {
+		fail(w, 401, "not set up")
+		return
+	}
+	var body struct {
+		Lat float64 `json:"lat"`
+		Lng float64 `json:"lng"`
+		Acc float64 `json:"acc"`
+	}
+	if err := readJSON(r, &body, 4096); err != nil {
+		fail(w, 400, "bad location")
+		return
+	}
+	s.mu.Lock()
+	d.Loc = &Location{Lat: body.Lat, Lng: body.Lng, Acc: body.Acc, At: time.Now().UTC()}
+	err := s.save()
+	s.mu.Unlock()
+	if err != nil {
+		fail(w, 500, "couldn't save")
+		return
+	}
+	writeJSON(w, 200, map[string]bool{"ok": true})
+}
+
+// handleCommand queues a remote command (lock, wipe, locate) for a phone.
+func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Cmd string `json:"cmd"`
+	}
+	if err := readJSON(r, &body, 4096); err != nil {
+		fail(w, 400, "bad request")
+		return
+	}
+	if body.Cmd != "lock" && body.Cmd != "wipe" && body.Cmd != "locate" {
+		fail(w, 400, "unknown command")
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	d := s.findDevice(r.PathValue("id"))
+	if d == nil {
+		fail(w, 404, "no such phone")
+		return
+	}
+	if d.TokenHash == "" {
+		fail(w, 409, "This phone isn't set up, so it can't be sent a command.")
+		return
+	}
+	now := time.Now().UTC()
+	d.Command = body.Cmd
+	d.CommandAt = &now
+	if err := s.save(); err != nil {
+		fail(w, 500, "couldn't save")
+		return
+	}
+	s.logger.Printf("queued command %q for device %s (%s)", body.Cmd, d.ID, d.Name)
+	writeJSON(w, 200, s.view(d))
 }
 
 type checkFile struct {
@@ -672,7 +756,9 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		}
 		s.addUsage(d.ID, total-oldSize, 1-oldFiles)
 		top := strings.SplitN(rel, "/", 2)[0]
-		if snapshotFolders[top] {
+		// Prune only the dated snapshot files directly in the top folder
+		// (Texts/texts-DATE.xml). Subfolder files (Texts/media/ attachments) stay.
+		if snapshotFolders[top] && strings.Count(rel, "/") == 1 {
 			s.pruneSnapshots(d.ID, filepath.Dir(full))
 		}
 	}
@@ -752,10 +838,13 @@ type deviceView struct {
 	BackupRequested bool        `json:"backupRequested"`
 	RequestedAt     *time.Time  `json:"requestedAt,omitempty"`
 	AppVersion      string      `json:"appVersion,omitempty"`
+	Command         string      `json:"command,omitempty"`
+	CommandAt       *time.Time  `json:"commandAt,omitempty"`
+	Loc             *Location   `json:"loc,omitempty"`
 }
 
 func (s *Server) view(d *Device) deviceView {
-	v := deviceView{ID: d.ID, Name: d.Name, CreatedAt: d.CreatedAt, Paired: d.TokenHash != "", PairedAt: d.PairedAt, Model: d.Model, LastSeen: d.LastSeen, Report: d.Report, BackupRequested: d.BackupRequested, RequestedAt: d.RequestedAt, AppVersion: d.AppVersion}
+	v := deviceView{ID: d.ID, Name: d.Name, CreatedAt: d.CreatedAt, Paired: d.TokenHash != "", PairedAt: d.PairedAt, Model: d.Model, LastSeen: d.LastSeen, Report: d.Report, BackupRequested: d.BackupRequested, RequestedAt: d.RequestedAt, AppVersion: d.AppVersion, Command: d.Command, CommandAt: d.CommandAt, Loc: d.Loc}
 	if d.PairCode != "" && time.Now().Before(d.PairExpires) {
 		v.PairCode = d.PairCode
 		t := d.PairExpires
