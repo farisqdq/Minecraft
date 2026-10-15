@@ -247,11 +247,13 @@ async function gallery(main){
 }
 
 // ---------- sensitive-photo check (runs in this browser, on thumbnails) ----------
-var NS_KEY = "rrv-nsfw-v1", nsMap = null;
+var NS_KEY = "rrv-nsfw-v2", nsMap = null;
 function nsLoad(){ if (nsMap) return nsMap; try { nsMap = JSON.parse(localStorage.getItem(NS_KEY)||"{}"); } catch(e){ nsMap = {}; } return nsMap; }
 var nsSaveT = null;
 function nsSave(){ if (nsSaveT) return; nsSaveT = setTimeout(function(){ nsSaveT=null; try { localStorage.setItem(NS_KEY, JSON.stringify(nsMap)); } catch(e){} }, 1500); }
-function verdictOf(phone, path){ var x = nsLoad()[phone+"|"+path]; return x===1?1:x===0?0:-1; }
+// 1 = flagged, 0 = fine, 2 = you marked it "not sensitive" (never re-flagged).
+function verdictOf(phone, path){ var x = nsLoad()[phone+"|"+path]; return x===1?1:(x===0||x===2)?0:-1; }
+function clearFlag(phone, path){ nsLoad()[phone+"|"+path] = 2; nsSave(); scanState.flagged = Math.max(0, scanState.flagged-1); }
 var scanState = { run: 0, done: 0, total: 0, left: 0, flagged: 0 };
 var modelP = null;
 function getModel(){
@@ -285,9 +287,11 @@ async function startScan(phone, items, onUpdate){
     var img = await job.p, sens = null;
     if (img) {
       try {
-        ctx.drawImage(img, 0, 0, 224, 224);
+        var sw=img.naturalWidth||img.width, sh=img.naturalHeight||img.height, sq=Math.min(sw,sh);
+        ctx.drawImage(img, (sw-sq)/2, (sh-sq)/2, sq, sq, 0, 0, 224, 224);
         var preds = await model.classify(c, 5), pr = function(n){ var x=preds.filter(function(q){return q.className===n;})[0]; return x?x.probability:0; };
-        sens = pr("Porn") + pr("Hentai") >= 0.5 || pr("Sexy") >= 0.7;
+        // Only confident "explicit" verdicts; "suggestive" alone flags ordinary photos of people.
+        sens = Math.max(pr("Porn"), pr("Hentai")) >= 0.8 || pr("Porn") + pr("Hentai") >= 0.9;
       } catch(e){}
     }
     if (sens !== null) { m[phone+"|"+job.e.path] = sens?1:0; nsSave(); if (sens) scanState.flagged++; }
@@ -305,8 +309,12 @@ function lightbox(items, i){
       : '<img src="'+fileUrl(e.path)+'" alt="">';
     box.innerHTML = '<button class="x" aria-label="Close">×</button>'+
       '<button class="nav" style="left:10px" data-d="-1">‹</button><button class="nav" style="right:10px" data-d="1">›</button>'+
-      media+'<div class="cap">'+(i+1)+' of '+items.length+' · '+esc(e.name)+' · <a href="'+fileUrl(e.path,"&a=1")+'">Download</a></div>';
+      media+'<div class="cap">'+(i+1)+' of '+items.length+' · '+esc(e.name)+' · <a href="'+fileUrl(e.path,"&a=1")+'">Download</a>'+
+      (verdictOf(S.phone, e.path)===1 ? ' · <a href="#" id="nsok">Not sensitive</a>' : '')+'</div>';
     box.querySelector(".x").onclick = close;
+    var ok = box.querySelector("#nsok");
+    if (ok) ok.onclick = function(ev){ ev.preventDefault(); clearFlag(S.phone, e.path);
+      var t = document.querySelector('.tile[data-p="'+CSS.escape(e.path)+'"]'); if (t) t.classList.remove("sens"); draw(); };
     box.querySelectorAll(".nav").forEach(function(n){ n.onclick=function(ev){ ev.stopPropagation(); i=(i+Number(n.dataset.d)+items.length)%items.length; draw(); }; });
   }
   function close(){ box.remove(); document.removeEventListener("keydown", key); }

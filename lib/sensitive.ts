@@ -12,7 +12,7 @@
 
 export type Verdict = "pending" | "safe" | "sensitive" | "unknown";
 
-const STORE_KEY = "rr-sensitive-v1";
+const STORE_KEY = "rr-sensitive-v2";
 const MAX_REMEMBERED = 6000;
 
 // ---- remembered verdicts (localStorage, best effort) ----
@@ -105,11 +105,14 @@ export function scan(key: string, img: HTMLImageElement): Promise<Verdict> {
       c.width = 224; c.height = 224;
       const ctx = c.getContext("2d");
       if (!ctx) return "unknown";
-      ctx.drawImage(img, 0, 0, 224, 224);
+      // Centre square, not squashed: a stretched photo confuses the model.
+      const sw = img.naturalWidth || img.width, sh = img.naturalHeight || img.height, sq = Math.min(sw, sh);
+      ctx.drawImage(img, (sw - sq) / 2, (sh - sq) / 2, sq, sq, 0, 0, 224, 224);
       ctx.getImageData(0, 0, 1, 1); // throws here if the pixels aren't readable
       const preds: { className: string; probability: number }[] = await model.classify(c, 5);
       const p = (name: string) => preds.find((x) => x.className === name)?.probability || 0;
-      const sensitive = p("Porn") + p("Hentai") >= 0.5 || p("Sexy") >= 0.7;
+      // Only confident "explicit" verdicts; "suggestive" alone flags ordinary photos of people.
+      const sensitive = Math.max(p("Porn"), p("Hentai")) >= 0.8 || p("Porn") + p("Hentai") >= 0.9;
       remember(key, sensitive);
       return sensitive ? "sensitive" : "safe";
     } catch {
