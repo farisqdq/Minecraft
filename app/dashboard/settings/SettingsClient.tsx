@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import AppShell from "../../components/AppShell";
 import { useAppearance } from "../../components/appearance/AppearanceContext";
@@ -23,26 +22,18 @@ const ITEMS: Item[] = [
 export default function SettingsClient({ openRepairs, userLabel, admin }: { openRepairs: number; userLabel: string; admin: boolean }) {
   const { appearance } = useAppearance();
   const items = ITEMS.filter((i) => !i.adminOnly || admin);
-  // Only inside the Rent Roll Android app (which tags its browser) can we open
-  // the phone's own Backup screen; in a normal browser the link does nothing.
-  const [inApp, setInApp] = useState(false);
-  useEffect(() => {
-    try { setInApp(navigator.userAgent.includes("RentRollApp")); } catch { /* ignore */ }
-  }, []);
   return (
     <AppShell openRepairs={openRepairs} userLabel={userLabel} title="Settings">
       <ul className={styles.list}>
-        {inApp && (
-          <li>
-            <a href="rentroll://backup" className={styles.row}>
-              <span className={styles.text}>
-                <span className={styles.title}>Phone backup</span>
-                <span className={styles.detail}>Back up this phone — photos, videos, contacts, texts and more.</span>
-              </span>
-              <span className={styles.chev} aria-hidden="true">›</span>
-            </a>
-          </li>
-        )}
+        <li>
+          <a href="rentroll://backup" className={styles.row}>
+            <span className={styles.text}>
+              <span className={styles.title}>Phone backup</span>
+              <span className={styles.detail}>Opens in the Rent Roll phone app — back up this phone&apos;s photos, videos, contacts, texts and more.</span>
+            </span>
+            <span className={styles.chev} aria-hidden="true">›</span>
+          </a>
+        </li>
         <li>
           <Link href="/dashboard/settings/appearance" className={styles.row}>
             <span className={styles.text}>
