@@ -142,8 +142,15 @@ object Exporters {
         return rows.size
     }
 
-    /** Text messages (SMS) in SMS Backup & Restore's sms XML. Picture messages (MMS) aren't included. */
-    fun texts(ctx: Context, out: File): Int {
+    /**
+     * Text messages in SMS Backup & Restore's XML: SMS as <sms/>, and picture /
+     * group messages (MMS) as <mms> with their parts and addresses. MMS photos
+     * and videos aren't embedded; each is backed up once as its own file under
+     * Texts/media/ and the <part> points at it (src="media/…"), so the daily
+     * texts file stays small. RCS chats and reactions live inside Google
+     * Messages' private storage and can't be read by any app.
+     */
+    fun texts(ctx: Context, out: File, attachments: MutableList<Item>? = null): Int {
         if (!has(ctx, Manifest.permission.READ_SMS)) return -1
         val nameOf = names(ctx)
         val cols = arrayOf(
@@ -182,9 +189,119 @@ object Exporters {
                     written++
                 }
             }
+            written += runCatching { writeMms(ctx, w, nameOf, attachments) }.getOrDefault(0)
             w.write("</smses>\n")
         }
         return written
+    }
+
+    private val MMS = Uri.parse("content://mms")
+    private val MMS_PART = Uri.parse("content://mms/part")
+
+    /** Picture and group messages. Returns how many were written. */
+    private fun writeMms(ctx: Context, w: BufferedWriter, nameOf: (String?) -> String, attachments: MutableList<Item>?): Int {
+        val cr = ctx.contentResolver
+        var n = 0
+        cr.query(MMS, arrayOf("_id", "date", "msg_box", "sub", "thread_id", "read", "m_id"), null, null, "date ASC")?.use { c ->
+            while (c.moveToNext()) {
+                val id = c.getLong(0)
+                val dateMs = c.getLong(1) * 1000 // MMS dates are in seconds
+                val box = c.getInt(2)
+                if (box != 1 && box != 2) continue // skip drafts / outbox / failed
+                // Addresses: 137 = from, 151 = to, 130 = cc.
+                val addrs = ArrayList<Pair<String, Int>>()
+                cr.query(Uri.parse("content://mms/$id/addr"), arrayOf("address", "type"), null, null, null)?.use { a ->
+                    while (a.moveToNext()) {
+                        val addr = a.getString(0) ?: continue
+                        if (addr == "insert-address-token") continue
+                        addrs += addr to a.getInt(1)
+                    }
+                }
+                // Parts: text and attachments.
+                data class Part(val seq: Int, val ct: String, val name: String?, val text: String?, val src: String?)
+                val parts = ArrayList<Part>()
+                cr.query(MMS_PART, arrayOf("_id", "ct", "text", "name", "cl", "seq", "_data"), "mid=?", arrayOf(id.toString()), "seq ASC")?.use { pc ->
+                    while (pc.moveToNext()) {
+                        val pid = pc.getLong(0)
+                        val ct = (pc.getString(1) ?: "").lowercase()
+                        val name = pc.getString(3) ?: pc.getString(4)
+                        when {
+                            ct == "application/smil" -> {}
+                            ct.startsWith("text/") -> {
+                                val text = pc.getString(2) ?: if (pc.getString(6) != null) readPartText(ctx, pid) else null
+                                if (!text.isNullOrEmpty()) parts += Part(pc.getInt(5), ct, name, text, null)
+                            }
+                            ct.startsWith("image/") || ct.startsWith("video/") || ct.startsWith("audio/") -> {
+                                val ext = extFor(ct, name)
+                                val file = "${id}_${pid}.$ext"
+                                val uri = Uri.parse("content://mms/part/$pid")
+                                val size = partSize(ctx, uri)
+                                if (size > 0) {
+                                    attachments?.add(Item("Texts/media/$file", size, dateMs, "texts") { cr.openInputStream(uri) })
+                                    parts += Part(pc.getInt(5), ct, name, null, "media/$file")
+                                }
+                            }
+                        }
+                    }
+                }
+                if (parts.isEmpty() && addrs.isEmpty()) continue
+                val from = addrs.firstOrNull { it.second == 137 }?.first ?: ""
+                val others = addrs.filter { it.second != 137 }.map { it.first }
+                val party = if (box == 2) others else listOf(from) + others
+                w.write("  <mms")
+                w.a("date", dateMs.toString())
+                w.a("msg_box", box.toString())
+                w.a("address", party.distinct().joinToString("~"))
+                w.a("contact_name", party.distinct().joinToString(", ") { nameOf(it) })
+                w.a("sub", c.getString(3))
+                w.a("thread_id", c.getString(4))
+                w.a("read", c.getString(5) ?: "1")
+                w.a("m_id", c.getString(6))
+                w.a("readable_date", readable.format(Date(dateMs)))
+                w.write(">\n    <parts>\n")
+                for (p in parts) {
+                    w.write("      <part")
+                    w.a("seq", p.seq.toString()); w.a("ct", p.ct); w.a("name", p.name)
+                    if (p.text != null) w.a("text", p.text)
+                    if (p.src != null) w.a("src", p.src)
+                    w.write(" />\n")
+                }
+                w.write("    </parts>\n    <addrs>\n")
+                for ((addr, type) in addrs) {
+                    w.write("      <addr"); w.a("address", addr); w.a("type", type.toString()); w.a("name", nameOf(addr)); w.write(" />\n")
+                }
+                w.write("    </addrs>\n  </mms>\n")
+                n++
+            }
+        }
+        return n
+    }
+
+    private fun readPartText(ctx: Context, pid: Long): String? = runCatching {
+        ctx.contentResolver.openInputStream(Uri.parse("content://mms/part/$pid"))?.use { it.readBytes().toString(Charsets.UTF_8) }
+    }.getOrNull()
+
+    private fun partSize(ctx: Context, uri: Uri): Long {
+        runCatching {
+            ctx.contentResolver.openAssetFileDescriptor(uri, "r")?.use { if (it.length > 0) return it.length }
+        }
+        return runCatching {
+            ctx.contentResolver.openInputStream(uri)?.use { input ->
+                val buf = ByteArray(64 * 1024); var total = 0L
+                while (true) { val r = input.read(buf); if (r < 0) break; total += r }
+                total
+            } ?: 0L
+        }.getOrDefault(0L)
+    }
+
+    private fun extFor(ct: String, name: String?): String {
+        name?.substringAfterLast('.', "")?.lowercase()?.takeIf { it.length in 2..5 && it.all { ch -> ch.isLetterOrDigit() } }?.let { return it }
+        return when (ct) {
+            "image/jpeg", "image/jpg" -> "jpg"; "image/png" -> "png"; "image/gif" -> "gif"; "image/webp" -> "webp"
+            "image/heic" -> "heic"; "video/mp4" -> "mp4"; "video/3gpp" -> "3gp"; "audio/amr" -> "amr"
+            "audio/mpeg" -> "mp3"; "audio/mp4", "audio/aac" -> "m4a"
+            else -> ct.substringAfter('/').filter { it.isLetterOrDigit() }.take(5).ifEmpty { "bin" }
+        }
     }
 
     /** Installed apps as a readable page with Play Store links, for setting up a replacement phone. */

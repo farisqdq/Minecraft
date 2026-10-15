@@ -26,6 +26,18 @@ object RemoteCommands {
         return dpm.isAdminActive(adminComponent(ctx))
     }
 
+    /** "always" / "fg" (only while open) / "none". */
+    fun locationLevel(ctx: Context): String {
+        val fg = ctx.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED ||
+            ctx.checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) == PackageManager.PERMISSION_GRANTED
+        if (!fg) return "none"
+        if (Build.VERSION.SDK_INT < 29) return "always"
+        return if (ctx.checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) "always" else "fg"
+    }
+
+    /** Sent with every request so the site knows which anti-theft controls will work. */
+    fun caps(ctx: Context): String = "admin=${if (isAdminActive(ctx)) 1 else 0};loc=${locationLevel(ctx)}"
+
     fun run(ctx: Context, command: String) {
         when (command) {
             "lock" -> lock(ctx)

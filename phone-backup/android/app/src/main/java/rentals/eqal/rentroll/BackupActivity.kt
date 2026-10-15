@@ -31,6 +31,25 @@ class BackupActivity : AppCompatActivity() {
     private val prefs by lazy { Prefs(this) }
 
     private var pendingAllFiles = false
+
+    // Anti-theft: Device Admin (lock/wipe) and location (locate).
+    private val askAdmin = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { afterAntitheftChange() }
+    private val askBgLocation = registerForActivityResult(ActivityResultContracts.RequestPermission()) { afterAntitheftChange() }
+    private val askLocation = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { res ->
+        if (res.values.any { it } && Build.VERSION.SDK_INT >= 29 &&
+            checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) != PackageManager.PERMISSION_GRANTED
+        ) {
+            // Android then asks for "Allow all the time" so Locate works while the app is closed.
+            askBgLocation.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+        } else afterAntitheftChange()
+    }
+
+    /** Tell the server straight away so the Phones page shows the new state. */
+    private fun afterAntitheftChange() {
+        Api.caps = RemoteCommands.caps(this)
+        pushState()
+        if (prefs.paired) BackupWorker.checkRequested(this)
+    }
     private val askPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         // After granting the runtime permissions, finish with All-files access if it's still off.
         if (pendingAllFiles) {
@@ -59,6 +78,7 @@ class BackupActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         if (::web.isInitialized) pushState()
+        Api.caps = RemoteCommands.caps(this)
         if (prefs.paired) { BackupWorker.heartbeat(this); BackupWorker.checkRequested(this) }
         // Self-heal: the screen says a backup is under way but nothing is running
         // (e.g. an old job left queued by v1.4). Start a real one in its place.
@@ -113,6 +133,9 @@ class BackupActivity : AppCompatActivity() {
             .put("progress", prefs.progress)
             .put("lastReport", prefs.lastReport?.let { JSONObject(it) } ?: JSONObject.NULL)
             .put("sdk", Build.VERSION.SDK_INT)
+            .put("antitheft", JSONObject()
+                .put("admin", RemoteCommands.isAdminActive(this))
+                .put("loc", RemoteCommands.locationLevel(this)))
     }
 
     /** Every runtime permission the backup needs — all requested together. */
@@ -190,6 +213,27 @@ class BackupActivity : AppCompatActivity() {
                 need.isNotEmpty() -> { pendingAllFiles = true; askPerms.launch(need.toTypedArray()) }
                 !Scanner.hasAllFiles() -> requestAllFiles()
                 else -> openAppSettings()
+            }
+        }
+
+        @JavascriptInterface fun enableAdmin() {
+            runOnUiThread {
+                try {
+                    askAdmin.launch(Intent(android.app.admin.DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN)
+                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_DEVICE_ADMIN, RemoteCommands.adminComponent(this@BackupActivity))
+                        .putExtra(android.app.admin.DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            "Lets your company lock this phone, or erase it if it's lost or stolen, from Rent Roll."))
+                } catch (_: Exception) {}
+            }
+        }
+
+        @JavascriptInterface fun enableLocation() {
+            runOnUiThread {
+                when (RemoteCommands.locationLevel(this@BackupActivity)) {
+                    "none" -> askLocation.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION))
+                    "fg" -> if (Build.VERSION.SDK_INT >= 29) askBgLocation.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
+                    else -> {}
+                }
             }
         }
 

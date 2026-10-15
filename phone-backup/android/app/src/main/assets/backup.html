@@ -138,10 +138,27 @@ function render(state){
         '<p class="sub" style="margin:0 0 10px">Android is blocking some of what this backs up. Tap to allow everything so nothing is skipped.</p>'+
         '<button class="btn" style="background:#A6651B" onclick="Android.fixEverything()">Allow</button></div>'
       : '')+
+    antitheftCard()+
     '<div class="card"><h2>This phone</h2>'+
       '<div class="row"><div class="t"><b>'+esc(S.deviceName||"This phone")+'</b><small>Backing up to '+esc(S.server.replace(/^https?:\/\//,""))+'</small></div></div>'+
       '<p class="sub" style="margin:8px 0 0">Managed from Rent Roll. To stop this phone\'s backups, remove it on the Phones page.</p>'+
     '</div>';
+}
+function antitheftCard(){
+  var a = S.antitheft || {};
+  var ok = '<span style="color:#2E6A48;font-weight:600">On</span>';
+  var row = function(title, sub, on, btn){
+    return '<div class="row" style="align-items:center;gap:10px"><div class="t" style="flex:1"><b>'+title+'</b><small>'+sub+'</small></div>'+(on?ok:btn)+'</div>';
+  };
+  var locSub = a.loc==="always" ? "Rent Roll can find this phone, even when the app is closed."
+             : a.loc==="fg" ? "Tap and choose \"Allow all the time\" so it works when the app is closed."
+             : "Lets Rent Roll find this phone if it's lost.";
+  return '<div class="card"><h2>If this phone is lost</h2>'+
+    row("Lock &amp; erase", "Lets Rent Roll lock this phone, or erase it if it's stolen.", !!a.admin,
+        '<button class="btn" style="width:auto;padding:8px 14px;margin:0" onclick="Android.enableAdmin()">Turn on</button>')+
+    row("Location", locSub, a.loc==="always",
+        '<button class="btn" style="width:auto;padding:8px 14px;margin:0" onclick="Android.enableLocation()">Allow</button>')+
+  '</div>';
 }
 function onCode(el){
   var v = el.value.toUpperCase().replace(/[^A-Z0-9]/g,"").slice(0,8);

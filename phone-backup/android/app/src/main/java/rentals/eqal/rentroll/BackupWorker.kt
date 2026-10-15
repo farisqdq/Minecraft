@@ -60,6 +60,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         if (!prefs.paired) return@withContext Result.success()
+        Api.caps = RemoteCommands.caps(applicationContext)
         val api = Api(prefs.server, prefs.token)
         val started = System.currentTimeMillis()
         val counts = JSONObject()
@@ -163,13 +164,15 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     private class ServerFull : IOException("server full")
 
     private fun collectSnapshots(items: ArrayList<Item>, counts: JSONObject, skipped: JSONArray) {
+        // Picture-message attachments found while exporting texts; each uploads once.
+        val mmsMedia = ArrayList<Item>()
         data class Snap(val key: String, val label: String, val ext: String, val folder: String, val perm: String?, val make: (File) -> Int)
         val ctx = applicationContext
         // Everything is always backed up; there's nothing to turn off.
         val snaps = listOf(
             Snap("contacts", "contacts", "vcf", "Contacts", Manifest.permission.READ_CONTACTS) { Exporters.contacts(ctx, it) },
             Snap("calls", "call log", "xml", "Calls", Manifest.permission.READ_CALL_LOG) { Exporters.calls(ctx, it) },
-            Snap("texts", "text messages", "xml", "Texts", Manifest.permission.READ_SMS) { Exporters.texts(ctx, it) },
+            Snap("texts", "text messages", "xml", "Texts", Manifest.permission.READ_SMS) { Exporters.texts(ctx, it, mmsMedia) },
             Snap("apps", "app list", "html", "Apps", null) { Exporters.apps(ctx, it) },
         )
         for (s in snaps) {
@@ -184,6 +187,10 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             } catch (e: Exception) {
                 problem("Couldn't read ${s.label}: ${e.message}")
             }
+        }
+        if (mmsMedia.isNotEmpty()) {
+            counts.put("mmsMedia", mmsMedia.size)
+            items += mmsMedia
         }
     }
 
@@ -296,12 +303,12 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     /**
      * Sends a "running" report so the site can show a progress bar and ETA.
      * Fire-and-forget on its own thread so a slow or offline server never
-     * holds up the upload; throttled to one every 30 seconds.
+     * holds up the upload; throttled to one every 10 seconds.
      */
     private fun sendLive(force: Boolean = false) {
         val api = liveApi ?: return
         val now = System.currentTimeMillis()
-        if (!force && now - lastLive < 30_000) return
+        if (!force && now - lastLive < 10_000) return
         lastLive = now
         val r = JSONObject().apply {
             put("running", true)

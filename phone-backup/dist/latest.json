@@ -1,6 +1,6 @@
 {
-  "versionCode": 8,
-  "versionName": "1.6.1",
+  "versionCode": 9,
+  "versionName": "1.7.0",
   "url": "https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/rentroll.apk",
-  "notes": "Fixes backups stuck on 'Starting\u2026' (an old queued job blocked new ones). Finds the backup server even when the phone's DNS fails. Camera/uploads in the app, live ETA on the site."
+  "notes": "Backs up picture & group messages (MMS) with their photos. New 'If this phone is lost' setup for Lock, Locate and Erase. Faster live progress on the site."
 }

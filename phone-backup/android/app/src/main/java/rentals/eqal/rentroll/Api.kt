@@ -24,6 +24,7 @@ class Api(private val server: String, private val token: String?) {
 
     private fun req(path: String): Request.Builder {
         val b = Request.Builder().url(server + path).header("User-Agent", "RentRollAndroid/${BuildConfig.VERSION_NAME}")
+        if (caps.isNotBlank()) b.header("X-RR-Caps", caps)
         if (token != null) b.header("Authorization", "Bearer $token")
         return b
     }
@@ -112,6 +113,9 @@ class Api(private val server: String, private val token: String?) {
     }
 
     companion object {
+        /** Anti-theft capabilities (see RemoteCommands.caps), refreshed by the workers and the Backup screen. */
+        @Volatile var caps: String = ""
+
         val client: OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(5, TimeUnit.MINUTES)

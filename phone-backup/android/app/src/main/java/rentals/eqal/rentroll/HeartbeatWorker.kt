@@ -15,6 +15,7 @@ class HeartbeatWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         val prefs = Prefs(applicationContext)
         if (!prefs.paired) return@withContext Result.success()
+        Api.caps = RemoteCommands.caps(applicationContext)
         try {
             val me = Api(prefs.server, prefs.token).me()
             if (me.optBoolean("backupNow")) {
