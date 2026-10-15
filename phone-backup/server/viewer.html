@@ -206,17 +206,22 @@ async function gallery(main){
   }
   var gs3 = document.getElementById("gs"); if (!gs3) return;
   gs3.outerHTML = '<div class="tools"><span class="muted" id="gs">'+items.length+' photos &amp; videos</span>'+
+    '<select id="typ"><option value="all">Photos &amp; videos</option><option value="photo">Photos only</option><option value="video">Videos only</option></select>'+
     '<select id="flt"><option value="all">All</option><option value="sens">Sensitive only</option><option value="hide">Hide sensitive</option></select>'+
     '<select id="srt"><option value="new">Newest first</option><option value="sens">Sensitive first</option></select>'+
     '<span class="muted" id="scan" style="font-size:13px"></span></div>';
-  var flt = document.getElementById("flt"), srt = document.getElementById("srt");
-  flt.value = S.flt || "all"; srt.value = S.srt || "new";
+  var flt = document.getElementById("flt"), srt = document.getElementById("srt"), typ = document.getElementById("typ");
+  flt.value = S.flt || "all"; srt.value = S.srt || "new"; typ.value = S.typ || "all";
   var g = document.getElementById("g"), view = [], shown = 0;
   var phone = S.phone;
   function v(e){ return verdictOf(phone, e.path); }
   function rebuild(){
-    S.flt = flt.value; S.srt = srt.value;
-    view = items.filter(function(e){ var x=v(e); return S.flt==="sens" ? x===1 : S.flt==="hide" ? x!==1 : true; });
+    S.flt = flt.value; S.srt = srt.value; S.typ = typ.value;
+    view = items.filter(function(e){
+      var isVid = VID.test(e.name);
+      if (S.typ==="photo" && isVid) return false;
+      if (S.typ==="video" && !isVid) return false;
+      var x=v(e); return S.flt==="sens" ? x===1 : S.flt==="hide" ? x!==1 : true; });
     if (S.srt==="sens") view = view.slice().sort(function(a,b){ return (v(b)===1)-(v(a)===1) || (a.mtime<b.mtime?1:-1); });
     g.innerHTML = ""; shown = 0; more();
     if (!view.length) g.innerHTML = '<p class="muted">'+(S.flt==="sens" ? "Nothing flagged as sensitive"+(scanState.left? " yet — still checking." : ".") : "Nothing to show.")+'</p>';
@@ -233,7 +238,7 @@ async function gallery(main){
     });
     shown += 240; g.appendChild(frag);
   }
-  flt.onchange = rebuild; srt.onchange = rebuild;
+  flt.onchange = rebuild; srt.onchange = rebuild; typ.onchange = rebuild;
   rebuild();
   var sentinel = document.createElement("div"); main.appendChild(sentinel);
   new IntersectionObserver(function(es){ if (es[0].isIntersecting && shown < view.length) more(); }, {rootMargin:"800px"}).observe(sentinel);

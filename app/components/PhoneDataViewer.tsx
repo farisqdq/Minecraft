@@ -216,15 +216,27 @@ type MediaItem = { path: string; name: string; size: number; mtime: string; vide
 function MediaTab({ phoneId }: { phoneId: string }) {
   const { data, err, loading } = useJson<{ items: MediaItem[]; capped: boolean }>(`/api/phones/${phoneId}/media`);
   const [open, setOpen] = useState<number | null>(null);
+  const [kind, setKind] = useState<"all" | "photo" | "video">("all");
   const fileUrl = (path: string, dl: boolean) => `/api/phones/${phoneId}/file?p=${encodeURIComponent(path)}${dl ? "&download=1" : ""}`;
 
   if (loading) return <Loading />;
   if (err) return <ErrorMsg msg={err} />;
-  const items = data?.items || [];
-  if (items.length === 0) return <Empty what="photos or videos" />;
+  const all = data?.items || [];
+  if (all.length === 0) return <Empty what="photos or videos" />;
+  const items = all.filter((m) => kind === "all" || (kind === "video" ? m.video : !m.video));
+  const nPhotos = all.filter((m) => !m.video).length;
+  const kindBar = (
+    <div style={{ display: "flex", gap: 6, padding: "6px 4px 8px", position: "sticky", top: 0, zIndex: 2, background: "var(--bg)" }}>
+      {([["all", `All (${all.length})`], ["photo", `Photos (${nPhotos})`], ["video", `Videos (${all.length - nPhotos})`]] as const).map(([k, label]) => (
+        <button key={k} onClick={() => { setKind(k); setOpen(null); }}
+          style={{ ...tabBtn, ...(kind === k ? tabActive : {}), padding: "6px 12px", fontSize: 13.5 }}>{label}</button>
+      ))}
+    </div>
+  );
 
   return (
     <div style={{ height: "100%", overflowY: "auto", background: "var(--bg)", padding: 3 }}>
+      {kindBar}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 3 }}>
         {items.map((m, i) => (
           <button key={m.path} onClick={() => setOpen(i)} style={galTile} title={m.name}>
