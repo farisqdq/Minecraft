@@ -30,7 +30,13 @@ class BackupActivity : AppCompatActivity() {
     private lateinit var web: WebView
     private val prefs by lazy { Prefs(this) }
 
+    private var pendingAllFiles = false
     private val askPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        // After granting the runtime permissions, finish with All-files access if it's still off.
+        if (pendingAllFiles) {
+            pendingAllFiles = false
+            if (!Scanner.hasAllFiles()) requestAllFiles()
+        }
         pushState()
     }
     @SuppressLint("SetJavaScriptEnabled")
@@ -166,14 +172,15 @@ class BackupActivity : AppCompatActivity() {
             pushState()
         }
 
-        /** Grant whatever's still blocked: runtime perms, then All-files access. */
-        @JavascriptInterface fun fixPermission(which: String) {
-            if (which == "allfiles") { requestAllFiles(); return }
+        /** One tap grants everything still blocked: runtime perms, then All-files access. */
+        @JavascriptInterface fun fixEverything() {
             val need = allPerms().filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-            if (need.isNotEmpty()) askPerms.launch(need.toTypedArray()) else openAppSettings()
+            when {
+                need.isNotEmpty() -> { pendingAllFiles = true; askPerms.launch(need.toTypedArray()) }
+                !Scanner.hasAllFiles() -> requestAllFiles()
+                else -> openAppSettings()
+            }
         }
-
-        @JavascriptInterface fun requestAllFiles() = this@BackupActivity.requestAllFiles()
 
         @JavascriptInterface fun openAppSettings() {
             try {

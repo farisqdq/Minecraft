@@ -134,9 +134,11 @@ function render(state){
     '<div class="sub" style="text-align:center;margin:8px 0 16px">Backs up everything on its own every 12 hours'+
       (S.wifiOnly?", on Wi-Fi":"")+(S.chargingOnly?", while charging":"")+'.</div>'+
     reportCard()+
-    '<div class="card"><h2>What gets backed up</h2>'+
-      '<p class="sub" style="margin:0 0 8px">Everything below is backed up automatically.'+
-      (anyBlocked?' Turn on the ones Android is still blocking.':'')+'</p>'+cats+'</div>'+
+    (anyBlocked
+      ? '<div class="card" style="border-color:#A6651B"><h2 style="color:#A6651B">Allow full backup</h2>'+
+        '<p class="sub" style="margin:0 0 10px">Android is blocking some of what this backs up. Tap to allow everything so nothing is skipped.</p>'+
+        '<button class="btn" style="background:#A6651B" onclick="Android.fixEverything()">Allow</button></div>'
+      : '')+
     '<div class="card"><h2>When to back up</h2>'+
       '<div class="row"><div class="t"><b>Only on Wi-Fi</b><small>Don\'t use mobile data</small></div>'+
         '<label class="sw"><input type="checkbox" id="wifi" '+(S.wifiOnly?"checked":"")+' onchange="sched()"><span></span></label></div>'+

@@ -40,6 +40,12 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     private val problems = ArrayList<String>()
     private var lastNotify = 0L
 
+    // For the upload ETA shown on the Backup screen.
+    private var uploadStart = 0L
+    private var uploadBase = 0L
+    private var liveDone = 0L
+    private var toSendTotal = 0L
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         if (!prefs.paired) return@withContext Result.success()
         val api = Api(prefs.server, prefs.token)
@@ -77,7 +83,11 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
             val totalBytes = needed.sumOf { it.first.size - it.second }
             var doneBytes = 0L
+            uploadStart = System.currentTimeMillis()
+            liveDone = 0L
+            toSendTotal = totalBytes
             counts.put("toSend", needed.size)
+            if (needed.isEmpty()) note("Everything's already backed up.")
             for ((item, have) in needed) {
                 if (isStopped) break
                 note(fileLine(sentFiles + 1, needed.size, doneBytes, totalBytes))
@@ -203,6 +213,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
                     offset = now
                     return sent + uploadRest(api, item, again, offset).also { again.close() }
                 }
+                liveDone += now - offset
                 sent += now - offset
                 offset = now
                 maybeNote(item, offset)
@@ -219,6 +230,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             val chunk = minOf(CHUNK, item.size - offset)
             val now = api.uploadChunk(item.remote, offset, item.size, item.mtime, input, chunk)
             if (now <= offset) throw IOException("upload stalled")
+            liveDone += now - offset
             sent += now - offset
             offset = now
         }
@@ -245,7 +257,17 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     }
 
     private fun maybeNote(item: Item, offset: Long) {
-        if (item.size > 8 * CHUNK) note("Uploading ${item.remote.substringAfterLast('/')} — ${pct(offset, item.size)}%")
+        if (item.size > 8 * CHUNK) note("Uploading ${item.remote.substringAfterLast('/')} — ${pct(offset, item.size)}%${etaSuffix()}")
+    }
+
+    /** " · about 25 min left", once there's enough uploaded to estimate. */
+    private fun etaSuffix(): String {
+        val elapsed = System.currentTimeMillis() - uploadStart
+        if (liveDone < 512 * 1024 || elapsed < 3000 || toSendTotal <= 0) return ""
+        val rate = liveDone.toDouble() / elapsed // bytes per ms
+        if (rate <= 0) return ""
+        val remainingMs = ((toSendTotal - liveDone) / rate).toLong()
+        return " · ${humanTime(remainingMs)} left"
     }
 
     private suspend fun setForegroundSafely(text: String) {
@@ -297,7 +319,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
     private fun fileLine(i: Int, total: Int, done: Long, all: Long): String {
         val p = if (all > 0) " — ${pct(done, all)}%" else ""
-        return "Backing up file $i of $total$p"
+        return "Backing up $i of $total$p${etaSuffix()}"
     }
 
     private fun summary(files: Int, bytes: Long): String {
@@ -325,6 +347,16 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             var b = bytes.toDouble(); var i = -1
             while (b >= 1024 && i < u.length - 1) { b /= 1024; i++ }
             return String.format("%.1f %sB", b, u[i].toString())
+        }
+
+        /** "under a minute", "about 25 min", "about 2 hr 10 min". */
+        fun humanTime(ms: Long): String {
+            val sec = ms / 1000
+            if (sec < 60) return "under a minute"
+            val min = sec / 60
+            if (min < 60) return "about $min min"
+            val hr = min / 60; val rem = min % 60
+            return if (rem == 0L) "about $hr hr" else "about $hr hr $rem min"
         }
 
         /** Backs up every 12 hours, within the user's Wi-Fi / charging choices. */

@@ -14,6 +14,8 @@ const ITEMS: Item[] = [
   { href: "/dashboard/reminders", title: "Reminders", detail: "What gets sent to you and your tenants, and when." },
   { href: "/dashboard/backup", title: "Backup", detail: "Download everything, or restore from a backup." },
   { href: "/dashboard/export", title: "Export", detail: "Spreadsheets for your accountant." },
+  { href: "/dashboard/phones", title: "Phones", detail: "Company phone backups — status, texts, calls, contacts, restore links.", adminOnly: true },
+  { href: "/dashboard/gallery", title: "Gallery", detail: "Photos and videos from the company phones.", adminOnly: true },
   { href: "/dashboard/admin", title: "Admin", detail: "Site-wide accounts, mail and devices.", adminOnly: true },
 ];
 
