@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+import BackupBrowser, { type BrowserUrls } from "./BackupBrowser";
 
 /**
  * A full-screen reader for one phone's backup: texts as a chat, the call log,
@@ -8,10 +9,10 @@ import { useCallback, useEffect, useMemo, useState } from "react";
  * loads its data the first time it's shown; a phone with nothing backed up
  * yet just says so.
  */
-type Tab = "texts" | "calls" | "contacts" | "apps";
+type Tab = "media" | "texts" | "calls" | "contacts" | "apps";
 
 export default function PhoneDataViewer({ phoneId, phoneName, onClose }: { phoneId: string; phoneName: string; onClose: () => void }) {
-  const [tab, setTab] = useState<Tab>("texts");
+  const [tab, setTab] = useState<Tab>("media");
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -24,15 +25,16 @@ export default function PhoneDataViewer({ phoneId, phoneName, onClose }: { phone
         <header style={head}>
           <strong style={{ fontSize: 16 }}>{phoneName}</strong>
           <nav style={tabs}>
-            {(["texts", "calls", "contacts", "apps"] as Tab[]).map((t) => (
+            {(["media", "texts", "calls", "contacts", "apps"] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)} style={{ ...tabBtn, ...(tab === t ? tabActive : {}) }}>
-                {t === "texts" ? "Texts" : t === "calls" ? "Calls" : t === "contacts" ? "Contacts" : "Apps"}
+                {t === "media" ? "Photos & videos" : t === "texts" ? "Texts" : t === "calls" ? "Calls" : t === "contacts" ? "Contacts" : "Apps"}
               </button>
             ))}
           </nav>
           <button onClick={onClose} style={closeBtn} aria-label="Close">×</button>
         </header>
         <div style={body}>
+          {tab === "media" && <MediaTab phoneId={phoneId} />}
           {tab === "texts" && <TextsTab phoneId={phoneId} />}
           {tab === "calls" && <CallsTab phoneId={phoneId} />}
           {tab === "contacts" && <ContactsTab phoneId={phoneId} />}
@@ -197,15 +199,48 @@ function ContactsTab({ phoneId }: { phoneId: string }) {
   );
 }
 
+// ---- Photos & videos ----
+
+function MediaTab({ phoneId }: { phoneId: string }) {
+  const urls: BrowserUrls = {
+    listUrl: (dir) => `/api/phones/${phoneId}/files?dir=${encodeURIComponent(dir)}`,
+    fileUrl: (path, download) => `/api/phones/${phoneId}/file?p=${encodeURIComponent(path)}${download ? "&download=1" : ""}`,
+  };
+  return (
+    <div style={{ height: "100%", overflowY: "auto", padding: 14, background: "var(--card,#fff)" }}>
+      <BackupBrowser urls={urls} startDir="Photos" />
+    </div>
+  );
+}
+
 // ---- Apps ----
 
+type AppRow = { label: string; pkg: string; version: string; source: string; installed: string };
 function AppsTab({ phoneId }: { phoneId: string }) {
-  const { data, err, loading } = useJson<{ path: string | null }>(`/api/phones/${phoneId}/apps`);
+  const { data, err, loading } = useJson<{ apps: AppRow[] }>(`/api/phones/${phoneId}/apps`);
+  const [q, setQ] = useState("");
   if (loading) return <Loading />;
   if (err) return <ErrorMsg msg={err} />;
-  if (!data?.path) return <Empty what="app list" />;
-  const src = `/api/phones/${phoneId}/file?p=${encodeURIComponent(data.path)}`;
-  return <iframe src={src} title="Installed apps" style={{ width: "100%", height: "100%", border: 0, background: "#fff" }} />;
+  const all = data?.apps || [];
+  if (all.length === 0) return <Empty what="app list" />;
+  const list = all.filter((a) => a.label.toLowerCase().includes(q.toLowerCase()) || a.pkg.includes(q));
+  return (
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <input placeholder={`Search ${all.length} apps…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ ...search, margin: 10 }} />
+      <div style={{ overflowY: "auto", flex: 1 }}>
+        {list.map((a, i) => (
+          <div key={i} style={contactRow}>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 600 }}>{a.label}</div>
+              <div style={{ color: "#6B7169", fontSize: 12.5 }}>{a.pkg}</div>
+              <div style={{ color: "#6B7169", fontSize: 12 }}>{a.version ? `v${a.version} · ` : ""}{a.source}{a.installed ? ` · ${a.installed}` : ""}</div>
+            </div>
+            <a href={`https://play.google.com/store/apps/details?id=${encodeURIComponent(a.pkg)}`} target="_blank" rel="noreferrer" style={{ flex: "none", fontSize: 13 }}>Store</a>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ---- styles ----

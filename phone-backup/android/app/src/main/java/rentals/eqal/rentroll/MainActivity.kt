@@ -33,25 +33,7 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         web = WebView(this)
-
-        // One screen: the Rent Roll site, with a small "Backup" chip floating
-        // in the corner that opens the Phone Backup screen. Keeps it one app
-        // with one icon, backup tucked inside.
-        val frame = FrameLayout(this)
-        frame.addView(web, FrameLayout.LayoutParams(-1, -1))
-        val chip = TextView(this).apply {
-            text = "☁  Backup"
-            setTextColor(0xFFFFFFFF.toInt())
-            textSize = 13f
-            setPadding(dp(14), dp(9), dp(14), dp(9))
-            background = pillBackground()
-            elevation = dp(4).toFloat()
-            setOnClickListener { startActivity(Intent(this@MainActivity, BackupActivity::class.java)) }
-        }
-        val lp = FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.END)
-        lp.setMargins(0, 0, dp(14), dp(22))
-        frame.addView(chip, lp)
-        setContentView(frame)
+        setContentView(web)
 
         web.settings.apply {
             javaScriptEnabled = true
@@ -63,6 +45,8 @@ class MainActivity : AppCompatActivity() {
             loadWithOverviewMode = true
             useWideViewPort = true
             cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
+            // Tags the app so Rent Roll shows "Phone backup" in its Settings list.
+            userAgentString = userAgentString + " RentRollApp/" + BuildConfig.VERSION_NAME
         }
         CookieManager.getInstance().setAcceptThirdPartyCookies(web, true)
 

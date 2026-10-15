@@ -285,9 +285,10 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             applicationContext, 0, Intent(applicationContext, BackupActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
+        // Deliberately generic — no file names or categories on the lock screen.
         val n = NotificationCompat.Builder(applicationContext, CHANNEL)
-            .setContentTitle("Backing up this phone")
-            .setContentText(text)
+            .setContentTitle("Rent Roll")
+            .setContentText("Backup in progress")
             .setSmallIcon(R.drawable.ic_notify)
             .setOngoing(true)
             .setContentIntent(tap)
