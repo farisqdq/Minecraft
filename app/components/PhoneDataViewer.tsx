@@ -24,7 +24,7 @@ export default function PhoneDataViewer({ phoneId, phoneName, onClose }: { phone
     <div style={overlay}>
       <div style={sheet}>
         <header style={head}>
-          <strong style={{ fontSize: 16 }}>{phoneName}</strong>
+          <strong style={{ fontSize: 16, flex: 1 }}>{phoneName}</strong>
           <nav style={tabs}>
             {(["media", "texts", "calls", "contacts", "apps"] as Tab[]).map((t) => (
               <button key={t} onClick={() => setTab(t)} style={{ ...tabBtn, ...(tab === t ? tabActive : {}) }}>
@@ -228,14 +228,13 @@ function MediaTab({ phoneId }: { phoneId: string }) {
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 3 }}>
         {items.map((m, i) => (
           <button key={m.path} onClick={() => setOpen(i)} style={galTile} title={m.name}>
-            {m.video || /\.(jpe?g|png|gif|webp|bmp|avif)$/i.test(m.name) ? (
-              m.video ? (
-                <div style={galPlaceholder}><span style={{ fontSize: 26, color: "#fff" }}>▶</span></div>
-              ) : (
-                <SensitiveImg src={fileUrl(m.path, false)} thumb={`${fileUrl(m.path, false)}&thumb=1`} fill compact />
-              )
+            {m.video ? (
+              <div style={galPlaceholder}><span style={{ fontSize: 26, color: "#fff" }}>▶</span></div>
+            ) : /\.(hei[cf])$/i.test(m.name) ? (
+              // Browsers can't open HEIC; the backup server converts it.
+              <SensitiveImg src={`${fileUrl(m.path, false)}&thumb=1&w=1600`} thumb={`${fileUrl(m.path, false)}&thumb=1`} fill compact />
             ) : (
-              <div style={galPlaceholder}><span style={{ fontSize: 22, color: "#bbb" }}>HEIC</span></div>
+              <SensitiveImg src={fileUrl(m.path, false)} thumb={`${fileUrl(m.path, false)}&thumb=1`} fill compact />
             )}
             {m.video && <span style={galPlay}>▶</span>}
           </button>
@@ -254,6 +253,7 @@ function GalleryLightbox({ items, index, fileUrl, onClose, onNav }: {
 }) {
   const m = items[index];
   const isImg = /\.(jpe?g|png|gif|webp|bmp|avif)$/i.test(m.name);
+  const isHeic = /\.(hei[cf])$/i.test(m.name);
   const prev = () => onNav((index - 1 + items.length) % items.length);
   const next = () => onNav((index + 1) % items.length);
   useEffect(() => {
@@ -276,7 +276,11 @@ function GalleryLightbox({ items, index, fileUrl, onClose, onNav }: {
         ) : isImg ? (
           <SensitiveImg key={m.path} src={fileUrl(m.path, false)} alt={m.name} imgStyle={{ maxWidth: "90vw", maxHeight: "78vh", objectFit: "contain", borderRadius: 8 }} />
         ) : (
-          <div style={{ color: "#fff" }}>This photo (HEIC) can&apos;t preview in a browser.</div>
+          isHeic ? (
+            <SensitiveImg key={m.path} src={`${fileUrl(m.path, false)}&thumb=1&w=1600`} alt={m.name} imgStyle={{ maxWidth: "90vw", maxHeight: "78vh", objectFit: "contain", borderRadius: 8 }} />
+          ) : (
+            <div style={{ color: "#fff" }}>This file can&apos;t preview in a browser.</div>
+          )
         )}
         <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
           <span style={{ color: "#ccc", fontSize: 13 }}>{index + 1} of {items.length}</span>
@@ -347,9 +351,10 @@ function AppsTab({ phoneId }: { phoneId: string }) {
 
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "2vh 2vw" };
 const sheet: React.CSSProperties = { background: "var(--surface)", color: "var(--ink)", borderRadius: 14, width: "min(900px, 100%)", height: "96vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,.3)" };
-const head: React.CSSProperties = { display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderBottom: "1px solid var(--line-strong)", flexWrap: "wrap" };
-const tabs: React.CSSProperties = { display: "flex", gap: 4, flex: 1, flexWrap: "wrap" };
-const tabBtn: React.CSSProperties = { border: 0, background: "none", padding: "7px 12px", borderRadius: 8, cursor: "pointer", font: "inherit", color: "var(--muted)", fontWeight: 600 };
+const head: React.CSSProperties = { display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderBottom: "1px solid var(--line-strong)", flexWrap: "wrap" };
+// One row that scrolls sideways on a phone instead of wrapping into a jumble.
+const tabs: React.CSSProperties = { display: "flex", gap: 4, flex: "1 1 100%", order: 3, flexWrap: "nowrap", overflowX: "auto", WebkitOverflowScrolling: "touch", scrollbarWidth: "none" };
+const tabBtn: React.CSSProperties = { border: 0, background: "none", padding: "7px 12px", borderRadius: 8, cursor: "pointer", font: "inherit", color: "var(--muted)", fontWeight: 600, whiteSpace: "nowrap", flex: "none" };
 const tabActive: React.CSSProperties = { background: "var(--accent)", color: "var(--on-accent)" };
 const closeBtn: React.CSSProperties = { border: 0, background: "none", fontSize: 26, cursor: "pointer", color: "var(--muted)", lineHeight: 1 };
 const body: React.CSSProperties = { flex: 1, minHeight: 0, background: "var(--bg)" };

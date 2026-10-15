@@ -91,11 +91,12 @@ export default function BackupBrowser({ urls, startDir = "" }: { urls: BrowserUr
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))", gap: 8, marginBottom: 18 }}>
           {media.map((m) => {
             const isVideo = VIDEO.test(m.name);
-            const canShow = isVideo || SHOWABLE_IMG.test(m.name);
+            const heic = /\.(hei[cf])$/i.test(m.name);
+            const canShow = isVideo || SHOWABLE_IMG.test(m.name) || heic;
             return (
               <button key={m.path} onClick={() => setLightbox(m)} style={mediaTile} title={m.name}>
                 {!isVideo && canShow ? (
-                  <SensitiveImg src={urls.fileUrl(m.path, false)} thumb={urls.thumbUrl?.(m.path)} alt={m.name} fill compact />
+                  <SensitiveImg src={heic ? `${urls.fileUrl(m.path, false)}&thumb=1&w=1600` : urls.fileUrl(m.path, false)} thumb={urls.thumbUrl?.(m.path)} alt={m.name} fill compact />
                 ) : (
                   <div style={tilePlaceholder}>
                     <span style={{ fontSize: 30 }}>{isVideo ? "▶" : "🖼"}</span>
@@ -135,7 +136,8 @@ export default function BackupBrowser({ urls, startDir = "" }: { urls: BrowserUr
 
 function Lightbox({ entry, urls, onClose }: { entry: Entry; urls: BrowserUrls; onClose: () => void }) {
   const isVideo = VIDEO.test(entry.name);
-  const canShow = isVideo || SHOWABLE_IMG.test(entry.name);
+  const heic = /\.(hei[cf])$/i.test(entry.name);
+  const canShow = isVideo || SHOWABLE_IMG.test(entry.name) || heic;
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
     window.addEventListener("keydown", onKey);
@@ -149,7 +151,7 @@ function Lightbox({ entry, urls, onClose }: { entry: Entry; urls: BrowserUrls; o
           <video src={urls.fileUrl(entry.path, false)} controls autoPlay playsInline
             style={{ maxWidth: "94vw", maxHeight: "78vh", borderRadius: 8, background: "#000" }} />
         ) : canShow ? (
-          <SensitiveImg src={urls.fileUrl(entry.path, false)} alt={entry.name}
+          <SensitiveImg src={heic ? `${urls.fileUrl(entry.path, false)}&thumb=1&w=1600` : urls.fileUrl(entry.path, false)} alt={entry.name}
             imgStyle={{ maxWidth: "94vw", maxHeight: "78vh", borderRadius: 8, objectFit: "contain" }} />
         ) : (
           <div style={{ color: "#fff", textAlign: "center" }}>

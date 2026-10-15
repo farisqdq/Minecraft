@@ -37,7 +37,7 @@ export default function SensitiveImg({
 
   // Covered only while being checked (a moment) or when actually flagged.
   // A photo that can't be checked (old backup server) shows normally.
-  const hidden = !shown && (verdict === "sensitive" || verdict === "pending");
+  const hidden = !shown && verdict === "sensitive";
 
   const onLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     if (plain) { if (verdict === "pending") setVerdict("unknown"); return; }

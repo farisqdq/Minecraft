@@ -14,6 +14,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const path = u.searchParams.get("p") || "";
   if (!path) return NextResponse.json({ error: "no file" }, { status: 400 });
   const download = u.searchParams.get("download") === "1";
-  if (u.searchParams.get("thumb") === "1") return NextResponse.redirect(thumbLink(id, path), { status: 307 });
+  if (u.searchParams.get("thumb") === "1") return NextResponse.redirect(thumbLink(id, path, u.searchParams.get("w") === "1600"), { status: 307 });
   return NextResponse.redirect(fileLink(id, path, download), { status: 307 });
 }

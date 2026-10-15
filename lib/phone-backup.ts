@@ -126,10 +126,11 @@ export function fileLink(deviceId: string, path: string, download: boolean): str
  * grids — a few KB instead of the multi-MB original. Same signature as /dl.
  * Falls back to the original on the server if it can't make one (e.g. HEIC).
  */
-export function thumbLink(deviceId: string, path: string): string {
+export function thumbLink(deviceId: string, path: string, large = false): string {
   const exp = Math.floor(Date.now() / 1000) + 600;
   const sig = createHmac("sha256", SECRET).update(`dl\n${deviceId}\n${path}\n${exp}`).digest("hex");
   const q = new URLSearchParams({ d: deviceId, p: path, e: String(exp), s: sig });
+  if (large) q.set("w", "1600");
   return `${BASE}/thumb?${q.toString()}`;
 }
 
