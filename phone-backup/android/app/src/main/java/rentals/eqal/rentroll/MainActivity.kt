@@ -13,11 +13,16 @@ import android.widget.TextView
 import android.webkit.CookieManager
 import android.webkit.DownloadListener
 import android.webkit.URLUtil
+import android.webkit.ValueCallback
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
+import android.provider.MediaStore
+import java.io.File
 import androidx.appcompat.app.AppCompatActivity
 
 /**
@@ -28,6 +33,44 @@ import androidx.appcompat.app.AppCompatActivity
 class MainActivity : AppCompatActivity() {
 
     private lateinit var web: WebView
+
+    // The site's "Take photo" / "Upload" buttons (<input type="file">). A web
+    // view does nothing with them unless the app opens the camera or picker
+    // and hands the result back — that's what these do.
+    private var fileCallback: ValueCallback<Array<Uri>>? = null
+    private var cameraUri: Uri? = null
+
+    private val pickFile = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { res ->
+        val cb = fileCallback ?: return@registerForActivityResult
+        fileCallback = null
+        var result: Array<Uri>? = null
+        if (res.resultCode == RESULT_OK) {
+            val data = res.data
+            val clip = data?.clipData
+            result = when {
+                clip != null && clip.itemCount > 0 -> Array(clip.itemCount) { clip.getItemAt(it).uri }
+                data?.data != null -> arrayOf(data.data!!)
+                // The camera app writes to our file and returns no data.
+                cameraUri != null && (File(cacheDir, "camera").listFiles()?.any { it.length() > 0 } == true) -> arrayOf(cameraUri!!)
+                else -> null
+            }
+        }
+        cameraUri = null
+        cb.onReceiveValue(result)
+    }
+
+    private fun cameraIntent(): Intent? {
+        return try {
+            val dir = File(cacheDir, "camera").apply { mkdirs(); listFiles()?.forEach { it.delete() } }
+            val f = File(dir, "photo_${System.currentTimeMillis()}.jpg")
+            val uri = FileProvider.getUriForFile(this, "$packageName.files", f)
+            cameraUri = uri
+            Intent(MediaStore.ACTION_IMAGE_CAPTURE).apply {
+                putExtra(MediaStore.EXTRA_OUTPUT, uri)
+                addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION or Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        } catch (_: Exception) { null }
+    }
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,7 +107,38 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
-        web.webChromeClient = WebChromeClient()
+        web.webChromeClient = object : WebChromeClient() {
+            override fun onShowFileChooser(
+                view: WebView, callback: ValueCallback<Array<Uri>>, params: FileChooserParams,
+            ): Boolean {
+                fileCallback?.onReceiveValue(null)
+                fileCallback = callback
+                cameraUri = null
+                val accept = params.acceptTypes.joinToString(",").lowercase()
+                val wantsImages = accept.isBlank() || accept.contains("image")
+                val intent: Intent? = if (params.isCaptureEnabled && wantsImages) {
+                    // capture="environment": straight to the camera.
+                    cameraIntent()
+                } else {
+                    // Picker (gallery / files), with the camera offered too for images.
+                    val picker = params.createIntent().apply {
+                        if (params.mode == FileChooserParams.MODE_OPEN_MULTIPLE) putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true)
+                    }
+                    Intent.createChooser(picker, "Choose a file").apply {
+                        if (wantsImages) cameraIntent()?.let { putExtra(Intent.EXTRA_INITIAL_INTENTS, arrayOf(it)) }
+                    }
+                }
+                return try {
+                    pickFile.launch(intent ?: throw IllegalStateException())
+                    true
+                } catch (_: Exception) {
+                    fileCallback = null
+                    callback.onReceiveValue(null)
+                    Toast.makeText(this@MainActivity, "Couldn't open the camera or file picker.", Toast.LENGTH_SHORT).show()
+                    true
+                }
+            }
+        }
 
         web.setDownloadListener(DownloadListener { url, userAgent, contentDisposition, mimeType, _ ->
             try {

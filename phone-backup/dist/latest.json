@@ -1,6 +1,6 @@
 {
-  "versionCode": 6,
-  "versionName": "1.5.0",
+  "versionCode": 7,
+  "versionName": "1.6.0",
   "url": "https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/rentroll.apk",
-  "notes": "Backups always run (removed Wi-Fi-only/charging limits that could stall them). Disconnect is admin-only."
+  "notes": "Camera and file upload buttons now work in the app (Take photo, Scanner, Filing Cabinet). Backups send live progress so the site shows an ETA."
 }

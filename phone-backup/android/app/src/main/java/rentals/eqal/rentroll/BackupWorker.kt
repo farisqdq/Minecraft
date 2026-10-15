@@ -46,6 +46,14 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     private var liveDone = 0L
     private var toSendTotal = 0L
 
+    // Live progress for the Phones page on the site: a "running" report sent
+    // at most every 30 s while files upload. The final report replaces it.
+    private var liveApi: Api? = null
+    private var liveCounts: JSONObject? = null
+    private var liveFilesDone = 0
+    private var liveFilesTotal = 0
+    private var lastLive = 0L
+
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         if (!prefs.paired) return@withContext Result.success()
         val api = Api(prefs.server, prefs.token)
@@ -89,20 +97,28 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             liveDone = 0L
             toSendTotal = totalBytes
             counts.put("toSend", needed.size)
+            liveApi = api
+            liveCounts = counts
+            liveFilesTotal = needed.size
+            liveFilesDone = 0
             if (needed.isEmpty()) note("Everything's already backed up.")
+            else sendLive(force = true)
             for ((item, have) in needed) {
                 if (isStopped) break
                 note(fileLine(sentFiles + 1, needed.size, doneBytes, totalBytes))
+                sendLive()
                 try {
                     val sent = uploadOne(api, item, have)
                     sentFiles++
                     sentBytes += sent
                     doneBytes += item.size - have
+                    liveFilesDone++
                 } catch (e: ServerFull) {
                     throw e
                 } catch (e: Exception) {
                     problem("${item.remote}: ${e.message}")
                     doneBytes += item.size - have
+                    liveFilesDone++
                 }
             }
         } catch (e: ServerFull) {
@@ -121,6 +137,7 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             put("problems", JSONArray(problems.take(50)))
             if (error != null) put("error", error)
         }
+        liveApi = null
         prefs.lastReport = report.toString()
         prefs.progress = ""
         runCatching { api.report(report) }
@@ -259,7 +276,41 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     }
 
     private fun maybeNote(item: Item, offset: Long) {
+        sendLive()
         if (item.size > 8 * CHUNK) note("Uploading ${item.remote.substringAfterLast('/')} — ${pct(offset, item.size)}%${etaSuffix()}")
+    }
+
+    /** Seconds left at the current upload rate, or -1 until there's enough to estimate. */
+    private fun etaSeconds(): Long {
+        val elapsed = System.currentTimeMillis() - uploadStart
+        if (liveDone < 512 * 1024 || elapsed < 3000 || toSendTotal <= 0) return -1
+        val rate = liveDone.toDouble() / elapsed // bytes per ms
+        if (rate <= 0) return -1
+        return ((toSendTotal - liveDone) / rate / 1000).toLong().coerceAtLeast(0)
+    }
+
+    /**
+     * Sends a "running" report so the site can show a progress bar and ETA.
+     * Fire-and-forget on its own thread so a slow or offline server never
+     * holds up the upload; throttled to one every 30 seconds.
+     */
+    private fun sendLive(force: Boolean = false) {
+        val api = liveApi ?: return
+        val now = System.currentTimeMillis()
+        if (!force && now - lastLive < 30_000) return
+        lastLive = now
+        val r = JSONObject().apply {
+            put("running", true)
+            put("at", now)
+            put("done", liveFilesDone)
+            put("total", liveFilesTotal)
+            put("bytesDone", liveDone)
+            put("bytesTotal", toSendTotal)
+            val eta = etaSeconds()
+            if (eta >= 0) put("etaSec", eta)
+            liveCounts?.let { put("counts", JSONObject(it.toString())) }
+        }
+        Thread { runCatching { api.report(r) } }.start()
     }
 
     /** " · about 25 min left", once there's enough uploaded to estimate. */
