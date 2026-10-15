@@ -125,6 +125,21 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
     act(`/api/phones/${p.id}`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "code" }) },
       "New setup code ready.");
 
+  // Returns the link (doesn't refresh the list — nothing changed server-side).
+  const restoreLink = async (p: Phone): Promise<string | null> => {
+    try {
+      const res = await fetch(`/api/phones/${p.id}`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "restore-link" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) { push(body?.error || "Couldn't make a restore link.", "bad"); return null; }
+      return body.link as string;
+    } catch {
+      push("Couldn't reach the server.", "bad");
+      return null;
+    }
+  };
+
   const rename = (p: Phone) => {
     const name = prompt("New name for this phone:", p.name);
     if (name && name.trim() && name.trim() !== p.name) {
@@ -223,6 +238,7 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
           onCode={() => newCode(p)}
           onRename={() => rename(p)}
           onRemove={() => remove(p)}
+          onRestoreLink={() => restoreLink(p)}
         />
       ))}
     </AppShell>
@@ -230,12 +246,23 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
 }
 
 function PhoneCard({
-  p, busy, onRequest, onCode, onRename, onRemove,
+  p, busy, onRequest, onCode, onRename, onRemove, onRestoreLink,
 }: {
   p: Phone; busy: string;
   onRequest: () => void; onCode: () => void; onRename: () => void; onRemove: () => void;
+  onRestoreLink: () => Promise<string | null>;
 }) {
   const [browse, setBrowse] = useState(false);
+  const [restore, setRestore] = useState<string>("");
+  const [copied, setCopied] = useState(false);
+
+  const makeRestore = async () => {
+    const link = await onRestoreLink();
+    if (link) { setRestore(link); setCopied(false); }
+  };
+  const copyRestore = async () => {
+    try { await navigator.clipboard.writeText(restore); setCopied(true); } catch { /* user can select it */ }
+  };
   const r = p.report;
   const counts = r?.counts || {};
   const order: [string, string][] = [
@@ -296,10 +323,24 @@ function PhoneCard({
             </button>
           )}
           {p.paired && <button className={styles.btn} onClick={() => setBrowse((b) => !b)}>{browse ? "Hide files" : "Browse files"}</button>}
+          {p.paired && <button className={styles.btn} onClick={makeRestore}>Send restore link</button>}
           <button className={styles.btn} onClick={onCode}>{p.paired ? "Replace phone" : "New code"}</button>
           <button className={styles.btn} onClick={onRename}>Rename</button>
           <button className={styles.btn} onClick={onRemove}>Remove</button>
         </div>
+
+        {restore && (
+          <div style={{ marginTop: 12, padding: 12, borderRadius: 10, background: "var(--bg,#f6f5f1)", border: "1px solid var(--line,#e4e2da)" }}>
+            <div className={styles.helpText} style={{ margin: "0 0 6px" }}>
+              Send this link to whoever has {p.name}. It opens their backup to download, no login, and expires in 7 days.
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <input readOnly value={restore} onFocus={(e) => e.currentTarget.select()}
+                style={{ flex: 1, minWidth: 220, padding: "8px 10px", border: "1px solid var(--line,#e4e2da)", borderRadius: 8, font: "inherit", background: "var(--card,#fff)", color: "inherit" }} />
+              <button className={`${styles.btn} ${styles.primary}`} onClick={copyRestore}>{copied ? "Copied" : "Copy"}</button>
+            </div>
+          </div>
+        )}
 
         {browse && <FileBrowser phoneId={p.id} />}
       </div>

@@ -64,7 +64,7 @@ function settingsItems(admin: boolean): MenuItem[] {
     { label: "Reminders", href: "/dashboard/reminders", icon: IconBell },
     { label: "Backup", href: "/dashboard/backup", icon: IconArchive },
     { label: "Export", href: "/dashboard/export", icon: IconDownload },
-    ...(admin ? [{ label: "Phones", href: "/dashboard/phones", icon: IconArchive }, { label: "Admin", href: "/dashboard/admin", icon: IconKey }] : []),
+    ...(admin ? [{ label: "Gallery", href: "/dashboard/gallery", icon: IconArchive }, { label: "Phones", href: "/dashboard/phones", icon: IconArchive }, { label: "Admin", href: "/dashboard/admin", icon: IconKey }] : []),
     { label: "Account & security", href: "/dashboard/account", icon: IconShield },
   ];
 }
@@ -75,6 +75,7 @@ const SETTINGS_PATHS = [
   "/dashboard/reminders",
   "/dashboard/backup",
   "/dashboard/export",
+  "/dashboard/gallery",
   "/dashboard/phones",
   "/dashboard/admin",
   "/dashboard/account",

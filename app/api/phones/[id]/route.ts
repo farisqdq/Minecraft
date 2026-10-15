@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-db";
-import { renamePhone, removePhone, newCode, requestBackup } from "@/lib/phone-backup";
+import { renamePhone, removePhone, newCode, requestBackup, restoreLink } from "@/lib/phone-backup";
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
   if (!(await requireAdmin())) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -9,6 +9,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   try {
     if (body?.action === "code") return NextResponse.json(await newCode(id));
     if (body?.action === "request") return NextResponse.json(await requestBackup(id));
+    if (body?.action === "restore-link") {
+      const origin = new URL(req.url).origin;
+      return NextResponse.json({ link: restoreLink(origin, id, 7) });
+    }
     return NextResponse.json({ error: "Unknown action" }, { status: 400 });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });

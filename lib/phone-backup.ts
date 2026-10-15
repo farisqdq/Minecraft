@@ -88,3 +88,33 @@ export function fileLink(deviceId: string, path: string, download: boolean): str
   if (download) q.set("a", "1");
   return `${BASE}/dl?${q.toString()}`;
 }
+
+/**
+ * Restore links. The admin makes one for a phone and sends it to whoever
+ * holds that phone; they open it (no sign-in) and download that one phone's
+ * backup until it expires. The token is an HMAC of the device and expiry
+ * with the shared secret, so it can't be forged or pointed at another phone,
+ * and it never carries the secret itself.
+ */
+function restoreSig(deviceId: string, exp: number): string {
+  return createHmac("sha256", SECRET).update(`restore\n${deviceId}\n${exp}`).digest("hex");
+}
+
+/** A restore link valid for `days` days (default 7). */
+export function restoreLink(origin: string, deviceId: string, days = 7): string {
+  const exp = Math.floor(Date.now() / 1000) + days * 86400;
+  const q = new URLSearchParams({ d: deviceId, e: String(exp), s: restoreSig(deviceId, exp) });
+  return `${origin.replace(/\/+$/, "")}/restore?${q.toString()}`;
+}
+
+/** True when a restore token is for this device and hasn't expired. */
+export function restoreTokenValid(deviceId: string, exp: string, sig: string): boolean {
+  const n = Number(exp);
+  if (!Number.isFinite(n) || Math.floor(Date.now() / 1000) > n) return false;
+  const want = restoreSig(deviceId, n);
+  // timing-safe compare
+  if (want.length !== sig.length) return false;
+  let diff = 0;
+  for (let i = 0; i < want.length; i++) diff |= want.charCodeAt(i) ^ sig.charCodeAt(i);
+  return diff === 0;
+}
