@@ -15,6 +15,14 @@ type Report = {
   skipped?: string[];
   problems?: string[];
   error?: string;
+  // Live progress while a backup is running (app v1.6+ sends these mid-run).
+  running?: boolean;
+  done?: number;
+  total?: number;
+  bytesDone?: number;
+  bytesTotal?: number;
+  etaSec?: number;
+  current?: string;
 };
 type Phone = {
   id: string;
@@ -82,11 +90,12 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
     } catch { /* leave the last good view up */ }
   }, []);
 
-  // While any phone has a backup requested or running, poll so status moves.
+  // While any phone has a backup requested or running — or the backup server
+  // didn't answer — poll so the page catches up on its own.
   useEffect(() => {
-    const active = (data.devices || []).some((d) => d.backupRequested);
+    const active = !!data.down || (data.devices || []).some((d) => d.backupRequested || isLive(d.report));
     if (active && !pollRef.current) {
-      pollRef.current = setInterval(refresh, 5000);
+      pollRef.current = setInterval(refresh, data.down ? 15000 : 5000);
     } else if (!active && pollRef.current) {
       clearInterval(pollRef.current); pollRef.current = null;
     }
@@ -185,7 +194,8 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
 
       {data.down && (
         <div className={styles.errorBar}>
-          The backup server on your VPS didn&apos;t answer. It may be off or offline. {data.error}
+          The backup server on your VPS isn&apos;t answering right now. Your backups are safe — this page will retry
+          on its own every 15 seconds.
         </div>
       )}
 
@@ -227,7 +237,7 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
         </div>
       </section>
 
-      {(data.devices || []).length === 0 && (
+      {!data.down && (data.devices || []).length === 0 && (
         <section className={styles.block}><div className={styles.formCard}><p className={styles.helpText} style={{ margin: 0 }}>No phones yet.</p></div></section>
       )}
 
@@ -305,7 +315,9 @@ function PhoneCard({
           </div>
         )}
 
-        {r && (r.sentFiles != null || r.error) && (
+        {isLive(r) && <LiveProgress r={r!} />}
+
+        {r && !isLive(r) && (r.sentFiles != null || r.error) && (
           <div style={{ marginTop: 12 }}>
             {r.error ? (
               <div className={styles.helpText} style={{ color: "#A6651B", margin: 0 }}>Last backup: {r.error}</div>
@@ -365,7 +377,8 @@ function PhoneCard({
 
 function StatusPill({ p }: { p: Phone }) {
   let label = "Not set up", color = "#8A8F82";
-  if (p.backupRequested) { label = "Backup requested"; color = "#A6651B"; }
+  if (isLive(p.report)) { label = "Backing up"; color = "#2E6A48"; }
+  else if (p.backupRequested) { label = "Backup requested"; color = "#A6651B"; }
   else if (p.paired) { label = "Active"; color = "#2E6A48"; }
   return (
     <span style={{ flex: "none", fontSize: 12, fontWeight: 600, color: "#fff", background: color, borderRadius: 20, padding: "4px 10px" }}>
@@ -433,3 +446,42 @@ const rowStyle: React.CSSProperties = {
   width: "100%", textAlign: "left", background: "none", border: "0",
   borderBottom: "1px solid var(--line,#e4e2da)", padding: "9px 2px", font: "inherit", cursor: "pointer",
 };
+
+/** A running report counts only while fresh — a phone killed mid-backup stops sending. */
+function isLive(r?: Report) {
+  return !!r?.running && !!r.at && Date.now() - r.at < 3 * 60 * 1000;
+}
+
+function fmtEta(sec?: number) {
+  if (sec == null || !isFinite(sec) || sec < 0) return "";
+  if (sec < 60) return "under a minute left";
+  const m = Math.round(sec / 60);
+  if (m < 90) return `about ${m} min left`;
+  const h = Math.floor(m / 60), mm = m % 60;
+  return `about ${h} hr${mm ? ` ${mm} min` : ""} left`;
+}
+
+/** The running backup: a bar by bytes (or files) and the phone's ETA. */
+function LiveProgress({ r }: { r: Report }) {
+  const byBytes = !!r.bytesTotal && r.bytesTotal > 0;
+  const pct = byBytes
+    ? Math.min(100, Math.round(((r.bytesDone || 0) / r.bytesTotal!) * 100))
+    : r.total ? Math.min(100, Math.round(((r.done || 0) / r.total) * 100)) : 0;
+  const eta = fmtEta(r.etaSec);
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 14 }}>
+        <strong>Backing up now — {pct}%</strong>
+        <span className={styles.helpText} style={{ margin: 0 }}>{eta || "working out time left…"}</span>
+      </div>
+      <div style={{ height: 8, borderRadius: 6, background: "var(--line, #e4e2da)", marginTop: 8, overflow: "hidden" }}>
+        <div style={{ width: `${pct}%`, height: "100%", background: "#2E6A48", transition: "width .5s" }} />
+      </div>
+      <div className={styles.helpText} style={{ margin: "6px 0 0" }}>
+        {r.total ? `${r.done || 0} of ${r.total} files` : ""}
+        {byBytes ? ` · ${human(r.bytesDone)} of ${human(r.bytesTotal)}` : ""}
+        {r.at ? <> · updated <Ago at={r.at} /></> : ""}
+      </div>
+    </div>
+  );
+}

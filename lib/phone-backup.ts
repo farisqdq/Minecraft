@@ -30,16 +30,27 @@ class BackupDown extends Error {}
 
 async function call(path: string, init?: RequestInit): Promise<any> {
   if (!phoneBackupConfigured()) throw new BackupDown("not configured");
-  let res: Response;
-  try {
-    res = await fetch(BASE + path, {
-      ...init,
-      headers: { ...(init?.headers || {}), Authorization: `Bearer ${SECRET}` },
-      cache: "no-store",
-      // The VPS can be slow or asleep; don't hang the page forever.
-      signal: AbortSignal.timeout(20000),
-    });
-  } catch {
+  // Reads are safe to repeat, so a dropped connection to the VPS (it blips
+  // now and then) gets two quick retries before the page calls it offline.
+  // Writes (add/rename/delete) are tried once so they can't double up.
+  const method = (init?.method || "GET").toUpperCase();
+  const tries = method === "GET" ? 3 : 1;
+  let res: Response | null = null;
+  for (let i = 0; i < tries; i++) {
+    try {
+      res = await fetch(BASE + path, {
+        ...init,
+        headers: { ...(init?.headers || {}), Authorization: `Bearer ${SECRET}` },
+        cache: "no-store",
+        // The VPS can be slow or asleep; don't hang the page forever.
+        signal: AbortSignal.timeout(8000),
+      });
+      break;
+    } catch {
+      if (i < tries - 1) await new Promise((r) => setTimeout(r, 600 * (i + 1)));
+    }
+  }
+  if (!res) {
     throw new BackupDown("The backup server on your VPS didn't answer. It may be off or offline.");
   }
   const text = await res.text();

@@ -14,11 +14,12 @@ export default async function GalleryPage() {
 
   let phones: { id: string; name: string }[] = [];
   let configured = phoneBackupConfigured();
+  let down = false;
   if (configured) {
     try {
       const s = await getSummary();
       phones = (s.devices || []).filter((d: any) => d.paired).map((d: any) => ({ id: d.id, name: d.name }));
-    } catch { /* server may be offline; page shows the message */ }
+    } catch { down = true; /* server didn't answer; the page says so and retries */ }
   }
-  return <GalleryClient openRepairs={openRepairs} configured={configured} phones={phones} />;
+  return <GalleryClient openRepairs={openRepairs} configured={configured} phones={phones} down={down} />;
 }
