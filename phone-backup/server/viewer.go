@@ -23,6 +23,10 @@ import (
 //go:embed viewer.html
 var viewerHTML []byte
 
+// The sensitive-photo detector (NSFWJS + TensorFlow.js, bundled), pre-gzipped.
+//go:embed nsfw.js.gz
+var nsfwJSGz []byte
+
 const viewerCookie = "rr_viewer"
 const viewerTTL = 7 * 24 * time.Hour
 
@@ -34,6 +38,12 @@ func (s *Server) viewerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /viewer/api/summary", s.viewer(s.handleSummary))
 	mux.HandleFunc("GET /viewer/api/devices/{id}/list", s.viewer(s.handleList))
 	mux.HandleFunc("GET /viewer/f/{id}", s.viewer(s.handleViewerFile))
+	mux.HandleFunc("GET /viewer/nsfw.js", s.viewer(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
+		w.Header().Set("Content-Encoding", "gzip")
+		w.Header().Set("Cache-Control", "private, max-age=604800")
+		w.Write(nsfwJSGz)
+	}))
 }
 
 func (s *Server) handleViewerPage(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +52,7 @@ func (s *Server) handleViewerPage(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-Frame-Options", "DENY")
 	w.Header().Set("Referrer-Policy", "no-referrer")
 	w.Header().Set("Content-Security-Policy",
-		"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
+		"default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self'; connect-src 'self' data: blob:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'")
 	w.Write(viewerHTML)
 }
 

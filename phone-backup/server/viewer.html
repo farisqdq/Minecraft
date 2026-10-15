@@ -58,6 +58,13 @@ main{max-width:1200px;margin:0 auto;padding:16px}
 .back{display:none}
 @media (max-width:700px){.list{width:100%;border:0}.split.open .list{display:none}.split:not(.open) .thread{display:none}.back{display:inline}}
 .login{max-width:380px;margin:12vh auto}
+.status{margin-bottom:14px}
+.bar{height:8px;border-radius:6px;background:var(--line);overflow:hidden;margin-top:8px}
+.bar>div{height:100%;background:var(--accent);transition:width .5s}
+.tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px}
+.tile.sens img{filter:blur(22px);transform:scale(1.15)}
+.tile .cover{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:rgba(0,0,0,.45);color:#fff;font-size:11px;font-weight:700;text-align:center}
+.tile.sens .cover{display:flex}
 </style>
 </head>
 <body>
@@ -117,14 +124,49 @@ function shell(){
       tabs.map(function(t){return '<button class="tab'+(S.tab===t[0]?" on":"")+'" data-t="'+t[0]+'">'+t[1]+'</button>';}).join("")+
     '</nav>'+
     (S.phones.length? '<select id="ph">'+S.phones.map(function(p){return '<option value="'+esc(p.id)+'"'+(p.id===S.phone?" selected":"")+'>'+esc(p.name)+'</option>';}).join("")+'</select>' : '')+
-    '<button class="btn" id="out">Sign out</button></header><main id="main"></main>';
+    '<button class="btn" id="out">Sign out</button></header><main><div id="status"></div><div id="main"></div></main>';
   root.querySelectorAll(".tab").forEach(function(b){ b.onclick=function(){ S.tab=b.dataset.t; shell(); }; });
   var ph = document.getElementById("ph"); if (ph) ph.onchange = function(){ S.phone = ph.value; shell(); };
   document.getElementById("out").onclick = async function(){ await fetch("/viewer/logout",{method:"POST"}); showLogin(); };
+  drawStatus();
   var main = document.getElementById("main");
   if (!S.phones.length && S.tab!=="phones") { main.innerHTML = '<div class="card muted">No set-up phones yet.</div>'; return; }
   ({gallery:gallery, texts:texts, files:files, phones:phones})[S.tab](main);
 }
+
+// ---------- live backup status (top of every tab) ----------
+function fmtLeft(sec){
+  if (sec==null || !isFinite(sec) || sec<0) return "";
+  if (sec<60) return "under a minute left";
+  var m=Math.round(sec/60); if (m<90) return "about "+m+" min left";
+  var h=Math.floor(m/60), mm=m%60; return "about "+h+" hr"+(mm?" "+mm+" min":"")+" left";
+}
+function drawStatus(){
+  var el = document.getElementById("status"); if (!el) return;
+  var p = S.phones.filter(function(x){return x.id===S.phone;})[0];
+  if (!p) { el.innerHTML=""; return; }
+  var r = p.report || {}, now = Date.now();
+  var live = r.running && r.at && now - r.at < 3*60*1000;
+  if (live) {
+    var since = Math.max(0,(now-r.at)/1000);
+    var pct = r.bytesTotal ? Math.min(100,Math.round((r.bytesDone||0)/r.bytesTotal*100)) : (r.total? Math.round((r.done||0)/r.total*100):0);
+    var eta = r.etaSec!=null ? fmtLeft(r.etaSec - since) : "working out time left…";
+    el.innerHTML = '<div class="card status"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>'+esc(p.name)+' — backing up now, '+pct+'%</b><span class="muted">'+esc(eta)+'</span></div>'+
+      '<div class="bar"><div style="width:'+pct+'%"></div></div>'+
+      '<div class="muted" style="margin-top:6px;font-size:13px">'+(r.done||0)+' of '+(r.total||0)+' files · '+human(r.bytesDone)+' of '+human(r.bytesTotal)+' · updated '+(since<5?"just now":Math.round(since)+" s ago")+'</div></div>';
+  } else {
+    var last = r.error ? '<span class="err">Last backup: '+esc(r.error)+'</span>'
+      : r.at ? 'Last backup '+when(r.at)+(r.sentFiles!=null? ' · sent '+r.sentFiles+' new files ('+human(r.sentBytes)+')':'') : 'No backup yet';
+    el.innerHTML = '<div class="card status" style="padding:12px 16px"><b>'+esc(p.name)+'</b> · '+human(p.bytes)+' backed up · '+(p.files||0)+' files<div class="muted" style="font-size:13px">'+last+'</div></div>';
+  }
+}
+setInterval(drawStatus, 1000);
+setInterval(async function(){
+  try {
+    var sum = await fetch("/viewer/api/summary",{credentials:"same-origin",cache:"no-store"}).then(function(r){return r.ok?r.json():null;});
+    if (sum && sum.devices) { S.phones = sum.devices.filter(function(d){return d.paired;}); S.disk = sum.disk; }
+  } catch(e){}
+}, 10000);
 
 // ---------- phones ----------
 function phones(main){
@@ -163,25 +205,95 @@ async function gallery(main){
     galleryCache[S.phone] = items;
   }
   var gs3 = document.getElementById("gs"); if (!gs3) return;
-  gs3.textContent = items.length + " photos & videos, newest first";
-  var g = document.getElementById("g");
-  // Render in pages as you scroll so 20,000 tiles don't freeze the page.
-  var shown = 0;
+  gs3.outerHTML = '<div class="tools"><span class="muted" id="gs">'+items.length+' photos &amp; videos</span>'+
+    '<select id="flt"><option value="all">All</option><option value="sens">Sensitive only</option><option value="hide">Hide sensitive</option></select>'+
+    '<select id="srt"><option value="new">Newest first</option><option value="sens">Sensitive first</option></select>'+
+    '<span class="muted" id="scan" style="font-size:13px"></span></div>';
+  var flt = document.getElementById("flt"), srt = document.getElementById("srt");
+  flt.value = S.flt || "all"; srt.value = S.srt || "new";
+  var g = document.getElementById("g"), view = [], shown = 0;
+  var phone = S.phone;
+  function v(e){ return verdictOf(phone, e.path); }
+  function rebuild(){
+    S.flt = flt.value; S.srt = srt.value;
+    view = items.filter(function(e){ var x=v(e); return S.flt==="sens" ? x===1 : S.flt==="hide" ? x!==1 : true; });
+    if (S.srt==="sens") view = view.slice().sort(function(a,b){ return (v(b)===1)-(v(a)===1) || (a.mtime<b.mtime?1:-1); });
+    g.innerHTML = ""; shown = 0; more();
+    if (!view.length) g.innerHTML = '<p class="muted">'+(S.flt==="sens" ? "Nothing flagged as sensitive"+(scanState.left? " yet — still checking." : ".") : "Nothing to show.")+'</p>';
+  }
   function more(){
     var frag = document.createDocumentFragment();
-    items.slice(shown, shown+240).forEach(function(e, k){
+    view.slice(shown, shown+240).forEach(function(e, k){
       var i = shown + k;
-      var b = document.createElement("button"); b.className="tile"; b.title=e.name;
+      var b = document.createElement("button"); b.className="tile"+(v(e)===1?" sens":""); b.title=e.name; b.dataset.p=e.path;
       if (VID.test(e.name)) b.innerHTML = '<div class="ph">▶ video</div><span class="play">▶</span>';
-      else b.innerHTML = '<img loading="lazy" alt="" src="'+fileUrl(e.path,"&thumb=1")+'">';
-      b.onclick = function(){ lightbox(items, i); };
+      else b.innerHTML = '<img loading="lazy" alt="" src="'+fileUrl(e.path,"&thumb=1")+'"><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div>';
+      b.onclick = function(){ if (b.classList.contains("sens")) { b.classList.remove("sens"); return; } lightbox(view, i); };
       frag.appendChild(b);
     });
     shown += 240; g.appendChild(frag);
   }
-  more();
+  flt.onchange = rebuild; srt.onchange = rebuild;
+  rebuild();
   var sentinel = document.createElement("div"); main.appendChild(sentinel);
-  new IntersectionObserver(function(es){ if (es[0].isIntersecting && shown < items.length) more(); }, {rootMargin:"800px"}).observe(sentinel);
+  new IntersectionObserver(function(es){ if (es[0].isIntersecting && shown < view.length) more(); }, {rootMargin:"800px"}).observe(sentinel);
+  startScan(phone, items, function(path, sensitive, done){
+    if (sensitive) { var t = g.querySelector('[data-p="'+CSS.escape(path)+'"]'); if (t) t.classList.add("sens"); }
+    var sc = document.getElementById("scan");
+    if (sc) sc.textContent = scanState.left ? "Checking for sensitive photos… "+scanState.done+" of "+scanState.total+" · "+scanState.flagged+" flagged"
+                                            : scanState.flagged+" sensitive found";
+    if (done && S.flt!=="all") rebuild();
+  });
+}
+
+// ---------- sensitive-photo check (runs in this browser, on thumbnails) ----------
+var NS_KEY = "rrv-nsfw-v1", nsMap = null;
+function nsLoad(){ if (nsMap) return nsMap; try { nsMap = JSON.parse(localStorage.getItem(NS_KEY)||"{}"); } catch(e){ nsMap = {}; } return nsMap; }
+var nsSaveT = null;
+function nsSave(){ if (nsSaveT) return; nsSaveT = setTimeout(function(){ nsSaveT=null; try { localStorage.setItem(NS_KEY, JSON.stringify(nsMap)); } catch(e){} }, 1500); }
+function verdictOf(phone, path){ var x = nsLoad()[phone+"|"+path]; return x===1?1:x===0?0:-1; }
+var scanState = { run: 0, done: 0, total: 0, left: 0, flagged: 0 };
+var modelP = null;
+function getModel(){
+  if (!modelP) modelP = new Promise(function(res, rej){
+    if (window.RRNSFW) return res(window.RRNSFW.load());
+    var s = document.createElement("script"); s.src = "/viewer/nsfw.js";
+    s.onload = function(){ res(window.RRNSFW.load()); }; s.onerror = function(){ modelP = null; rej(new Error("detector didn't load")); };
+    document.head.appendChild(s);
+  });
+  return modelP;
+}
+function loadImg(src){ return new Promise(function(res, rej){ var im = new Image(); im.onload=function(){res(im);}; im.onerror=rej; im.src=src; }); }
+async function startScan(phone, items, onUpdate){
+  var run = ++scanState.run;
+  var m = nsLoad();
+  var todo = items.filter(function(e){ return !VID.test(e.name) && m[phone+"|"+e.path]==null; });
+  scanState.total = items.filter(function(e){ return !VID.test(e.name); }).length;
+  scanState.flagged = items.filter(function(e){ return m[phone+"|"+e.path]===1; }).length;
+  scanState.done = scanState.total - todo.length; scanState.left = todo.length;
+  onUpdate(null, false, !todo.length);
+  if (!todo.length) return;
+  var model;
+  try { model = await getModel(); } catch(e){ var sc=document.getElementById("scan"); if(sc) sc.textContent="Couldn't start the sensitive-photo check."; return; }
+  var c = document.createElement("canvas"); c.width = c.height = 224; var ctx = c.getContext("2d");
+  var i = 0, pending = [];
+  function fetchNext(){ while (pending.length < 3 && i < todo.length) { var e = todo[i++]; pending.push({e:e, p: loadImg(fileUrl(e.path,"&thumb=1")).catch(function(){ return null; })}); } }
+  fetchNext();
+  while (pending.length) {
+    if (run !== scanState.run || S.phone !== phone) return; // left the gallery or switched phone
+    var job = pending.shift(); fetchNext();
+    var img = await job.p, sens = null;
+    if (img) {
+      try {
+        ctx.drawImage(img, 0, 0, 224, 224);
+        var preds = await model.classify(c, 5), pr = function(n){ var x=preds.filter(function(q){return q.className===n;})[0]; return x?x.probability:0; };
+        sens = pr("Porn") + pr("Hentai") >= 0.5 || pr("Sexy") >= 0.7;
+      } catch(e){}
+    }
+    if (sens !== null) { m[phone+"|"+job.e.path] = sens?1:0; nsSave(); if (sens) scanState.flagged++; }
+    scanState.done++; scanState.left--;
+    onUpdate(job.e.path, sens===true, scanState.left===0);
+  }
 }
 
 function lightbox(items, i){
