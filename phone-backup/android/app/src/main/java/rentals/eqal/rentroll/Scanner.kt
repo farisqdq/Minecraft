@@ -90,6 +90,47 @@ object Scanner {
         }
     }
 
+    /** Whether we can read all shared files (needed to back up documents without picking folders). */
+    fun hasAllFiles(): Boolean =
+        if (Build.VERSION.SDK_INT >= 30) Environment.isExternalStorageManager() else true
+
+    // Folders worth backing up as "documents" — the camera roll is handled separately.
+    private val docFolders = listOf("Download", "Documents", "WhatsApp", "Signal", "Telegram")
+    private val skipNames = setOf("Android", "cache", ".thumbnails")
+
+    /** Walks the standard document folders in shared storage. Used when All-files access is on. */
+    fun documents(ctx: Context): List<Item> {
+        val base = Environment.getExternalStorageDirectory()
+        val out = ArrayList<Item>()
+        for (name in docFolders) {
+            val root = File(base, name)
+            if (!root.isDirectory) continue
+            walk(root, name, out)
+        }
+        return out
+    }
+
+    private fun walk(root: File, label: String, out: ArrayList<Item>) {
+        val stack = ArrayDeque<File>()
+        stack.add(root)
+        var guard = 0
+        while (stack.isNotEmpty() && guard++ < 200000 && out.size < 100000) {
+            val dir = stack.removeLast()
+            val kids = dir.listFiles() ?: continue
+            for (f in kids) {
+                if (f.name.startsWith(".")) continue
+                if (f.isDirectory) {
+                    if (f.name !in skipNames) stack.add(f)
+                    continue
+                }
+                val size = f.length()
+                if (size <= 0 || !f.canRead()) continue
+                val rel = f.absolutePath.removePrefix(root.parentFile?.absolutePath ?: "").trimStart('/')
+                out += Item("Files/$rel", size, f.lastModified(), "files") { f.inputStream() }
+            }
+        }
+    }
+
     /** Every file inside a picked folder, including subfolders. */
     fun folder(ctx: Context, tree: Uri): List<Item> {
         val rootId = DocumentsContract.getTreeDocumentId(tree)

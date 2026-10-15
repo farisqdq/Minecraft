@@ -78,35 +78,14 @@ function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return
 function bytes(n){ if(n==null)return""; if(n<1024)return n+" B"; var u=["KB","MB","GB","TB"],i=-1; do{n/=1024;i++;}while(n>=1024&&i<u.length-1); return n.toFixed(1)+" "+u[i]; }
 function ago(ms){ if(!ms)return""; var s=(Date.now()-ms)/1000; if(s<90)return"just now"; if(s<5400)return Math.round(s/60)+" min ago"; if(s<129600)return Math.round(s/3600)+" hr ago"; return Math.round(s/86400)+" days ago"; }
 
-var LABELS = {
-  photos:["Photos","Camera roll and saved pictures"],
-  videos:["Videos","Clips and recordings"],
-  files:["Files & documents","Folders you choose below"],
-  contacts:["Contacts","Names and numbers"],
-  calls:["Call log","Who called and when"],
-  texts:["Text messages","SMS (picture messages aren't included)"],
-  apps:["App list","So a new phone can be set up the same"]
-};
-var ORDER = ["photos","videos","files","contacts","calls","texts","apps"];
-
-function toggleRow(key){
-  var t = S.toggles[key], L = LABELS[key];
-  var warn = "";
-  if (t.on && !t.ok) warn = '<div class="status bad">Permission needed — <button class="link" onclick="Android.fixPermission(\''+key+'\')">allow</button></div>';
-  else if (t.on && t.limited) warn = '<div class="status warn">Only the photos you picked. <button class="link" onclick="Android.fixPermission(\''+key+'\')">choose more</button></div>';
-  else if (t.on) warn = '<div class="status ok">On</div>';
-  return '<div class="row"><div class="t"><b>'+esc(L[0])+'</b><small>'+esc(L[1])+'</small>'+warn+'</div>'+
-    '<label class="sw"><input type="checkbox" '+(t.on?"checked":"")+' onchange="Android.setToggle(\''+key+'\',this.checked)"><span></span></label></div>';
-}
-
-function folderList(){
-  var inner = "";
-  (S.folders||[]).forEach(function(f){
-    inner += '<div class="folder">📁 '+esc(f.name)+'<button class="x" onclick="Android.removeFolder('+JSON.stringify(f.uri).replace(/"/g,'&quot;')+')">×</button></div>';
-  });
-  if(!inner) inner = '<div class="muted" style="font-size:14px;padding:4px 0">No folders chosen yet. Pick Downloads, WhatsApp, or any folder you want kept.</div>';
-  return '<div class="card"><h2>Folders to back up</h2>'+inner+
-    '<button class="btn ghost" style="margin-top:10px" onclick="Android.addFolder()">+ Add a folder</button></div>';
+function catRow(c){
+  var right;
+  if (c.ok) right = '<span class="status ok">✓ On</span>';
+  else if (c.fix === "allfiles") right = '<button class="fix" onclick="Android.fixPermission(\'allfiles\')">Turn on</button>';
+  else if (c.fix === "more") right = '<button class="fix" onclick="Android.fixPermission(\'perm\')">Allow all</button>';
+  else if (c.fix === "perm") right = '<button class="fix" onclick="Android.fixPermission(\'perm\')">Allow</button>';
+  else right = '<span class="status ok">✓ On</span>';
+  return '<div class="row"><div class="t"><b>'+esc(c.label)+'</b></div>'+right+'</div>';
 }
 
 function reportCard(){
@@ -147,15 +126,17 @@ function render(state){
   }
 
   var busy = S.progress && S.progress.length;
-  var toggles = ORDER.map(toggleRow).join("");
+  var cats = (S.categories||[]).map(catRow).join("");
+  var anyBlocked = (S.categories||[]).some(function(c){ return !c.ok; });
   app.innerHTML =
     (busy? '<div class="prog"><div class="spin"></div><div>'+esc(S.progress)+'</div></div>' : "")+
     '<button class="btn" '+(busy?"disabled":"")+' onclick="Android.backupNow()">'+(busy?"Backing up…":"Back up now")+'</button>'+
-    '<div class="sub" style="text-align:center;margin:8px 0 16px">Also runs on its own every 12 hours'+
+    '<div class="sub" style="text-align:center;margin:8px 0 16px">Backs up everything on its own every 12 hours'+
       (S.wifiOnly?", on Wi-Fi":"")+(S.chargingOnly?", while charging":"")+'.</div>'+
     reportCard()+
-    '<div class="card"><h2>What gets backed up</h2>'+toggles+'</div>'+
-    folderList()+
+    '<div class="card"><h2>What gets backed up</h2>'+
+      '<p class="sub" style="margin:0 0 8px">Everything below is backed up automatically.'+
+      (anyBlocked?' Turn on the ones Android is still blocking.':'')+'</p>'+cats+'</div>'+
     '<div class="card"><h2>When to back up</h2>'+
       '<div class="row"><div class="t"><b>Only on Wi-Fi</b><small>Don\'t use mobile data</small></div>'+
         '<label class="sw"><input type="checkbox" id="wifi" '+(S.wifiOnly?"checked":"")+' onchange="sched()"><span></span></label></div>'+

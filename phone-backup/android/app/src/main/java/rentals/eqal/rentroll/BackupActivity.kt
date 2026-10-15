@@ -33,17 +33,6 @@ class BackupActivity : AppCompatActivity() {
     private val askPerms = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
         pushState()
     }
-    private val pickFolder = registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-        if (uri != null) {
-            try {
-                contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                prefs.folders = (prefs.folders + uri.toString()).distinct()
-                prefs.files = true
-            } catch (_: Exception) {}
-        }
-        pushState()
-    }
-
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -83,27 +72,25 @@ class BackupActivity : AppCompatActivity() {
 
     private fun granted(p: String) = checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
 
+    // Everything is backed up; the screen only shows whether each type is
+    // allowed yet, and offers to fix the ones Android is still blocking.
+    private fun cat(label: String, ok: Boolean, fix: String): JSONObject =
+        JSONObject().put("label", label).put("ok", ok).put("fix", fix)
+
     private fun state(): JSONObject {
-        val photoPerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_IMAGES else Manifest.permission.READ_EXTERNAL_STORAGE
-        val videoPerm = if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
-        val folders = JSONArray()
-        for (u in prefs.folders) {
-            folders.put(JSONObject().put("uri", u).put("name", Scanner.folderName(this, Uri.parse(u))))
-        }
-        val toggles = JSONObject()
-            .put("photos", JSONObject().put("on", prefs.photos).put("ok", Scanner.canReadPhotos(this)).put("limited", Scanner.photosLimited(this)))
-            .put("videos", JSONObject().put("on", prefs.videos).put("ok", Scanner.canReadVideos(this)))
-            .put("files", JSONObject().put("on", prefs.files).put("ok", true))
-            .put("contacts", JSONObject().put("on", prefs.contacts).put("ok", granted(Manifest.permission.READ_CONTACTS)))
-            .put("calls", JSONObject().put("on", prefs.calls).put("ok", granted(Manifest.permission.READ_CALL_LOG)))
-            .put("texts", JSONObject().put("on", prefs.texts).put("ok", granted(Manifest.permission.READ_SMS)))
-            .put("apps", JSONObject().put("on", prefs.apps).put("ok", true))
+        val cats = JSONArray()
+            .put(cat("Photos", Scanner.canReadPhotos(this), if (Scanner.photosLimited(this)) "more" else "perm"))
+            .put(cat("Videos", Scanner.canReadVideos(this), "perm"))
+            .put(cat("Documents", Scanner.hasAllFiles(), "allfiles"))
+            .put(cat("Contacts", granted(Manifest.permission.READ_CONTACTS), "perm"))
+            .put(cat("Call log", granted(Manifest.permission.READ_CALL_LOG), "perm"))
+            .put(cat("Texts", granted(Manifest.permission.READ_SMS), "perm"))
+            .put(cat("App list", true, ""))
         return JSONObject()
             .put("paired", prefs.paired)
             .put("deviceName", prefs.deviceName ?: "")
             .put("server", prefs.server)
-            .put("toggles", toggles)
-            .put("folders", folders)
+            .put("categories", cats)
             .put("wifiOnly", prefs.wifiOnly)
             .put("chargingOnly", prefs.chargingOnly)
             .put("progress", prefs.progress)
@@ -111,21 +98,31 @@ class BackupActivity : AppCompatActivity() {
             .put("sdk", Build.VERSION.SDK_INT)
     }
 
-    private fun permsFor(key: String): Array<String> {
+    /** Every runtime permission the backup needs — all requested together. */
+    private fun allPerms(): Array<String> {
         val list = ArrayList<String>()
-        when (key) {
-            "photos" -> {
-                if (Build.VERSION.SDK_INT >= 33) { list += Manifest.permission.READ_MEDIA_IMAGES; list += Manifest.permission.ACCESS_MEDIA_LOCATION }
-                else list += Manifest.permission.READ_EXTERNAL_STORAGE
-                if (Build.VERSION.SDK_INT >= 34) list += Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
-            }
-            "videos" -> list += if (Build.VERSION.SDK_INT >= 33) Manifest.permission.READ_MEDIA_VIDEO else Manifest.permission.READ_EXTERNAL_STORAGE
-            "contacts" -> list += Manifest.permission.READ_CONTACTS
-            "calls" -> list += Manifest.permission.READ_CALL_LOG
-            "texts" -> list += Manifest.permission.READ_SMS
+        if (Build.VERSION.SDK_INT >= 33) {
+            list += Manifest.permission.READ_MEDIA_IMAGES
+            list += Manifest.permission.READ_MEDIA_VIDEO
+            list += Manifest.permission.ACCESS_MEDIA_LOCATION
+            list += Manifest.permission.POST_NOTIFICATIONS
+            if (Build.VERSION.SDK_INT >= 34) list += Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+        } else {
+            list += Manifest.permission.READ_EXTERNAL_STORAGE
         }
-        if (Build.VERSION.SDK_INT >= 33) list += Manifest.permission.POST_NOTIFICATIONS
+        list += Manifest.permission.READ_CONTACTS
+        list += Manifest.permission.READ_CALL_LOG
+        list += Manifest.permission.READ_SMS
         return list.toTypedArray()
+    }
+
+    private fun requestAllFiles() {
+        if (Build.VERSION.SDK_INT < 30) return
+        try {
+            startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.fromParts("package", packageName, null)))
+        } catch (_: Exception) {
+            try { startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION)) } catch (_: Exception) {}
+        }
     }
 
     inner class Bridge {
@@ -148,41 +145,17 @@ class BackupActivity : AppCompatActivity() {
                 if (res.optBoolean("ok")) {
                     BackupWorker.schedule(this@BackupActivity)
                     BackupWorker.heartbeat(this@BackupActivity)
-                    askPerms.launch(permsFor("photos") + Manifest.permission.READ_CONTACTS)
+                    // Ask for everything up front; the backup covers it all.
+                    askPerms.launch(allPerms())
                 }
                 web.evaluateJavascript("window.paired(${res})", null)
                 pushState()
             }
         }
 
-        @JavascriptInterface fun setToggle(key: String, on: Boolean) {
-            when (key) {
-                "photos" -> prefs.photos = on
-                "videos" -> prefs.videos = on
-                "files" -> prefs.files = on
-                "contacts" -> prefs.contacts = on
-                "calls" -> prefs.calls = on
-                "texts" -> prefs.texts = on
-                "apps" -> prefs.apps = on
-            }
-            if (on) {
-                val need = permsFor(key).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
-                if (need.isNotEmpty()) { askPerms.launch(need.toTypedArray()); return }
-            }
-            pushState()
-        }
-
         @JavascriptInterface fun setSchedule(wifiOnly: Boolean, chargingOnly: Boolean) {
             prefs.wifiOnly = wifiOnly; prefs.chargingOnly = chargingOnly
             if (prefs.paired) BackupWorker.schedule(this@BackupActivity)
-            pushState()
-        }
-
-        @JavascriptInterface fun addFolder() = runOnUiThread { pickFolder.launch(null) }
-
-        @JavascriptInterface fun removeFolder(uri: String) {
-            try { contentResolver.releasePersistableUriPermission(Uri.parse(uri), Intent.FLAG_GRANT_READ_URI_PERMISSION) } catch (_: Exception) {}
-            prefs.folders = prefs.folders - uri
             pushState()
         }
 
@@ -193,10 +166,14 @@ class BackupActivity : AppCompatActivity() {
             pushState()
         }
 
-        @JavascriptInterface fun fixPermission(key: String) {
-            val need = permsFor(key).filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
+        /** Grant whatever's still blocked: runtime perms, then All-files access. */
+        @JavascriptInterface fun fixPermission(which: String) {
+            if (which == "allfiles") { requestAllFiles(); return }
+            val need = allPerms().filter { checkSelfPermission(it) != PackageManager.PERMISSION_GRANTED }
             if (need.isNotEmpty()) askPerms.launch(need.toTypedArray()) else openAppSettings()
         }
+
+        @JavascriptInterface fun requestAllFiles() = this@BackupActivity.requestAllFiles()
 
         @JavascriptInterface fun openAppSettings() {
             try {

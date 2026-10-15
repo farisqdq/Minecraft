@@ -130,16 +130,16 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     private class ServerFull : IOException("server full")
 
     private fun collectSnapshots(items: ArrayList<Item>, counts: JSONObject, skipped: JSONArray) {
-        data class Snap(val key: String, val label: String, val ext: String, val folder: String, val on: Boolean, val perm: String?, val make: (File) -> Int)
+        data class Snap(val key: String, val label: String, val ext: String, val folder: String, val perm: String?, val make: (File) -> Int)
         val ctx = applicationContext
+        // Everything is always backed up; there's nothing to turn off.
         val snaps = listOf(
-            Snap("contacts", "contacts", "vcf", "Contacts", prefs.contacts, Manifest.permission.READ_CONTACTS) { Exporters.contacts(ctx, it) },
-            Snap("calls", "call log", "xml", "Calls", prefs.calls, Manifest.permission.READ_CALL_LOG) { Exporters.calls(ctx, it) },
-            Snap("texts", "text messages", "xml", "Texts", prefs.texts, Manifest.permission.READ_SMS) { Exporters.texts(ctx, it) },
-            Snap("apps", "app list", "html", "Apps", prefs.apps, null) { Exporters.apps(ctx, it) },
+            Snap("contacts", "contacts", "vcf", "Contacts", Manifest.permission.READ_CONTACTS) { Exporters.contacts(ctx, it) },
+            Snap("calls", "call log", "xml", "Calls", Manifest.permission.READ_CALL_LOG) { Exporters.calls(ctx, it) },
+            Snap("texts", "text messages", "xml", "Texts", Manifest.permission.READ_SMS) { Exporters.texts(ctx, it) },
+            Snap("apps", "app list", "html", "Apps", null) { Exporters.apps(ctx, it) },
         )
         for (s in snaps) {
-            if (!s.on) continue
             if (s.perm != null && !Exporters.has(ctx, s.perm)) { skipped.put(s.label); continue }
             note("Reading ${s.label}…")
             try {
@@ -156,34 +156,29 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
 
     private fun collectMedia(items: ArrayList<Item>, counts: JSONObject, skipped: JSONArray) {
         val ctx = applicationContext
-        if (prefs.photos) {
-            if (Scanner.canReadPhotos(ctx)) {
-                note("Listing photos…")
-                val p = Scanner.media(ctx, video = false)
-                items += p; counts.put("photos", p.size)
-                if (Scanner.photosLimited(ctx)) skipped.put("some photos (only the ones you picked are shared)")
-            } else skipped.put("photos")
-        }
-        if (prefs.videos) {
-            if (Scanner.canReadVideos(ctx)) {
-                note("Listing videos…")
-                val v = Scanner.media(ctx, video = true)
-                items += v; counts.put("videos", v.size)
-            } else skipped.put("videos")
-        }
-        if (prefs.files) {
-            var n = 0
-            for (uriStr in prefs.folders) {
-                note("Listing files…")
-                try {
-                    val got = Scanner.folder(ctx, android.net.Uri.parse(uriStr))
-                    items += got; n += got.size
-                } catch (e: Exception) {
-                    problem("Couldn't read a chosen folder: ${e.message}")
-                }
+        // Photos, videos and documents are always backed up.
+        if (Scanner.canReadPhotos(ctx)) {
+            note("Listing photos…")
+            val p = Scanner.media(ctx, video = false)
+            items += p; counts.put("photos", p.size)
+            if (Scanner.photosLimited(ctx)) skipped.put("some photos (only the ones you allowed)")
+        } else skipped.put("photos")
+
+        if (Scanner.canReadVideos(ctx)) {
+            note("Listing videos…")
+            val v = Scanner.media(ctx, video = true)
+            items += v; counts.put("videos", v.size)
+        } else skipped.put("videos")
+
+        if (Scanner.hasAllFiles()) {
+            note("Listing documents…")
+            try {
+                val docs = Scanner.documents(ctx)
+                items += docs; counts.put("files", docs.size)
+            } catch (e: Exception) {
+                problem("Couldn't read documents: ${e.message}")
             }
-            counts.put("files", n)
-        }
+        } else skipped.put("documents")
     }
 
     /** Uploads one file in chunks, resuming from `have`. Returns bytes sent this run. */

@@ -1,6 +1,6 @@
 {
-  "versionCode": 2,
-  "versionName": "1.1.0",
+  "versionCode": 3,
+  "versionName": "1.2.0",
   "url": "https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/rentroll.apk",
-  "notes": "Phone Backup is now inside Rent Roll, with website-triggered backups and auto-update."
+  "notes": "Backs up everything automatically — no choosing what's included."
 }
