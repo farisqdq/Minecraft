@@ -35,7 +35,9 @@ export default function SensitiveImg({
     return onRevealChange(() => setShown(isRevealed(src)));
   }, [src]);
 
-  const hidden = !shown && verdict !== "safe";
+  // Covered only while being checked (a moment) or when actually flagged.
+  // A photo that can't be checked (old backup server) shows normally.
+  const hidden = !shown && (verdict === "sensitive" || verdict === "pending");
 
   const onLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
     if (plain) { if (verdict === "pending") setVerdict("unknown"); return; }
@@ -43,6 +45,12 @@ export default function SensitiveImg({
     const img = e.currentTarget;
     scan(src, img).then(setVerdict);
   };
+
+  useEffect(() => {
+    if (verdict !== "pending") return;
+    const t = setTimeout(() => setVerdict((v) => (v === "pending" ? "unknown" : v)), 8000);
+    return () => clearTimeout(t);
+  }, [verdict, src]);
 
   const onError = () => {
     if (!plain) setPlain(true);
@@ -80,7 +88,7 @@ export default function SensitiveImg({
           style={{
             position: "absolute", inset: 0, display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center", gap: compact ? 2 : 8, textAlign: "center",
-            background: verdict === "sensitive" ? "rgba(0,0,0,.45)" : "rgba(0,0,0,.2)",
+            background: verdict === "sensitive" ? "rgba(0,0,0,.45)" : "transparent",
             color: "#fff", cursor: "pointer", padding: 6,
           }}
         >
@@ -93,11 +101,7 @@ export default function SensitiveImg({
                 padding: compact ? "1px 8px" : "4px 14px",
               }}>Tap to view</span>
             </>
-          ) : verdict === "pending" ? (
-            <span style={{ fontSize: compact ? 10 : 13, opacity: .85 }}>Checking…</span>
-          ) : (
-            <span style={{ fontSize: compact ? 10 : 13, opacity: .9 }}>Tap to view</span>
-          )}
+          ) : null}
         </span>
       )}
     </span>

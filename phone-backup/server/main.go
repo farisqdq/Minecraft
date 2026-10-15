@@ -84,6 +84,11 @@ type Device struct {
 	CommandAt *time.Time `json:"commandAt,omitempty"`
 	// Last known location the phone reported (from a "locate" command).
 	Loc *Location `json:"loc,omitempty"`
+	// Anti-theft capabilities the phone reports ("admin=1;loc=always").
+	Caps string `json:"caps,omitempty"`
+	// The last remote command handed to the phone, and when.
+	LastCmd   string     `json:"lastCmd,omitempty"`
+	LastCmdAt *time.Time `json:"lastCmdAt,omitempty"`
 }
 
 type Location struct {
@@ -559,6 +564,13 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		changed = true
 		d.Command = ""
 		d.CommandAt = nil
+		now := time.Now().UTC()
+		d.LastCmd = command
+		d.LastCmdAt = &now
+	}
+	if caps := r.Header.Get("X-RR-Caps"); caps != "" && len(caps) < 120 && caps != d.Caps {
+		d.Caps = caps
+		changed = true
 	}
 	if ver != "" && ver != d.AppVersion {
 		d.AppVersion = ver
@@ -608,7 +620,7 @@ func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 		fail(w, 400, "bad request")
 		return
 	}
-	if body.Cmd != "lock" && body.Cmd != "wipe" && body.Cmd != "locate" {
+	if body.Cmd != "lock" && body.Cmd != "wipe" && body.Cmd != "locate" && body.Cmd != "cancel" {
 		fail(w, 400, "unknown command")
 		return
 	}
@@ -624,8 +636,14 @@ func (s *Server) handleCommand(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	now := time.Now().UTC()
-	d.Command = body.Cmd
-	d.CommandAt = &now
+	if body.Cmd == "cancel" {
+		// Withdraw a command the phone hasn't picked up yet (e.g. a wipe sent by mistake).
+		d.Command = ""
+		d.CommandAt = nil
+	} else {
+		d.Command = body.Cmd
+		d.CommandAt = &now
+	}
 	if err := s.save(); err != nil {
 		fail(w, 500, "couldn't save")
 		return
@@ -842,10 +860,13 @@ type deviceView struct {
 	Command         string      `json:"command,omitempty"`
 	CommandAt       *time.Time  `json:"commandAt,omitempty"`
 	Loc             *Location   `json:"loc,omitempty"`
+	Caps            string      `json:"caps,omitempty"`
+	LastCmd         string      `json:"lastCmd,omitempty"`
+	LastCmdAt       *time.Time  `json:"lastCmdAt,omitempty"`
 }
 
 func (s *Server) view(d *Device) deviceView {
-	v := deviceView{ID: d.ID, Name: d.Name, CreatedAt: d.CreatedAt, Paired: d.TokenHash != "", PairedAt: d.PairedAt, Model: d.Model, LastSeen: d.LastSeen, Report: d.Report, BackupRequested: d.BackupRequested, RequestedAt: d.RequestedAt, AppVersion: d.AppVersion, Command: d.Command, CommandAt: d.CommandAt, Loc: d.Loc}
+	v := deviceView{ID: d.ID, Name: d.Name, CreatedAt: d.CreatedAt, Paired: d.TokenHash != "", PairedAt: d.PairedAt, Model: d.Model, LastSeen: d.LastSeen, Report: d.Report, BackupRequested: d.BackupRequested, RequestedAt: d.RequestedAt, AppVersion: d.AppVersion, Command: d.Command, CommandAt: d.CommandAt, Loc: d.Loc, Caps: d.Caps, LastCmd: d.LastCmd, LastCmdAt: d.LastCmdAt}
 	if d.PairCode != "" && time.Now().Before(d.PairExpires) {
 		v.PairCode = d.PairCode
 		t := d.PairExpires

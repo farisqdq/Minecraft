@@ -39,6 +39,13 @@ type Phone = {
   backupRequested?: boolean;
   requestedAt?: string;
   appVersion?: string;
+  // Anti-theft
+  command?: string;          // queued, waiting for the phone's next check-in
+  commandAt?: string;
+  lastCmd?: string;          // last one the phone picked up
+  lastCmdAt?: string;
+  caps?: string;             // "admin=1;loc=always"
+  loc?: { lat: number; lng: number; acc: number; at: string };
 };
 type Summary = {
   configured: boolean;
@@ -93,7 +100,9 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
   // While any phone has a backup requested or running — or the backup server
   // didn't answer — poll so the page catches up on its own.
   useEffect(() => {
-    const active = !!data.down || (data.devices || []).some((d) => d.backupRequested || isLive(d.report));
+    const recent = (t?: string) => !!t && Date.now() - Date.parse(t) < 5 * 60 * 1000;
+    const active = !!data.down || (data.devices || []).some((d) =>
+      d.backupRequested || isLive(d.report) || !!d.command || recent(d.lastCmdAt));
     if (active && !pollRef.current) {
       pollRef.current = setInterval(refresh, data.down ? 15000 : 5000);
     } else if (!active && pollRef.current) {
@@ -126,6 +135,23 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
       method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }),
     }, "Phone added.");
     if (made) setNewName("");
+  };
+
+  const NAMES: Record<string, string> = { lock: "Lock", wipe: "Erase", locate: "Locate", cancel: "Cancel" };
+  const sendCmd = (p: Phone, cmd: "lock" | "wipe" | "locate" | "cancel", confirmText?: string) =>
+    act(`/api/phones/${p.id}`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "command", cmd, confirm: confirmText }),
+    }, cmd === "cancel" ? "Cancelled — nothing will be sent to the phone." : `${NAMES[cmd]} sent — the phone will act at its next check-in.`);
+
+  const askCmd = (p: Phone, cmd: "lock" | "locate") => {
+    if (cmd === "locate") { sendCmd(p, "locate"); return; }
+    setConfirm({
+      title: `Lock ${p.name}?`,
+      body: "The screen locks at the phone's next check-in (usually within 15 minutes). Whoever has it will need the phone's PIN or pattern to get back in.",
+      confirmLabel: "Lock phone",
+      onConfirm: () => { setConfirm(null); sendCmd(p, "lock"); },
+    });
   };
 
   const requestBackup = (p: Phone) =>
@@ -251,6 +277,9 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
           onRename={() => rename(p)}
           onRemove={() => remove(p)}
           onRestoreLink={() => restoreLink(p)}
+          onCmd={(cmd) => askCmd(p, cmd)}
+          onWipe={(text) => sendCmd(p, "wipe", text)}
+          onCancelCmd={() => sendCmd(p, "cancel")}
         />
       ))}
     </AppShell>
@@ -258,11 +287,14 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
 }
 
 function PhoneCard({
-  p, busy, onRequest, onCode, onRename, onRemove, onRestoreLink,
+  p, busy, onRequest, onCode, onRename, onRemove, onRestoreLink, onCmd, onWipe, onCancelCmd,
 }: {
   p: Phone; busy: string;
   onRequest: () => void; onCode: () => void; onRename: () => void; onRemove: () => void;
   onRestoreLink: () => Promise<string | null>;
+  onCmd: (cmd: "lock" | "locate") => void;
+  onWipe: (typed: string) => Promise<unknown>;
+  onCancelCmd: () => void;
 }) {
   const [browse, setBrowse] = useState(false);
   const [viewer, setViewer] = useState(false);
@@ -339,6 +371,8 @@ function PhoneCard({
             )}
           </div>
         )}
+
+        {p.paired && <AntiTheft p={p} busy={!!busy} onCmd={onCmd} onWipe={onWipe} onCancelCmd={onCancelCmd} />}
 
         <div className={styles.formFoot} style={{ justifyContent: "flex-start", gap: 8, marginTop: 14, flexWrap: "wrap" }}>
           {p.paired && (
@@ -487,6 +521,98 @@ function LiveProgress({ r }: { r: Report }) {
         {byBytes ? ` · ${human(r.bytesDone)} of ${human(r.bytesTotal)}` : ""}
         {r.at ? ` · updated ${ago}` : ""}
       </div>
+    </div>
+  );
+}
+
+function parseCaps(caps?: string) {
+  const m: Record<string, string> = {};
+  for (const part of (caps || "").split(";")) { const [k, v] = part.split("="); if (k) m[k.trim()] = (v || "").trim(); }
+  return { known: !!caps, admin: m.admin === "1", loc: m.loc || "none" };
+}
+
+/** Lost or stolen phone: Locate / Lock / Erase, and where it was last seen. */
+function AntiTheft({ p, busy, onCmd, onWipe, onCancelCmd }: {
+  p: Phone; busy: boolean;
+  onCmd: (cmd: "lock" | "locate") => void;
+  onWipe: (typed: string) => Promise<unknown>;
+  onCancelCmd: () => void;
+}) {
+  const caps = parseCaps(p.caps);
+  const [wipeOpen, setWipeOpen] = useState(false);
+  const [typed, setTyped] = useState("");
+  const NAMES: Record<string, string> = { lock: "Lock", wipe: "Erase", locate: "Locate" };
+  const box: React.CSSProperties = { marginTop: 14, padding: 12, borderRadius: 10, border: "1px solid var(--line-strong, #e4e2da)" };
+  const pill = (on: boolean, text: string) => (
+    <span style={{ fontSize: 12, fontWeight: 600, color: on ? "var(--accent)" : "var(--muted)" }}>{text}</span>
+  );
+  const needsSetup = !caps.admin || caps.loc !== "always";
+
+  return (
+    <div style={box}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+        <strong>If this phone is lost</strong>
+        <span style={{ display: "flex", gap: 12 }}>
+          {pill(caps.admin, caps.admin ? "Lock & erase: on" : "Lock & erase: off")}
+          {pill(caps.loc === "always", caps.loc === "always" ? "Location: on" : caps.loc === "fg" ? "Location: only while open" : "Location: off")}
+        </span>
+      </div>
+
+      {needsSetup && (
+        <p className={styles.helpText} style={{ margin: "6px 0 0" }}>
+          {caps.known ? "To turn these on" : "Needs app v1.7 or later. Then"}: on the phone, open Rent Roll → Settings → Phone backup →
+          {" "}<b>If this phone is lost</b>, and tap Turn on / Allow.
+        </p>
+      )}
+
+      {p.command && (
+        <div style={{ marginTop: 10, padding: "8px 10px", borderRadius: 8, background: p.command === "wipe" ? "rgba(178,58,58,.12)" : "var(--accent-soft, #eef4f0)", display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 13.5 }}>
+            <b>{NAMES[p.command] || p.command}</b> is waiting for the phone — it happens at the next check-in (usually within 15 minutes).
+          </span>
+          <button className={styles.btn} disabled={busy} onClick={onCancelCmd}>Cancel</button>
+        </div>
+      )}
+      {!p.command && p.lastCmd && p.lastCmdAt && (
+        <p className={styles.helpText} style={{ margin: "8px 0 0" }}>
+          {NAMES[p.lastCmd] || p.lastCmd} reached the phone <Ago at={p.lastCmdAt} />.
+        </p>
+      )}
+
+      {p.loc && (
+        <p style={{ margin: "8px 0 0", fontSize: 14 }}>
+          📍 Last seen{" "}
+          <a href={`https://www.google.com/maps?q=${p.loc.lat},${p.loc.lng}`} target="_blank" rel="noreferrer">on the map</a>
+          {" "}· within {Math.max(1, Math.round(p.loc.acc))} m · <Ago at={p.loc.at} />
+        </p>
+      )}
+
+      <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+        <button className={styles.btn} disabled={busy || !!p.command} onClick={() => onCmd("locate")}>Locate</button>
+        <button className={styles.btn} disabled={busy || !!p.command || !caps.admin} onClick={() => onCmd("lock")}>Lock</button>
+        <button className={styles.btn} disabled={busy || !!p.command || !caps.admin} onClick={() => { setWipeOpen((o) => !o); setTyped(""); }}
+          style={{ color: "var(--expense, #b42318)" }}>Erase phone…</button>
+      </div>
+
+      {wipeOpen && !p.command && (
+        <div style={{ marginTop: 10, padding: 12, borderRadius: 10, border: "1px solid var(--expense, #b42318)" }}>
+          <p style={{ margin: "0 0 8px", fontSize: 14 }}>
+            <b>Erase everything on {p.name}?</b> The phone resets to factory settings at its next check-in. This can&apos;t be undone.
+            Its backups on your server are kept.
+          </p>
+          <label className={styles.helpText} style={{ display: "block", margin: "0 0 6px" }}>Type <b>ERASE</b> to confirm</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoCapitalize="characters"
+              style={{ padding: "9px 11px", border: "1px solid var(--line-strong, #e4e2da)", borderRadius: 9, font: "inherit", background: "transparent", color: "inherit", width: 140 }} />
+            <button className={styles.btn} disabled={typed !== "ERASE" || busy}
+              onClick={async () => { await onWipe(typed); setWipeOpen(false); setTyped(""); }}
+              style={{ background: typed === "ERASE" ? "var(--expense, #b42318)" : undefined, color: typed === "ERASE" ? "#fff" : undefined }}>
+              Erase phone
+            </button>
+            <button className={styles.btn} onClick={() => setWipeOpen(false)}>Never mind</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

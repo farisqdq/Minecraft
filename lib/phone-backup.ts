@@ -84,6 +84,8 @@ export const renamePhone = (id: string, name: string) =>
   call(`/api/admin/devices/${encodeURIComponent(id)}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
 export const removePhone = (id: string, withFiles: boolean) =>
   call(`/api/admin/devices/${encodeURIComponent(id)}${withFiles ? "?files=1" : ""}`, { method: "DELETE" });
+export const sendCommand = (id: string, cmd: "lock" | "wipe" | "locate" | "cancel") =>
+  call(`/api/admin/devices/${encodeURIComponent(id)}/command`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cmd }) });
 export const listFiles = (id: string, dir: string) =>
   call(`/api/admin/devices/${encodeURIComponent(id)}/list?dir=${encodeURIComponent(dir)}`);
 
