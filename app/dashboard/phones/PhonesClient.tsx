@@ -463,11 +463,16 @@ function fmtEta(sec?: number) {
 
 /** The running backup: a bar by bytes (or files) and the phone's ETA. */
 function LiveProgress({ r }: { r: Report }) {
+  // Tick every second so the time left counts down between the phone's reports.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const since = r.at ? Math.max(0, (now - r.at) / 1000) : 0;
   const byBytes = !!r.bytesTotal && r.bytesTotal > 0;
   const pct = byBytes
     ? Math.min(100, Math.round(((r.bytesDone || 0) / r.bytesTotal!) * 100))
     : r.total ? Math.min(100, Math.round(((r.done || 0) / r.total) * 100)) : 0;
-  const eta = fmtEta(r.etaSec);
+  const eta = fmtEta(r.etaSec != null ? Math.max(0, r.etaSec - since) : undefined);
+  const ago = since < 5 ? "just now" : since < 90 ? `${Math.round(since)} s ago` : `${Math.round(since / 60)} min ago`;
   return (
     <div style={{ marginTop: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", gap: 10, fontSize: 14 }}>
@@ -480,7 +485,7 @@ function LiveProgress({ r }: { r: Report }) {
       <div className={styles.helpText} style={{ margin: "6px 0 0" }}>
         {r.total ? `${r.done || 0} of ${r.total} files` : ""}
         {byBytes ? ` · ${human(r.bytesDone)} of ${human(r.bytesTotal)}` : ""}
-        {r.at ? <> · updated <Ago at={r.at} /></> : ""}
+        {r.at ? ` · updated ${ago}` : ""}
       </div>
     </div>
   );

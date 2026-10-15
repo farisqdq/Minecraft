@@ -74,20 +74,22 @@ function fmtDay(ms: number) {
   return new Date(ms).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" });
 }
 function Empty({ what }: { what: string }) {
-  return <p style={{ color: "#6B7169", padding: 20 }}>No {what} backed up yet.</p>;
+  return <p style={{ color: "var(--muted)", padding: 20 }}>No {what} backed up yet.</p>;
 }
-function Loading() { return <p style={{ color: "#6B7169", padding: 20 }}>Loading…</p>; }
-function ErrorMsg({ msg }: { msg: string }) { return <p style={{ color: "#B23A3A", padding: 20 }}>{msg}</p>; }
+function Loading() { return <p style={{ color: "var(--muted)", padding: 20 }}>Loading…</p>; }
+function ErrorMsg({ msg }: { msg: string }) { return <p style={{ color: "var(--expense)", padding: 20 }}>{msg}</p>; }
 
 // ---- Texts ----
 
-type SmsMessage = { dir: "in" | "out"; body: string; date: number };
+type Attachment = { path: string; ct: string; name?: string };
+type SmsMessage = { dir: "in" | "out"; body: string; date: number; attachments?: Attachment[]; from?: string };
 type Conversation = { key: string; name: string; address: string; count: number; lastDate: number; messages: SmsMessage[] };
 
 function TextsTab({ phoneId }: { phoneId: string }) {
   const { data, err, loading } = useJson<{ conversations: Conversation[]; backedUpAt: string | null }>(`/api/phones/${phoneId}/texts`);
   const [openKey, setOpenKey] = useState<string | null>(null);
   const [q, setQ] = useState("");
+  const fileUrl = (path: string, dl: boolean) => `/api/phones/${phoneId}/file?p=${encodeURIComponent(path)}${dl ? "&download=1" : ""}`;
 
   if (loading) return <Loading />;
   if (err) return <ErrorMsg msg={err} />;
@@ -107,7 +109,7 @@ function TextsTab({ phoneId }: { phoneId: string }) {
               <div style={avatar}>{c.name.slice(0, 1).toUpperCase()}</div>
               <div style={{ minWidth: 0, flex: 1 }}>
                 <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-                <div style={{ color: "#6B7169", fontSize: 12.5 }}>{c.count} message{c.count === 1 ? "" : "s"} · {fmtDay(c.lastDate)}</div>
+                <div style={{ color: "var(--muted)", fontSize: 12.5 }}>{c.count} message{c.count === 1 ? "" : "s"} · {fmtDay(c.lastDate)}</div>
               </div>
             </button>
           ))}
@@ -119,17 +121,24 @@ function TextsTab({ phoneId }: { phoneId: string }) {
             <div style={threadHead}>
               <button onClick={() => setOpenKey(null)} style={backBtn}>‹ All</button>
               <strong>{open.name}</strong>
-              <span style={{ color: "#6B7169", fontSize: 13 }}>{open.address}</span>
+              <span style={{ color: "var(--muted)", fontSize: 13 }}>{open.address}</span>
             </div>
-            <div style={bubbleScroll}>
-              {open.messages.map((msg, i) => (
-                <div key={i} style={{ display: "flex", justifyContent: msg.dir === "out" ? "flex-end" : "flex-start" }}>
-                  <div style={{ ...bubble, ...(msg.dir === "out" ? bubbleOut : bubbleIn) }}>
-                    <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.body || <em style={{ opacity: .6 }}>(no text)</em>}</div>
-                    <div style={{ fontSize: 10.5, opacity: 0.65, marginTop: 3, textAlign: "right" }}>{fmtDate(msg.date)}</div>
+            {/* column-reverse: the thread opens scrolled to the newest message, like a phone. */}
+            <div key={open.key} style={bubbleScroll}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {open.messages.map((msg, i) => (
+                  <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: msg.dir === "out" ? "flex-end" : "flex-start" }}>
+                    {msg.from && <div style={{ fontSize: 11.5, color: "var(--muted)", margin: "4px 0 2px 6px" }}>{msg.from}</div>}
+                    <div style={{ ...bubble, ...(msg.dir === "out" ? bubbleOut : bubbleIn) }}>
+                      {msg.attachments?.map((a, j) => <MmsAttachment key={j} a={a} fileUrl={fileUrl} />)}
+                      {(msg.body || !msg.attachments?.length) && (
+                        <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{msg.body || <em style={{ opacity: .6 }}>(no text)</em>}</div>
+                      )}
+                      <div style={{ fontSize: 10.5, opacity: 0.65, marginTop: 3, textAlign: "right" }}>{fmtDate(msg.date)}</div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </>
         )}
@@ -142,7 +151,7 @@ function TextsTab({ phoneId }: { phoneId: string }) {
 
 type Call = { dir: string; name: string; number: string; duration: number; date: number };
 const CALL_ICON: Record<string, string> = { in: "↙", out: "↗", missed: "✖", rejected: "⦸", blocked: "⛔", voicemail: "✉", other: "•" };
-const CALL_COLOR: Record<string, string> = { in: "#2E6A48", out: "#2E6A48", missed: "#B23A3A", rejected: "#B23A3A", blocked: "#B23A3A", voicemail: "#A6651B", other: "#6B7169" };
+const CALL_COLOR: Record<string, string> = { in: "var(--accent)", out: "var(--accent)", missed: "var(--expense)", rejected: "var(--expense)", blocked: "var(--expense)", voicemail: "var(--gold)", other: "var(--muted)" };
 function dur(s: number) {
   if (!s) return "—";
   const m = Math.floor(s / 60), sec = s % 60;
@@ -161,9 +170,9 @@ function CallsTab({ phoneId }: { phoneId: string }) {
           <span style={{ color: CALL_COLOR[c.dir], fontSize: 18, width: 22, textAlign: "center" }}>{CALL_ICON[c.dir] || "•"}</span>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{c.name}</div>
-            <div style={{ color: "#6B7169", fontSize: 12.5 }}>{c.dir === "missed" ? "Missed" : c.dir[0].toUpperCase() + c.dir.slice(1)} · {dur(c.duration)}</div>
+            <div style={{ color: "var(--muted)", fontSize: 12.5 }}>{c.dir === "missed" ? "Missed" : c.dir[0].toUpperCase() + c.dir.slice(1)} · {dur(c.duration)}</div>
           </div>
-          <div style={{ color: "#6B7169", fontSize: 12.5, textAlign: "right", flex: "none" }}>{fmtDate(c.date)}</div>
+          <div style={{ color: "var(--muted)", fontSize: 12.5, textAlign: "right", flex: "none" }}>{fmtDate(c.date)}</div>
         </div>
       ))}
     </div>
@@ -190,8 +199,8 @@ function ContactsTab({ phoneId }: { phoneId: string }) {
             <div style={avatar}>{c.name.slice(0, 1).toUpperCase()}</div>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontWeight: 600 }}>{c.name}</div>
-              {c.phones.map((p, j) => <div key={j} style={{ color: "#4a4f45", fontSize: 13.5 }}>{p}</div>)}
-              {c.emails.map((e, j) => <div key={j} style={{ color: "#6B7169", fontSize: 13 }}>{e}</div>)}
+              {c.phones.map((p, j) => <div key={j} style={{ color: "var(--ink)", opacity: .8, fontSize: 13.5 }}>{p}</div>)}
+              {c.emails.map((e, j) => <div key={j} style={{ color: "var(--muted)", fontSize: 13 }}>{e}</div>)}
             </div>
           </div>
         ))}
@@ -215,7 +224,7 @@ function MediaTab({ phoneId }: { phoneId: string }) {
   if (items.length === 0) return <Empty what="photos or videos" />;
 
   return (
-    <div style={{ height: "100%", overflowY: "auto", background: "#111", padding: 3 }}>
+    <div style={{ height: "100%", overflowY: "auto", background: "var(--bg)", padding: 3 }}>
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 3 }}>
         {items.map((m, i) => (
           <button key={m.path} onClick={() => setOpen(i)} style={galTile} title={m.name}>
@@ -278,6 +287,32 @@ function GalleryLightbox({ items, index, fileUrl, onClose, onNav }: {
   );
 }
 
+/** A photo, video or voice clip from a picture message, inside its bubble. */
+function MmsAttachment({ a, fileUrl }: { a: Attachment; fileUrl: (p: string, dl: boolean) => string }) {
+  const ct = (a.ct || "").toLowerCase();
+  const full = fileUrl(a.path, false);
+  const box: React.CSSProperties = { margin: "2px 0 6px", borderRadius: 10, overflow: "hidden", maxWidth: 260 };
+  if (ct.startsWith("image/") && !/hei[cf]/.test(ct)) {
+    return (
+      <a href={full} target="_blank" rel="noreferrer" style={{ ...box, display: "block" }}>
+        <SensitiveImg src={full} thumb={`${full}&thumb=1`} alt={a.name || "Picture message"}
+          imgStyle={{ maxWidth: 260, maxHeight: 320, width: "100%", objectFit: "cover", borderRadius: 10 }} />
+      </a>
+    );
+  }
+  if (ct.startsWith("video/")) {
+    return <div style={box}><video src={full} controls preload="none" playsInline style={{ width: "100%", maxHeight: 320, background: "#000", display: "block" }} /></div>;
+  }
+  if (ct.startsWith("audio/")) {
+    return <div style={{ margin: "2px 0 6px" }}><audio src={full} controls preload="none" style={{ maxWidth: 240 }} /></div>;
+  }
+  return (
+    <div style={{ margin: "2px 0 6px" }}>
+      <a href={fileUrl(a.path, true)} style={{ color: "inherit", textDecoration: "underline" }}>📎 {a.name || "Attachment"}</a>
+    </div>
+  );
+}
+
 // ---- Apps ----
 
 type AppRow = { label: string; pkg: string; version: string; source: string; installed: string };
@@ -297,8 +332,8 @@ function AppsTab({ phoneId }: { phoneId: string }) {
           <div key={i} style={contactRow}>
             <div style={{ minWidth: 0, flex: 1 }}>
               <div style={{ fontWeight: 600 }}>{a.label}</div>
-              <div style={{ color: "#6B7169", fontSize: 12.5 }}>{a.pkg}</div>
-              <div style={{ color: "#6B7169", fontSize: 12 }}>{a.version ? `v${a.version} · ` : ""}{a.source}{a.installed ? ` · ${a.installed}` : ""}</div>
+              <div style={{ color: "var(--muted)", fontSize: 12.5 }}>{a.pkg}</div>
+              <div style={{ color: "var(--muted)", fontSize: 12 }}>{a.version ? `v${a.version} · ` : ""}{a.source}{a.installed ? ` · ${a.installed}` : ""}</div>
             </div>
             <a href={`https://play.google.com/store/apps/details?id=${encodeURIComponent(a.pkg)}`} target="_blank" rel="noreferrer" style={{ flex: "none", fontSize: 13 }}>Store</a>
           </div>
@@ -311,28 +346,28 @@ function AppsTab({ phoneId }: { phoneId: string }) {
 // ---- styles ----
 
 const overlay: React.CSSProperties = { position: "fixed", inset: 0, background: "rgba(0,0,0,.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "2vh 2vw" };
-const sheet: React.CSSProperties = { background: "var(--card,#fff)", color: "#23281F", borderRadius: 14, width: "min(900px, 100%)", height: "96vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,.3)" };
-const head: React.CSSProperties = { display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderBottom: "1px solid #E4E2DA", flexWrap: "wrap" };
+const sheet: React.CSSProperties = { background: "var(--surface)", color: "var(--ink)", borderRadius: 14, width: "min(900px, 100%)", height: "96vh", display: "flex", flexDirection: "column", overflow: "hidden", boxShadow: "0 10px 40px rgba(0,0,0,.3)" };
+const head: React.CSSProperties = { display: "flex", alignItems: "center", gap: 14, padding: "12px 14px", borderBottom: "1px solid var(--line-strong)", flexWrap: "wrap" };
 const tabs: React.CSSProperties = { display: "flex", gap: 4, flex: 1, flexWrap: "wrap" };
-const tabBtn: React.CSSProperties = { border: 0, background: "none", padding: "7px 12px", borderRadius: 8, cursor: "pointer", font: "inherit", color: "#6B7169", fontWeight: 600 };
-const tabActive: React.CSSProperties = { background: "#2E6A48", color: "#fff" };
-const closeBtn: React.CSSProperties = { border: 0, background: "none", fontSize: 26, cursor: "pointer", color: "#6B7169", lineHeight: 1 };
-const body: React.CSSProperties = { flex: 1, minHeight: 0, background: "#F6F5F1" };
+const tabBtn: React.CSSProperties = { border: 0, background: "none", padding: "7px 12px", borderRadius: 8, cursor: "pointer", font: "inherit", color: "var(--muted)", fontWeight: 600 };
+const tabActive: React.CSSProperties = { background: "var(--accent)", color: "var(--on-accent)" };
+const closeBtn: React.CSSProperties = { border: 0, background: "none", fontSize: 26, cursor: "pointer", color: "var(--muted)", lineHeight: 1 };
+const body: React.CSSProperties = { flex: 1, minHeight: 0, background: "var(--bg)" };
 const splitWrap: React.CSSProperties = { display: "flex", height: "100%" };
-const listPane: React.CSSProperties = { width: 290, borderRight: "1px solid #E4E2DA", flexDirection: "column", minWidth: 0, flex: "none" };
+const listPane: React.CSSProperties = { width: 290, borderRight: "1px solid var(--line-strong)", flexDirection: "column", minWidth: 0, flex: "none" };
 const threadPane: React.CSSProperties = { flex: 1, flexDirection: "column", minWidth: 0 };
-const search: React.CSSProperties = { margin: 10, padding: "9px 11px", border: "1px solid #E4E2DA", borderRadius: 9, font: "inherit", background: "#fff" };
-const convRow: React.CSSProperties = { display: "flex", gap: 10, alignItems: "center", width: "100%", textAlign: "left", border: 0, borderBottom: "1px solid #ECEAE3", background: "none", padding: "10px 12px", cursor: "pointer", font: "inherit" };
-const rowActive: React.CSSProperties = { background: "#ECF2EE" };
-const avatar: React.CSSProperties = { width: 36, height: 36, borderRadius: "50%", background: "#2E6A48", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flex: "none" };
-const threadHead: React.CSSProperties = { display: "flex", gap: 10, alignItems: "baseline", padding: "10px 14px", borderBottom: "1px solid #E4E2DA", background: "#fff" };
-const backBtn: React.CSSProperties = { border: 0, background: "none", color: "#2E6A48", cursor: "pointer", font: "inherit", fontWeight: 600, padding: 0 };
-const bubbleScroll: React.CSSProperties = { flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column", gap: 6 };
+const search: React.CSSProperties = { margin: 10, padding: "9px 11px", border: "1px solid var(--line-strong)", borderRadius: 9, font: "inherit", background: "var(--surface)", color: "var(--ink)" };
+const convRow: React.CSSProperties = { display: "flex", gap: 10, alignItems: "center", width: "100%", textAlign: "left", color: "inherit", border: 0, borderBottom: "1px solid var(--line)", background: "none", padding: "10px 12px", cursor: "pointer", font: "inherit" };
+const rowActive: React.CSSProperties = { background: "var(--accent-soft)" };
+const avatar: React.CSSProperties = { width: 36, height: 36, borderRadius: "50%", background: "var(--accent)", color: "var(--on-accent)", display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 700, flex: "none" };
+const threadHead: React.CSSProperties = { display: "flex", gap: 10, alignItems: "baseline", padding: "10px 14px", borderBottom: "1px solid var(--line-strong)", background: "var(--surface)" };
+const backBtn: React.CSSProperties = { border: 0, background: "none", color: "var(--accent)", cursor: "pointer", font: "inherit", fontWeight: 600, padding: 0 };
+const bubbleScroll: React.CSSProperties = { flex: 1, overflowY: "auto", padding: 14, display: "flex", flexDirection: "column-reverse" };
 const bubble: React.CSSProperties = { maxWidth: "76%", padding: "8px 11px", borderRadius: 14, fontSize: 14.5, lineHeight: 1.35 };
-const bubbleIn: React.CSSProperties = { background: "#fff", border: "1px solid #E4E2DA", borderBottomLeftRadius: 4 };
-const bubbleOut: React.CSSProperties = { background: "#2E6A48", color: "#fff", borderBottomRightRadius: 4 };
-const callRow: React.CSSProperties = { display: "flex", gap: 12, alignItems: "center", padding: "10px 14px", borderBottom: "1px solid #ECEAE3" };
-const contactRow: React.CSSProperties = { display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 14px", borderBottom: "1px solid #ECEAE3" };
+const bubbleIn: React.CSSProperties = { background: "var(--surface)", color: "var(--ink)", border: "1px solid var(--line-strong)", borderBottomLeftRadius: 4 };
+const bubbleOut: React.CSSProperties = { background: "var(--accent)", color: "var(--on-accent)", borderBottomRightRadius: 4 };
+const callRow: React.CSSProperties = { display: "flex", gap: 12, alignItems: "center", padding: "10px 14px", borderBottom: "1px solid var(--line)" };
+const contactRow: React.CSSProperties = { display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 14px", borderBottom: "1px solid var(--line)" };
 const galTile: React.CSSProperties = { position: "relative", aspectRatio: "1 / 1", padding: 0, border: 0, overflow: "hidden", cursor: "pointer", background: "#222" };
 const galPlaceholder: React.CSSProperties = { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#333" };
 const galPlay: React.CSSProperties = { position: "absolute", bottom: 5, right: 5, background: "rgba(0,0,0,.6)", color: "#fff", borderRadius: 20, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 };
