@@ -117,6 +117,25 @@ class Api(private val server: String, private val token: String?) {
             .readTimeout(5, TimeUnit.MINUTES)
             .writeTimeout(5, TimeUnit.MINUTES)
             .retryOnConnectionFailure(true)
+            .dns(FallbackDns)
             .build()
+    }
+}
+
+/**
+ * The phone's DNS sometimes can't find backup.eqal.rentals (weak signal,
+ * flaky carrier DNS: "Unable to resolve host"). When that happens, fall back
+ * to the VPS's fixed address. HTTPS still checks the real certificate for the
+ * hostname, so this can't be pointed anywhere else.
+ */
+private object FallbackDns : okhttp3.Dns {
+    private val known = mapOf("backup.eqal.rentals" to "207.180.211.137")
+    override fun lookup(hostname: String): List<java.net.InetAddress> {
+        return try {
+            okhttp3.Dns.SYSTEM.lookup(hostname)
+        } catch (e: java.net.UnknownHostException) {
+            val ip = known[hostname] ?: throw e
+            listOf(java.net.InetAddress.getByAddress(hostname, java.net.InetAddress.getByName(ip).address))
+        }
     }
 }

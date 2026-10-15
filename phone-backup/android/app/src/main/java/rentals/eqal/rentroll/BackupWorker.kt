@@ -18,6 +18,8 @@ import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
+import androidx.work.OutOfQuotaPolicy
+import androidx.work.WorkInfo
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -53,6 +55,8 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
     private var liveFilesDone = 0
     private var liveFilesTotal = 0
     private var lastLive = 0L
+
+    override suspend fun getForegroundInfo(): ForegroundInfo = foregroundInfo("Getting ready…")
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
         if (!prefs.paired) return@withContext Result.success()
@@ -453,11 +457,26 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
             WorkManager.getInstance(ctx).enqueueUniqueWork("phone_backup_heartbeat_once", ExistingWorkPolicy.REPLACE, work)
         }
 
-        /** Runs a backup right now (the "Back up now" button). Any network, any power. */
+        /** True while a backup is actually running on this phone. */
+        fun isRunning(ctx: Context): Boolean = try {
+            val wm = WorkManager.getInstance(ctx)
+            (wm.getWorkInfosForUniqueWork(ONE_OFF).get() + wm.getWorkInfosForUniqueWork(PERIODIC).get())
+                .any { it.state == WorkInfo.State.RUNNING }
+        } catch (_: Exception) { false }
+
+        /**
+         * Runs a backup right now (the "Back up now" button). Any network, any power.
+         * If one is already running it's left alone; anything merely queued (e.g. an
+         * old job from v1.4 stuck waiting for Wi-Fi) is replaced, so a tap always starts.
+         */
         fun runNow(ctx: Context) {
+            if (isRunning(ctx)) return
             val constraints = Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build()
-            val work = OneTimeWorkRequestBuilder<BackupWorker>().setConstraints(constraints).build()
-            WorkManager.getInstance(ctx).enqueueUniqueWork(ONE_OFF, ExistingWorkPolicy.KEEP, work)
+            val work = OneTimeWorkRequestBuilder<BackupWorker>()
+                .setConstraints(constraints)
+                .setExpedited(OutOfQuotaPolicy.RUN_AS_NON_EXPEDITED_WORK_REQUEST)
+                .build()
+            WorkManager.getInstance(ctx).enqueueUniqueWork(ONE_OFF, ExistingWorkPolicy.REPLACE, work)
         }
     }
 }

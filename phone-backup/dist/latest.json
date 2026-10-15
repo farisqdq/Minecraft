@@ -1,6 +1,6 @@
 {
-  "versionCode": 7,
-  "versionName": "1.6.0",
+  "versionCode": 8,
+  "versionName": "1.6.1",
   "url": "https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/rentroll.apk",
-  "notes": "Camera and file upload buttons now work in the app (Take photo, Scanner, Filing Cabinet). Backups send live progress so the site shows an ETA."
+  "notes": "Fixes backups stuck on 'Starting\u2026' (an old queued job blocked new ones). Finds the backup server even when the phone's DNS fails. Camera/uploads in the app, live ETA on the site."
 }

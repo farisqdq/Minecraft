@@ -60,6 +60,17 @@ class BackupActivity : AppCompatActivity() {
         super.onResume()
         if (::web.isInitialized) pushState()
         if (prefs.paired) { BackupWorker.heartbeat(this); BackupWorker.checkRequested(this) }
+        // Self-heal: the screen says a backup is under way but nothing is running
+        // (e.g. an old job left queued by v1.4). Start a real one in its place.
+        if (prefs.paired && prefs.progress.isNotBlank()) {
+            lifecycleScope.launch(Dispatchers.IO) {
+                if (!BackupWorker.isRunning(this@BackupActivity)) {
+                    BackupWorker.runNow(this@BackupActivity)
+                    prefs.progress = "Starting…"
+                    pushState()
+                }
+            }
+        }
     }
 
     /** rentroll://backup?code=ABCD2345 from the Phones page pre-fills the code. */
