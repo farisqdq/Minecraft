@@ -60,6 +60,10 @@ foreach ($port in 80, 443) {
 Say "Setting it to start with Windows and restart if it stops"
 $action = New-ScheduledTaskAction -Execute $exe -Argument "-config `"$(Join-Path $DataDir 'config.json')`"" -WorkingDirectory $DataDir
 $trigger = New-ScheduledTaskTrigger -AtStartup
+# Watchdog: every 2 minutes Windows tries to start it again. If it's already
+# running nothing happens (IgnoreNew); if it ever stopped, it's back within 2 min.
+$watch = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes 2) -RepetitionDuration (New-TimeSpan -Days 3650)
+$trigger = @($trigger, $watch)
 $principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
   -RestartCount 999 -RestartInterval (New-TimeSpan -Minutes 1) -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
