@@ -76,6 +76,25 @@ type Device struct {
 	// starting a run the next time it checks in.
 	BackupRequested bool       `json:"backupRequested,omitempty"`
 	RequestedAt     *time.Time `json:"requestedAt,omitempty"`
+	// The app version, read from the User-Agent on the phone's requests.
+	AppVersion string `json:"appVersion,omitempty"`
+}
+
+// appVersionFromUA pulls "1.4.0" out of a "RentRollAndroid/1.4.0" User-Agent.
+func appVersionFromUA(ua string) string {
+	const p = "RentRollAndroid/"
+	i := strings.Index(ua, p)
+	if i < 0 {
+		return ""
+	}
+	v := ua[i+len(p):]
+	if j := strings.IndexAny(v, " \t;"); j >= 0 {
+		v = v[:j]
+	}
+	if len(v) > 20 {
+		v = v[:20]
+	}
+	return v
 }
 
 type Server struct {
@@ -480,6 +499,9 @@ func (s *Server) handlePair(w http.ResponseWriter, r *http.Request) {
 			if len(d.Model) > 100 {
 				d.Model = d.Model[:100]
 			}
+			if ver := appVersionFromUA(r.UserAgent()); ver != "" {
+				d.AppVersion = ver
+			}
 			if err := s.save(); err != nil {
 				fail(w, 500, "couldn't save")
 				return
@@ -507,11 +529,19 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 	}
 	s.touch(d)
 	// A pending "back up now" from Rent Roll is handed to the phone once, then cleared.
+	ver := appVersionFromUA(r.UserAgent())
 	s.mu.Lock()
 	requested := d.BackupRequested
+	changed := requested
 	if requested {
 		d.BackupRequested = false
 		d.RequestedAt = nil
+	}
+	if ver != "" && ver != d.AppVersion {
+		d.AppVersion = ver
+		changed = true
+	}
+	if changed {
 		s.save()
 	}
 	s.mu.Unlock()
@@ -721,10 +751,11 @@ type deviceView struct {
 	Files       int64           `json:"files"`
 	BackupRequested bool        `json:"backupRequested"`
 	RequestedAt     *time.Time  `json:"requestedAt,omitempty"`
+	AppVersion      string      `json:"appVersion,omitempty"`
 }
 
 func (s *Server) view(d *Device) deviceView {
-	v := deviceView{ID: d.ID, Name: d.Name, CreatedAt: d.CreatedAt, Paired: d.TokenHash != "", PairedAt: d.PairedAt, Model: d.Model, LastSeen: d.LastSeen, Report: d.Report, BackupRequested: d.BackupRequested, RequestedAt: d.RequestedAt}
+	v := deviceView{ID: d.ID, Name: d.Name, CreatedAt: d.CreatedAt, Paired: d.TokenHash != "", PairedAt: d.PairedAt, Model: d.Model, LastSeen: d.LastSeen, Report: d.Report, BackupRequested: d.BackupRequested, RequestedAt: d.RequestedAt, AppVersion: d.AppVersion}
 	if d.PairCode != "" && time.Now().Before(d.PairExpires) {
 		v.PairCode = d.PairCode
 		t := d.PairExpires

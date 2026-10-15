@@ -30,6 +30,7 @@ type Phone = {
   files: number;
   backupRequested?: boolean;
   requestedAt?: string;
+  appVersion?: string;
 };
 type Summary = {
   configured: boolean;
@@ -265,6 +266,14 @@ function PhoneCard({
   const copyRestore = async () => {
     try { await navigator.clipboard.writeText(restore); setCopied(true); } catch { /* user can select it */ }
   };
+  const sendRestore = async () => {
+    const text = `Here's the link to download the backup of ${p.name}. It works once, no login, and expires in 7 days:\n${restore}`;
+    try {
+      if (navigator.share) { await navigator.share({ title: "Phone backup", text }); return; }
+    } catch { /* cancelled or unsupported */ }
+    // No share sheet (desktop): open an email draft.
+    window.location.href = `mailto:?subject=${encodeURIComponent("Your phone backup")}&body=${encodeURIComponent(text)}`;
+  };
   const r = p.report;
   const counts = r?.counts || {};
   const order: [string, string][] = [
@@ -281,6 +290,7 @@ function PhoneCard({
             <strong style={{ fontSize: 16 }}>{p.name}</strong>
             <div className={styles.helpText} style={{ margin: "2px 0 0" }}>
               {p.model ? `${p.model} · ` : ""}{human(p.bytes)} backed up
+              {p.appVersion ? ` · app v${p.appVersion}` : ""}
               {p.lastSeen ? <> · last seen <Ago at={p.lastSeen} /></> : ""}
             </div>
           </div>
@@ -324,7 +334,7 @@ function PhoneCard({
               {p.backupRequested ? "Waiting for phone…" : "Back up now"}
             </button>
           )}
-          {p.paired && <button className={`${styles.btn} ${styles.primary}`} onClick={() => setViewer(true)}>View texts, calls &amp; contacts</button>}
+          {p.paired && <button className={`${styles.btn} ${styles.primary}`} onClick={() => setViewer(true)}>View backup</button>}
           {p.paired && <button className={styles.btn} onClick={() => setBrowse((b) => !b)}>{browse ? "Hide files" : "Browse files"}</button>}
           {p.paired && <button className={styles.btn} onClick={makeRestore}>Send restore link</button>}
           <button className={styles.btn} onClick={onCode}>{p.paired ? "Replace phone" : "New code"}</button>
@@ -340,7 +350,8 @@ function PhoneCard({
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
               <input readOnly value={restore} onFocus={(e) => e.currentTarget.select()}
                 style={{ flex: 1, minWidth: 220, padding: "8px 10px", border: "1px solid var(--line,#e4e2da)", borderRadius: 8, font: "inherit", background: "var(--card,#fff)", color: "inherit" }} />
-              <button className={`${styles.btn} ${styles.primary}`} onClick={copyRestore}>{copied ? "Copied" : "Copy"}</button>
+              <button className={styles.btn} onClick={copyRestore}>{copied ? "Copied" : "Copy"}</button>
+              <button className={`${styles.btn} ${styles.primary}`} onClick={sendRestore}>Send</button>
             </div>
           </div>
         )}

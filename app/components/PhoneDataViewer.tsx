@@ -199,16 +199,80 @@ function ContactsTab({ phoneId }: { phoneId: string }) {
   );
 }
 
-// ---- Photos & videos ----
+// ---- Photos & videos (gallery) ----
+
+type MediaItem = { path: string; name: string; size: number; mtime: string; video: boolean };
 
 function MediaTab({ phoneId }: { phoneId: string }) {
-  const urls: BrowserUrls = {
-    listUrl: (dir) => `/api/phones/${phoneId}/files?dir=${encodeURIComponent(dir)}`,
-    fileUrl: (path, download) => `/api/phones/${phoneId}/file?p=${encodeURIComponent(path)}${download ? "&download=1" : ""}`,
-  };
+  const { data, err, loading } = useJson<{ items: MediaItem[]; capped: boolean }>(`/api/phones/${phoneId}/media`);
+  const [open, setOpen] = useState<number | null>(null);
+  const fileUrl = (path: string, dl: boolean) => `/api/phones/${phoneId}/file?p=${encodeURIComponent(path)}${dl ? "&download=1" : ""}`;
+
+  if (loading) return <Loading />;
+  if (err) return <ErrorMsg msg={err} />;
+  const items = data?.items || [];
+  if (items.length === 0) return <Empty what="photos or videos" />;
+
   return (
-    <div style={{ height: "100%", overflowY: "auto", padding: 14, background: "var(--card,#fff)" }}>
-      <BackupBrowser urls={urls} startDir="Photos" />
+    <div style={{ height: "100%", overflowY: "auto", background: "#111", padding: 3 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(110px, 1fr))", gap: 3 }}>
+        {items.map((m, i) => (
+          <button key={m.path} onClick={() => setOpen(i)} style={galTile} title={m.name}>
+            {m.video || /\.(jpe?g|png|gif|webp|bmp|avif)$/i.test(m.name) ? (
+              m.video ? (
+                <div style={galPlaceholder}><span style={{ fontSize: 26, color: "#fff" }}>▶</span></div>
+              ) : (
+                <img src={fileUrl(m.path, false)} loading="lazy" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              )
+            ) : (
+              <div style={galPlaceholder}><span style={{ fontSize: 22, color: "#bbb" }}>HEIC</span></div>
+            )}
+            {m.video && <span style={galPlay}>▶</span>}
+          </button>
+        ))}
+      </div>
+      {data?.capped && <p style={{ color: "#aaa", textAlign: "center", padding: 12, fontSize: 13 }}>Showing the newest 4,000. Browse all on the Phones page.</p>}
+      {open !== null && (
+        <GalleryLightbox items={items} index={open} fileUrl={fileUrl} onClose={() => setOpen(null)} onNav={setOpen} />
+      )}
+    </div>
+  );
+}
+
+function GalleryLightbox({ items, index, fileUrl, onClose, onNav }: {
+  items: MediaItem[]; index: number; fileUrl: (p: string, d: boolean) => string; onClose: () => void; onNav: (i: number) => void;
+}) {
+  const m = items[index];
+  const isImg = /\.(jpe?g|png|gif|webp|bmp|avif)$/i.test(m.name);
+  const prev = () => onNav((index - 1 + items.length) % items.length);
+  const next = () => onNav((index + 1) % items.length);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      else if (e.key === "ArrowLeft") prev();
+      else if (e.key === "ArrowRight") next();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
+  return (
+    <div onClick={onClose} style={overlay}>
+      <button onClick={onClose} style={closeBtn} aria-label="Close">×</button>
+      <button onClick={(e) => { e.stopPropagation(); prev(); }} style={{ ...navArrow, left: 10 }} aria-label="Previous">‹</button>
+      <button onClick={(e) => { e.stopPropagation(); next(); }} style={{ ...navArrow, right: 10 }} aria-label="Next">›</button>
+      <div onClick={(e) => e.stopPropagation()} style={{ maxWidth: "90vw", maxHeight: "86vh", display: "flex", flexDirection: "column", alignItems: "center", gap: 10 }}>
+        {m.video ? (
+          <video src={fileUrl(m.path, false)} controls autoPlay playsInline style={{ maxWidth: "90vw", maxHeight: "78vh", borderRadius: 8, background: "#000" }} />
+        ) : isImg ? (
+          <img src={fileUrl(m.path, false)} alt={m.name} style={{ maxWidth: "90vw", maxHeight: "78vh", objectFit: "contain", borderRadius: 8 }} />
+        ) : (
+          <div style={{ color: "#fff" }}>This photo (HEIC) can&apos;t preview in a browser.</div>
+        )}
+        <div style={{ display: "flex", gap: 14, alignItems: "center" }}>
+          <span style={{ color: "#ccc", fontSize: 13 }}>{index + 1} of {items.length}</span>
+          <a href={fileUrl(m.path, true)} style={{ color: "#8Fd0aa" }}>Download</a>
+        </div>
+      </div>
     </div>
   );
 }
@@ -268,3 +332,7 @@ const bubbleIn: React.CSSProperties = { background: "#fff", border: "1px solid #
 const bubbleOut: React.CSSProperties = { background: "#2E6A48", color: "#fff", borderBottomRightRadius: 4 };
 const callRow: React.CSSProperties = { display: "flex", gap: 12, alignItems: "center", padding: "10px 14px", borderBottom: "1px solid #ECEAE3" };
 const contactRow: React.CSSProperties = { display: "flex", gap: 12, alignItems: "flex-start", padding: "10px 14px", borderBottom: "1px solid #ECEAE3" };
+const galTile: React.CSSProperties = { position: "relative", aspectRatio: "1 / 1", padding: 0, border: 0, overflow: "hidden", cursor: "pointer", background: "#222" };
+const galPlaceholder: React.CSSProperties = { width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", background: "#333" };
+const galPlay: React.CSSProperties = { position: "absolute", bottom: 5, right: 5, background: "rgba(0,0,0,.6)", color: "#fff", borderRadius: 20, width: 22, height: 22, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11 };
+const navArrow: React.CSSProperties = { position: "fixed", top: "50%", transform: "translateY(-50%)", background: "rgba(0,0,0,.4)", border: 0, color: "#fff", fontSize: 40, width: 50, height: 70, cursor: "pointer", borderRadius: 8, zIndex: 1001 };
