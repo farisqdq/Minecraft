@@ -472,6 +472,7 @@ func (s *Server) routes() http.Handler {
 	// Signed links.
 	mux.HandleFunc("GET /dl", s.handleDownload)
 	mux.HandleFunc("GET /thumb", s.handleThumb)
+	s.viewerRoutes(mux)
 
 	return logRequests(s.logger, mux)
 }
