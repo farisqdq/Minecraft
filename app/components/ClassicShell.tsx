@@ -64,6 +64,16 @@ function IconBackup(props: { className?: string }) {
   );
 }
 
+function IconPhone(props: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round"
+      strokeLinejoin="round" aria-hidden="true" {...props}>
+      <rect x="6" y="2.5" width="12" height="19" rx="2.5" />
+      <path d="M10.5 18.5h3" />
+    </svg>
+  );
+}
+
 function IconUser(props: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"
@@ -208,7 +218,7 @@ const NAV: {
   { href: "/dashboard/export", label: "Export", short: "Export", Icon: IconExport },
   // Site admins only; the layout says who those are.
   { href: "/dashboard/gallery", label: "Gallery", short: "Gallery", Icon: IconFiles, adminOnly: true },
-  { href: "/dashboard/phones", label: "Phones", short: "Phones", Icon: IconBackup, adminOnly: true },
+  { href: "/dashboard/phones", label: "Phones", short: "Phones", Icon: IconPhone, adminOnly: true },
   { href: "/dashboard/admin", label: "Admin", short: "Admin", Icon: IconAdmin, adminOnly: true },
 ];
 

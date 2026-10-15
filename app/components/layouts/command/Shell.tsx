@@ -29,6 +29,7 @@ import {
   IconLogOut,
   IconMessage,
   IconMore,
+  IconPhone,
   IconOverview,
   IconPlus,
   IconReceipt,
@@ -98,7 +99,7 @@ const SETTINGS: { href: string; label: string; Icon: ComponentType<IconProps>; a
   { href: "/dashboard/backup", label: "Backup", Icon: IconArchive },
   { href: "/dashboard/export", label: "Export", Icon: IconDownload },
   { href: "/dashboard/gallery", label: "Gallery", Icon: IconArchive, adminOnly: true },
-  { href: "/dashboard/phones", label: "Phones", Icon: IconArchive, adminOnly: true },
+  { href: "/dashboard/phones", label: "Phones", Icon: IconPhone, adminOnly: true },
   { href: "/dashboard/admin", label: "Admin", Icon: IconKey, adminOnly: true },
   { href: "/dashboard/account", label: "Account & security", Icon: IconShield },
 ];

@@ -35,6 +35,7 @@ import {
   IconWrench,
   IconX,
   type IconProps,
+  IconPhone,
 } from "../../icons";
 import { initialsOf, isNavOn } from "@/lib/layouts/ledger-nav";
 import styles from "./ledger-shell.module.css";
@@ -69,7 +70,7 @@ function secondary(admin: boolean): NavItem[] {
     { href: "/dashboard/reminders", label: "Reminders", Icon: IconBell },
     { href: "/dashboard/backup", label: "Backup", Icon: IconArchive },
     { href: "/dashboard/export", label: "Export", Icon: IconDownload },
-    ...(admin ? [{ href: "/dashboard/gallery", label: "Gallery", Icon: IconArchive }, { href: "/dashboard/phones", label: "Phones", Icon: IconArchive }, { href: "/dashboard/admin", label: "Admin", Icon: IconKey }] : []),
+    ...(admin ? [{ href: "/dashboard/gallery", label: "Gallery", Icon: IconArchive }, { href: "/dashboard/phones", label: "Phones", Icon: IconPhone }, { href: "/dashboard/admin", label: "Admin", Icon: IconKey }] : []),
     { href: "/dashboard/account", label: "Account & security", Icon: IconShield },
     { href: "/dashboard/settings", label: "Settings", Icon: IconSettings },
   ];
