@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BackupBrowser, { type BrowserUrls } from "./BackupBrowser";
+import SensitiveImg from "./SensitiveImg";
 
 /**
  * A full-screen reader for one phone's backup: texts as a chat, the call log,
@@ -222,7 +223,7 @@ function MediaTab({ phoneId }: { phoneId: string }) {
               m.video ? (
                 <div style={galPlaceholder}><span style={{ fontSize: 26, color: "#fff" }}>▶</span></div>
               ) : (
-                <img src={fileUrl(m.path, false)} loading="lazy" alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                <SensitiveImg src={fileUrl(m.path, false)} thumb={`${fileUrl(m.path, false)}&thumb=1`} fill compact />
               )
             ) : (
               <div style={galPlaceholder}><span style={{ fontSize: 22, color: "#bbb" }}>HEIC</span></div>
@@ -264,7 +265,7 @@ function GalleryLightbox({ items, index, fileUrl, onClose, onNav }: {
         {m.video ? (
           <video src={fileUrl(m.path, false)} controls autoPlay playsInline style={{ maxWidth: "90vw", maxHeight: "78vh", borderRadius: 8, background: "#000" }} />
         ) : isImg ? (
-          <img src={fileUrl(m.path, false)} alt={m.name} style={{ maxWidth: "90vw", maxHeight: "78vh", objectFit: "contain", borderRadius: 8 }} />
+          <SensitiveImg key={m.path} src={fileUrl(m.path, false)} alt={m.name} imgStyle={{ maxWidth: "90vw", maxHeight: "78vh", objectFit: "contain", borderRadius: 8 }} />
         ) : (
           <div style={{ color: "#fff" }}>This photo (HEIC) can&apos;t preview in a browser.</div>
         )}

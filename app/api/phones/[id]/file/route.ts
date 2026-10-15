@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { requireAdmin } from "@/lib/admin-db";
-import { fileLink } from "@/lib/phone-backup";
+import { fileLink, thumbLink } from "@/lib/phone-backup";
 
 /**
  * Hands back a short-lived link straight to the file on the VPS, so the big
@@ -14,5 +14,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const path = u.searchParams.get("p") || "";
   if (!path) return NextResponse.json({ error: "no file" }, { status: 400 });
   const download = u.searchParams.get("download") === "1";
+  if (u.searchParams.get("thumb") === "1") return NextResponse.redirect(thumbLink(id, path), { status: 307 });
   return NextResponse.redirect(fileLink(id, path, download), { status: 307 });
 }

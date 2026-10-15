@@ -120,6 +120,18 @@ export function fileLink(deviceId: string, path: string, download: boolean): str
 }
 
 /**
+ * A small preview (≈360 px JPEG, made once and cached on the VPS) for gallery
+ * grids — a few KB instead of the multi-MB original. Same signature as /dl.
+ * Falls back to the original on the server if it can't make one (e.g. HEIC).
+ */
+export function thumbLink(deviceId: string, path: string): string {
+  const exp = Math.floor(Date.now() / 1000) + 600;
+  const sig = createHmac("sha256", SECRET).update(`dl\n${deviceId}\n${path}\n${exp}`).digest("hex");
+  const q = new URLSearchParams({ d: deviceId, p: path, e: String(exp), s: sig });
+  return `${BASE}/thumb?${q.toString()}`;
+}
+
+/**
  * Restore links. The admin makes one for a phone and sends it to whoever
  * holds that phone; they open it (no sign-in) and download that one phone's
  * backup until it expires. The token is an HMAC of the device and expiry

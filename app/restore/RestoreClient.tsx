@@ -13,6 +13,7 @@ export default function RestoreClient({ d, e, s }: { d: string; e: string; s: st
   const urls: BrowserUrls = {
     listUrl: (dir) => `/api/restore/list?${tok}&dir=${encodeURIComponent(dir)}`,
     fileUrl: (path, download) => `/api/restore/file?${tok}&p=${encodeURIComponent(path)}${download ? "&download=1" : ""}`,
+    thumbUrl: (path) => `/api/restore/file?${tok}&p=${encodeURIComponent(path)}&thumb=1`,
   };
   return (
     <main style={{ minHeight: "100vh", background: "#F6F5F1", color: "#23281F", font: "16px system-ui, sans-serif" }}>

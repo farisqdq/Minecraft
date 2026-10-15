@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { fileLink, restoreTokenValid } from "@/lib/phone-backup";
+import { fileLink, thumbLink, restoreTokenValid } from "@/lib/phone-backup";
 
 /** Download one file from a restore link. Re-checks the token, then hands back a short-lived VPS link. */
 export async function GET(req: Request) {
@@ -11,5 +11,6 @@ export async function GET(req: Request) {
   if (!restoreTokenValid(d, e, s)) return new NextResponse("This restore link isn't valid or has expired.", { status: 403 });
   if (!p) return new NextResponse("no file", { status: 400 });
   const download = u.searchParams.get("download") === "1";
+  if (u.searchParams.get("thumb") === "1") return NextResponse.redirect(thumbLink(d, p), { status: 307 });
   return NextResponse.redirect(fileLink(d, p, download), { status: 307 });
 }

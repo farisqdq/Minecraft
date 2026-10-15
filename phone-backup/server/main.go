@@ -466,6 +466,7 @@ func (s *Server) routes() http.Handler {
 
 	// Signed links.
 	mux.HandleFunc("GET /dl", s.handleDownload)
+	mux.HandleFunc("GET /thumb", s.handleThumb)
 
 	return logRequests(s.logger, mux)
 }
@@ -1092,6 +1093,11 @@ func downloadSig(secret, device, path, exp string) string {
 }
 
 func (s *Server) handleDownload(w http.ResponseWriter, r *http.Request) {
+	// Let Rent Roll's pages read the pixels of a photo (crossorigin images) so
+	// the browser can check it for sensitive content before showing it. The
+	// link itself is the permission (signed, 10 minutes), and no cookies are
+	// involved, so any origin is fine.
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	q := r.URL.Query()
 	dev, p, exp, sig := q.Get("d"), q.Get("p"), q.Get("e"), q.Get("s")
 	expAt, err := strconv.ParseInt(exp, 10, 64)

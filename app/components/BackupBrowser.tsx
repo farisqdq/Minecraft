@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import SensitiveImg from "./SensitiveImg";
 
 /**
  * Browses one phone's backup as a photo/video gallery with folders. Used both
@@ -13,6 +14,8 @@ import { useCallback, useEffect, useState } from "react";
 export type BrowserUrls = {
   listUrl: (dir: string) => string;
   fileUrl: (path: string, download: boolean) => string;
+  /** Optional small preview for grid tiles. */
+  thumbUrl?: (path: string) => string;
 };
 
 type Entry = { name: string; path: string; dir: boolean; size: number; mtime: string; count?: number };
@@ -92,8 +95,7 @@ export default function BackupBrowser({ urls, startDir = "" }: { urls: BrowserUr
             return (
               <button key={m.path} onClick={() => setLightbox(m)} style={mediaTile} title={m.name}>
                 {!isVideo && canShow ? (
-                  <img src={urls.fileUrl(m.path, false)} loading="lazy" alt={m.name}
-                    style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  <SensitiveImg src={urls.fileUrl(m.path, false)} thumb={urls.thumbUrl?.(m.path)} alt={m.name} fill compact />
                 ) : (
                   <div style={tilePlaceholder}>
                     <span style={{ fontSize: 30 }}>{isVideo ? "▶" : "🖼"}</span>
@@ -147,8 +149,8 @@ function Lightbox({ entry, urls, onClose }: { entry: Entry; urls: BrowserUrls; o
           <video src={urls.fileUrl(entry.path, false)} controls autoPlay playsInline
             style={{ maxWidth: "94vw", maxHeight: "78vh", borderRadius: 8, background: "#000" }} />
         ) : canShow ? (
-          <img src={urls.fileUrl(entry.path, false)} alt={entry.name}
-            style={{ maxWidth: "94vw", maxHeight: "78vh", borderRadius: 8, objectFit: "contain" }} />
+          <SensitiveImg src={urls.fileUrl(entry.path, false)} alt={entry.name}
+            imgStyle={{ maxWidth: "94vw", maxHeight: "78vh", borderRadius: 8, objectFit: "contain" }} />
         ) : (
           <div style={{ color: "#fff", textAlign: "center" }}>
             <p>This type of photo (HEIC) can&apos;t preview in a browser.</p>
