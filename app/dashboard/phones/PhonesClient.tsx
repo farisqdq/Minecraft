@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import AppShell from "../../components/AppShell";
 import ConfirmDialog, { type ConfirmRequest } from "../../components/ConfirmDialog";
 import { Toasts, useToasts } from "../../components/Toasts";
+import PhoneDataViewer from "../../components/PhoneDataViewer";
 import styles from "../dashboard.module.css";
 
 type Report = {
@@ -253,6 +254,7 @@ function PhoneCard({
   onRestoreLink: () => Promise<string | null>;
 }) {
   const [browse, setBrowse] = useState(false);
+  const [viewer, setViewer] = useState(false);
   const [restore, setRestore] = useState<string>("");
   const [copied, setCopied] = useState(false);
 
@@ -322,6 +324,7 @@ function PhoneCard({
               {p.backupRequested ? "Waiting for phone…" : "Back up now"}
             </button>
           )}
+          {p.paired && <button className={`${styles.btn} ${styles.primary}`} onClick={() => setViewer(true)}>View texts, calls &amp; contacts</button>}
           {p.paired && <button className={styles.btn} onClick={() => setBrowse((b) => !b)}>{browse ? "Hide files" : "Browse files"}</button>}
           {p.paired && <button className={styles.btn} onClick={makeRestore}>Send restore link</button>}
           <button className={styles.btn} onClick={onCode}>{p.paired ? "Replace phone" : "New code"}</button>
@@ -344,6 +347,7 @@ function PhoneCard({
 
         {browse && <FileBrowser phoneId={p.id} />}
       </div>
+      {viewer && <PhoneDataViewer phoneId={p.id} phoneName={p.name} onClose={() => setViewer(false)} />}
     </section>
   );
 }

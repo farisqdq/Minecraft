@@ -76,6 +76,25 @@ export const removePhone = (id: string, withFiles: boolean) =>
 export const listFiles = (id: string, dir: string) =>
   call(`/api/admin/devices/${encodeURIComponent(id)}/list?dir=${encodeURIComponent(dir)}`);
 
+/** Downloads a (small) backed-up file's text, server-side, for parsing. */
+export async function fetchFileText(deviceId: string, path: string, maxBytes = 25 * 1024 * 1024): Promise<string> {
+  if (!phoneBackupConfigured()) throw new BackupDown("not configured");
+  const res = await fetch(fileLink(deviceId, path, false), { cache: "no-store", signal: AbortSignal.timeout(60000) });
+  if (!res.ok) throw new Error(`Couldn't read the file (${res.status}).`);
+  const len = Number(res.headers.get("content-length") || 0);
+  if (len > maxBytes) throw new Error("That backup file is too large to open here.");
+  return res.text();
+}
+
+/** The newest file in one of a phone's folders (e.g. "Texts"), or null. */
+export async function newestIn(deviceId: string, folder: string): Promise<{ path: string; mtime: string } | null> {
+  const { entries } = await listFiles(deviceId, folder);
+  const files = (entries || []).filter((e: any) => !e.dir);
+  if (files.length === 0) return null;
+  files.sort((a: any, b: any) => (a.mtime < b.mtime ? 1 : -1));
+  return { path: files[0].path, mtime: files[0].mtime };
+}
+
 /**
  * A link straight to one backed-up file on the VPS, good for 10 minutes.
  * download=true makes the browser save it rather than show it. The signature
