@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
-import { monthKeyOf, recordRentChange } from "@/lib/rent";
+import { monthKeyOf, recordRentChange, startRentFrom } from "@/lib/rent";
 import { validRent } from "@/lib/money";
 import { sinceDay, vacantSinceFor } from "@/lib/vacancy-db";
 
@@ -45,6 +45,12 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
     if (since && "error" in since) return NextResponse.json({ error: since.error }, { status: 400 });
     data.vacantSince = since;
   }
+  // "No rent expected before this month" (see startRentFrom). Only a month
+  // already started: a future one would wipe out rent that's due now.
+  const rentFrom = typeof body?.rentFrom === "string" ? body.rentFrom.trim() : "";
+  if (rentFrom && (!/^\d{4}-(0[1-9]|1[0-2])$/.test(rentFrom) || rentFrom > monthKeyOf(new Date()))) {
+    return NextResponse.json({ error: "Pick a month that has already started." }, { status: 400 });
+  }
 
   // The rent change and the property update land together, so the books can
   // never show a new rent with no record of when it started.
@@ -57,6 +63,9 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
       month: monthKeyOf(new Date()),
       userId,
     });
+    if (rentFrom) {
+      await startRentFrom(tx, { propertyId: id, unitId: null, month: rentFrom, current: monthlyRent, userId });
+    }
     return tx.property.update({ where: { id }, data });
   });
   // The client judges past months against this history, so hand back what

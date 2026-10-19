@@ -117,6 +117,45 @@ export async function recordRentChange(
   });
 }
 
+/**
+ * "No rent was expected here before this month." For a place whose history
+ * was brought in after the fact (an old spreadsheet), so earlier months show
+ * what was paid and nothing as owed. Every month from `month` on keeps the
+ * rent it had; everything before it expects $0.
+ */
+export async function startRentFrom(
+  tx: Prisma.TransactionClient,
+  {
+    propertyId,
+    unitId,
+    month,
+    current,
+    userId,
+  }: { propertyId: string; unitId: string | null; month: string; current: number; userId: string | null }
+) {
+  const rows = await tx.rentChange.findMany({ where: { propertyId, unitId } });
+  const changes: RentChangeDTO[] = rows.map((r) => ({
+    id: r.id,
+    propertyId,
+    unitId,
+    effectiveFrom: monthKeyOf(r.effectiveFrom),
+    amount: r.amount,
+  }));
+  const rentThen = rentForMonth(changes, propertyId, unitId, month, current);
+
+  // Anything said about rent before `month` is what this replaces.
+  await tx.rentChange.deleteMany({ where: { propertyId, unitId, effectiveFrom: { lt: monthStart(month) } } });
+  await tx.rentChange.create({
+    data: { propertyId, unitId, effectiveFrom: new Date("1970-01-01T00:00:00.000Z"), amount: 0, createdById: userId },
+  });
+  const atMonth = await tx.rentChange.findFirst({ where: { propertyId, unitId, effectiveFrom: monthStart(month) } });
+  if (!atMonth) {
+    await tx.rentChange.create({
+      data: { propertyId, unitId, effectiveFrom: monthStart(month), amount: rentThen, createdById: userId },
+    });
+  }
+}
+
 /** A rent history row as the pages keep it. */
 export function serializeRentChange(c: {
   id: string;
