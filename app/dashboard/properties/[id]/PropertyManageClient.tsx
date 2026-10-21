@@ -1967,6 +1967,7 @@ export default function PropertyManageClient({
                       <form className={styles.inlineForm} onSubmit={saveUnit} style={{ flexWrap: "wrap" }}>
                         <input
                           type="text"
+                          aria-label="Unit name"
                           required
                           autoFocus
                           value={editUnitName}
@@ -1974,6 +1975,7 @@ export default function PropertyManageClient({
                         />
                         <input
                           type="number"
+                          aria-label="Monthly rent"
                           min="0"
                           step="0.01"
                           placeholder="Monthly rent"
@@ -2073,6 +2075,7 @@ export default function PropertyManageClient({
           <form className={styles.inlineForm} onSubmit={addUnit} style={{ marginTop: 14, flexWrap: "wrap" }}>
             <input
               type="text"
+              aria-label="Unit name"
               required
               autoFocus
               placeholder="Unit name, e.g. Apt 2"
@@ -2081,6 +2084,7 @@ export default function PropertyManageClient({
             />
             <input
               type="number"
+              aria-label="Monthly rent"
               min="0"
               step="0.01"
               placeholder="Monthly rent"

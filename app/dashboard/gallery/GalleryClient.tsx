@@ -53,6 +53,7 @@ export default function GalleryClient({
             <div className={styles.formCard}>
               <label className={styles.helpText} style={{ marginTop: 0, display: "block" }}>Phone</label>
               <select
+                aria-label="Phone"
                 value={phoneId}
                 onChange={(e) => setPhoneId(e.target.value)}
                 style={{ padding: "10px 12px", border: "1px solid var(--line,#e4e2da)", borderRadius: 10, font: "inherit", background: "transparent", color: "inherit", colorScheme: "light dark", minWidth: 220 }}

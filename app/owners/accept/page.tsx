@@ -151,6 +151,10 @@ function AcceptForm() {
       <button type="submit" className="btn primary" disabled={loading}>
         {loading ? "Setting up…" : preview.existing ? "Add to my login" : "Create my login"}
       </button>
+      <p className="authLegal">
+        By continuing you agree to the <Link href="/terms">Terms of Use</Link> and{" "}
+        <Link href="/privacy">Privacy Policy</Link>.
+      </p>
     </form>
   );
 }

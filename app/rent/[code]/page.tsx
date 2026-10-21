@@ -114,7 +114,8 @@ export default async function ListingPage({ params }: { params: Promise<{ code: 
 
       <footer className={styles.foot}>
         <span>Equal Housing Opportunity.</span> {l.company.name} doesn&apos;t ask for, and won&apos;t consider, race,
-        colour, religion, sex, disability, family status or national origin.
+        color, religion, sex, disability, familial status or national origin. Lexington&apos;s local fair housing law
+        also protects sexual orientation and gender identity.
       </footer>
     </main>
   );

@@ -115,6 +115,10 @@ function SignupForm() {
         <button type="submit" className="btn primary" disabled={loading}>
           {loading ? "Creating account…" : "Create account"}
         </button>
+        <p className="authLegal">
+          By creating an account you agree to the <Link href="/terms">Terms of Use</Link> and{" "}
+          <Link href="/privacy">Privacy Policy</Link>.
+        </p>
       </form>
       <div className="authFoot">
         Already have an account?{" "}

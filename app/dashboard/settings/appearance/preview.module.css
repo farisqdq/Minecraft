@@ -55,7 +55,7 @@
   --p-bar: #e2e8f0;
   --p-line: rgba(15, 23, 42, 0.08);
   --p-acc: #0f7a55;
-  --p-font: "Inter", system-ui, sans-serif;
+  --p-font: var(--font-inter), "Inter", system-ui, sans-serif;
 }
 
 /* dark: forced, or the device asks and the person follows it */
@@ -182,7 +182,7 @@
 }
 .brandSerif,
 .titleSerif {
-  font-family: "Inter", system-ui, sans-serif;
+  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
   font-weight: 700;
   letter-spacing: -0.02em;
 }

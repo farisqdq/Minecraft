@@ -88,6 +88,10 @@ export default function PushSetup({ audience }: { audience: "user" | "tenant" })
             Get {what} on this device.
             {ios && !standalone ? " On an iPhone this works once Rent Roll is open from the home screen." : ""}
           </p>
+          <p className={styles.note} style={{ marginBottom: 10 }}>
+            Notifications travel through your browser&apos;s push service (Apple, Google, Mozilla or Microsoft). You can
+            turn them off at any time. See our <a href="/privacy#reminders">Privacy Policy</a>.
+          </p>
           <div className={styles.actions}>
             <button type="button" className={styles.primary} onClick={turnOn} disabled={busy}>
               {busy ? "Turning on…" : "Enable notifications"}

@@ -34,7 +34,7 @@
   --surface-3: #f1f3f6;
   --ink: #0f172a;
   --ink-2: #334155;
-  --muted: #64748b;
+  --muted: #5b6a7f;
   --line: rgba(15, 23, 42, 0.08);
   --line-strong: rgba(15, 23, 42, 0.16);
   --accent: #0f7a55;
@@ -72,9 +72,9 @@
   /* Classic's typefaces and shapes, named so the shared page modules can
      read them and the new layouts can swap them. Values = what the modules
      used to hard-code. */
-  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-display: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-num: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: var(--font-inter), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-display: var(--font-inter), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-num: var(--font-inter), "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-sans: var(--font-body);
   --radius-pill: 6px; /* pill buttons and chips; 8px in the new layouts */
   --radius-chip: 6px; /* small tags and status chips; 6px in the new layouts */
@@ -856,4 +856,68 @@ button {
   textarea {
     font-size: 16px !important;
   }
+}
+
+/* ---------- Site footer (copyright, contact, policies) ---------- */
+.siteFoot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 18px;
+  padding: 18px 16px;
+  border-top: 1px solid var(--line);
+  background: var(--bg);
+  color: var(--ink-2);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.siteFoot p {
+  margin: 0;
+}
+
+.siteFoot nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 4px 16px;
+}
+
+.siteFoot a {
+  color: var(--ink-2);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.siteFoot a:hover {
+  color: var(--ink);
+}
+
+/* Phones: clear the fixed tab bar that some layouts pin to the bottom. */
+@media (max-width: 760px) {
+  .siteFoot {
+    padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
+  }
+}
+
+@media print {
+  .siteFoot {
+    display: none;
+  }
+}
+
+.authLegal {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.authLegal a {
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }

@@ -2898,6 +2898,7 @@ export default function DashboardClient({
                                   reliable picker target, esp. in the home-screen app — keep it in
                                   the layout, clipped. accept names HEIC/PDF explicitly. */}
                               <input
+                                aria-label="Attach proof of payment"
                                 type="file"
                                 multiple
                                 accept={PROOF_ACCEPT}

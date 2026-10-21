@@ -102,7 +102,7 @@ function TextsTab({ phoneId }: { phoneId: string }) {
   return (
     <div style={splitWrap}>
       <div style={{ ...listPane, display: open ? undefined : "flex" }} data-open={!!open}>
-        <input placeholder="Search people…" value={q} onChange={(e) => setQ(e.target.value)} style={search} />
+        <input aria-label="Search people" placeholder="Search people…" value={q} onChange={(e) => setQ(e.target.value)} style={search} />
         <div style={{ overflowY: "auto" }}>
           {filtered.map((c) => (
             <button key={c.key} onClick={() => setOpenKey(c.key)} style={{ ...convRow, ...(c.key === openKey ? rowActive : {}) }}>
@@ -192,7 +192,7 @@ function ContactsTab({ phoneId }: { phoneId: string }) {
   const list = all.filter((c) => c.name.toLowerCase().includes(q.toLowerCase()) || c.phones.join(" ").includes(q));
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <input placeholder={`Search ${all.length} contacts…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ ...search, margin: 10 }} />
+      <input aria-label="Search contacts" placeholder={`Search ${all.length} contacts…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ ...search, margin: 10 }} />
       <div style={{ overflowY: "auto", flex: 1 }}>
         {list.map((c, i) => (
           <div key={i} style={contactRow}>
@@ -342,7 +342,7 @@ function AppsTab({ phoneId }: { phoneId: string }) {
   const list = all.filter((a) => a.label.toLowerCase().includes(q.toLowerCase()) || a.pkg.includes(q));
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <input placeholder={`Search ${all.length} apps…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ ...search, margin: 10 }} />
+      <input aria-label="Search apps" placeholder={`Search ${all.length} apps…`} value={q} onChange={(e) => setQ(e.target.value)} style={{ ...search, margin: 10 }} />
       <div style={{ overflowY: "auto", flex: 1 }}>
         {list.map((a, i) => (
           <div key={i} style={contactRow}>

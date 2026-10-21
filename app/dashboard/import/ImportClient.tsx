@@ -917,7 +917,7 @@ function ColumnPicker({
   const pick = (label: string, value: number, set: (n: number) => void, optional = false) => (
     <div className={styles.field}>
       <label>{label}</label>
-      <select value={value} onChange={(e) => set(Number(e.target.value))}>
+      <select aria-label={label} value={value} onChange={(e) => set(Number(e.target.value))}>
         <option value={-1}>{optional ? "(none)" : "Choose…"}</option>
         {header.map((h, i) => (
           <option key={i} value={i}>
@@ -959,7 +959,7 @@ function ColumnPicker({
         {pick("Date", date, setDate)}
         <div className={styles.field}>
           <label>Dates are written</label>
-          <select value={order} onChange={(e) => setOrder(e.target.value as DateOrder)}>
+          <select aria-label="Dates are written" value={order} onChange={(e) => setOrder(e.target.value as DateOrder)}>
             <option value="mdy">Month first (09/03/2026)</option>
             <option value="dmy">Day first (03/09/2026)</option>
           </select>
@@ -968,7 +968,7 @@ function ColumnPicker({
         {pick("Also read (memo)", memo, setMemo, true)}
         <div className={styles.field}>
           <label>Amounts are in</label>
-          <select value={split ? "2" : "1"} onChange={(e) => setSplit(e.target.value === "2")}>
+          <select aria-label="Amounts are in" value={split ? "2" : "1"} onChange={(e) => setSplit(e.target.value === "2")}>
             <option value="1">One column, minus for money out</option>
             <option value="2">Two columns, money out and money in</option>
           </select>
