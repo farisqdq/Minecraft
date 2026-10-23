@@ -45,7 +45,7 @@ test("links are built on the site's own address in production, never the request
 });
 
 test("passwords are checked the same way signup checks them", () => {
-  assert.equal(passwordProblem("short"), "Use at least 8 characters.");
+  assert.equal(passwordProblem("short"), "Use at least 10 characters.");
   assert.equal(passwordProblem("x".repeat(201)), "That's too long.");
   assert.equal(passwordProblem("correct-horse"), null);
   assert.ok(passwordProblem(undefined));

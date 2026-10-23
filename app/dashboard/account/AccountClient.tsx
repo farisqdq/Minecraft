@@ -266,7 +266,7 @@ export default function AccountClient({
                 id="pw-next"
                 type="password"
                 autoComplete="new-password"
-                minLength={8}
+                minLength={10}
                 required
                 value={pw.next}
                 onChange={(e) => setPw((p) => ({ ...p, next: e.target.value }))}
@@ -278,7 +278,7 @@ export default function AccountClient({
                 id="pw-confirm"
                 type="password"
                 autoComplete="new-password"
-                minLength={8}
+                minLength={10}
                 required
                 value={pw.confirm}
                 onChange={(e) => setPw((p) => ({ ...p, confirm: e.target.value }))}

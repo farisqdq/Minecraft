@@ -23,8 +23,26 @@ const instrument = Instrument_Sans({ subsets: ["latin"], variable: "--font-instr
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap", preload: false });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://eqal.rentals"),
   title: "Rent Roll",
   description: "Track rent payments and repair costs across your rental properties.",
+  // Google Search Console: set GOOGLE_SITE_VERIFICATION to the code Search
+  // Console gives you. Nothing is added while it is unset.
+  ...(process.env.GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
+    : {}),
+  openGraph: {
+    type: "website",
+    siteName: "Rent Roll",
+    url: "https://eqal.rentals",
+    title: "Rent Roll",
+    description: "Track rent payments and repair costs across your rental properties.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Rent Roll",
+    description: "Track rent payments and repair costs across your rental properties.",
+  },
   applicationName: "Rent Roll",
   // Lets iOS run it full-screen from the home screen, with the status bar
   // tinted to match the page rather than a white strip above it.

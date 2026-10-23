@@ -69,7 +69,7 @@ Node's own test runner in about a second.
 
 ## Site admin
 
-One account runs the site. `fariseqal3@gmail.com` is the first admin: on a
+One account runs the site. `the admin email (see lib/admin.ts)` is the first admin: on a
 fresh site the account that signs up with that address starts as admin —
 only while the site has no admin at all — and the migration flagged the
 existing one. After that, admin comes from another admin and from nowhere

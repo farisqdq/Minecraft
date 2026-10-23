@@ -112,7 +112,7 @@ export function ordinal(n: number) {
 }
 
 /**
- * "8596844729" is what gets typed; "(859) 684-4729" is what gets read.
+ * "8595550100" is what gets typed; "(859) 555-0100" is what gets read.
  * Only a bare ten-digit US number is reshaped — anything already punctuated,
  * international, or an extension is left exactly as entered.
  */

@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { breachedPasswordProblem } from "@/lib/pwned";
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { passwordProblem } from "@/lib/portal";
@@ -19,7 +20,7 @@ export async function POST(req: Request) {
   if (!(await checkPassword(user, body?.current))) return bad("Your current password isn't right.", 403);
 
   const next = typeof body?.next === "string" ? body.next : "";
-  const problem = passwordProblem(next);
+  const problem = passwordProblem(next) ?? (await breachedPasswordProblem(next));
   if (problem) return bad(problem);
   if (next.length > 200) return bad("That's too long.");
   if (await bcrypt.compare(next, user.passwordHash)) return bad("That's the password you have now.");

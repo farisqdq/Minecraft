@@ -67,7 +67,7 @@ function ResetForm() {
           id="password"
           type="password"
           required
-          minLength={8}
+          minLength={10}
           autoComplete="new-password"
           autoFocus
           value={password}
@@ -80,7 +80,7 @@ function ResetForm() {
           id="again"
           type="password"
           required
-          minLength={8}
+          minLength={10}
           autoComplete="new-password"
           value={again}
           onChange={(e) => setAgain(e.target.value)}

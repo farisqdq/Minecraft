@@ -29,8 +29,8 @@ export function inviteExpiry(from = new Date()) {
  * the portal never drifts into being the weaker of the two doors.
  */
 export function passwordProblem(password: unknown): string | null {
-  if (typeof password !== "string" || password.length < 8) {
-    return "Password must be at least 8 characters.";
+  if (typeof password !== "string" || password.length < 10) {
+    return "Password must be at least 10 characters.";
   }
   return null;
 }
