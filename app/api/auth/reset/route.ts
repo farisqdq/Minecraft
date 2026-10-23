@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { breachedPasswordProblem } from "@/lib/pwned";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { MAX_PER_IP, accountKey, clearFailures, clientIp, ipKey, isThrottled, pauseMessage, recordFailure } from "@/lib/throttle";
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
   const body = await req.json().catch(() => null);
   const token = body?.token;
   const password = body?.password;
-  const problem = passwordProblem(password);
+  const problem = passwordProblem(password) ?? (await breachedPasswordProblem(password));
   if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
   const expired = NextResponse.json(

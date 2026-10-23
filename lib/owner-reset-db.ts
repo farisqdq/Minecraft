@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { breachedPasswordProblem } from "@/lib/pwned";
 import { prisma } from "@/lib/prisma";
 import { hashToken, newResetToken, ownerResetLink, passwordProblem, plausibleToken, resetIsLive } from "@/lib/password-reset";
 import { resetEmail, sendEmail } from "@/lib/email";
@@ -58,7 +59,7 @@ const EXPIRED: ResetOutcome = {
  * version on — the old password's sessions end on their next click.
  */
 export async function useOwnerReset(token: unknown, password: unknown): Promise<ResetOutcome> {
-  const problem = passwordProblem(password);
+  const problem = passwordProblem(password) ?? (await breachedPasswordProblem(password));
   if (problem) return { ok: false, error: problem, status: 400 };
   if (!plausibleToken(token)) return EXPIRED;
   const reset = await prisma.ownerPasswordReset.findUnique({

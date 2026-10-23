@@ -86,7 +86,7 @@ function PortalSignupForm() {
             id="password"
             type="password"
             required
-            minLength={8}
+            minLength={10}
             autoComplete="new-password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -95,6 +95,11 @@ function PortalSignupForm() {
         <button type="submit" className="btn primary" disabled={loading}>
           {loading ? "Setting up…" : "Create account"}
         </button>
+        <p className="authLegal">
+          By creating an account you agree to the <Link href="/terms">Terms of Use</Link> and{" "}
+          <Link href="/privacy">Privacy Policy</Link>. Rent reminders by email are on by default and you can turn them
+          off in your portal.
+        </p>
       </form>
       <div className="authFoot">
         Already set up? <Link href="/portal/login">Sign in</Link>

@@ -15,14 +15,14 @@ Backups do NOT go through Vercel storage — they go straight to the VPS to avoi
 
 - **GitHub:** `farisqdq/minecraft` (public), working branch **`claude/rental-profit-tracker-p2d5xy`** — this branch auto-deploys to production.
 - **Website:** Next.js on Vercel, project **"minecraft"**, team `team_ad4wJqvaRlCSlTEWdBeoWWag` (scope `farisqdqs-projects`). Serves **www.eqal.rentals** (apex eqal.rentals 307-redirects to www). DNS is on Vercel.
-- **Admin account:** `fariseqal3@gmail.com` is the built-in site admin (lib/admin.ts). All phone pages 404 for non-admins.
+- **Admin account:** `the admin email (see lib/admin.ts)` is the built-in site admin (lib/admin.ts). All phone pages 404 for non-admins.
 - **All phone-backup code lives under `phone-backup/`** in the repo. `.vercelignore` excludes `phone-backup/` from the Vercel build.
 
 ## The VPS backup server
 
 - **URL:** https://backup.eqal.rentals  (A record → **207.180.211.137**, the Contabo VPS; added in Vercel DNS).
 - **Shared secret** (server password; also in Vercel env `PHONE_BACKUP_SECRET`):
-  `bb496b49cc3a7b82e7449d4952eb4aa4de671f99ba8a597ef248d95be035fc15`
+  `<stored in Vercel env PHONE_BACKUP_SECRET and on the VPS; never commit it>`
   Keep this private. Admin API auth is `Authorization: Bearer <secret>`.
 - **Source:** `phone-backup/server/main.go` (Go, single Windows exe, serves its own HTTPS via Let's Encrypt/autocert). Data stored in `C:\PhoneBackups\devices\<deviceId>\{Photos,Files,Contacts,Calls,Texts,Apps}`.
 - **Build the exe:** `cd phone-backup/server && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../dist/rentroll-backup.exe .`

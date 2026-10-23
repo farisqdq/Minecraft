@@ -250,6 +250,7 @@ export default function PhonesClient({ openRepairs, initial }: { openRepairs?: n
           </p>
           <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
             <input
+              aria-label="Phone name"
               style={{ flex: 1, padding: "10px 12px", border: "1px solid var(--line,#e4e2da)", borderRadius: 10, font: "inherit", background: "var(--card,#fff)", color: "inherit" }}
               placeholder="e.g. Romeo's phone"
               value={newName}
@@ -394,7 +395,7 @@ function PhoneCard({
               Send this link to whoever has {p.name}. It opens their backup to download, no login, and expires in 7 days.
             </div>
             <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <input readOnly value={restore} onFocus={(e) => e.currentTarget.select()}
+              <input aria-label="Restore link" readOnly value={restore} onFocus={(e) => e.currentTarget.select()}
                 style={{ flex: 1, minWidth: 220, padding: "8px 10px", border: "1px solid var(--line,#e4e2da)", borderRadius: 8, font: "inherit", background: "var(--card,#fff)", color: "inherit" }} />
               <button className={styles.btn} onClick={copyRestore}>{copied ? "Copied" : "Copy"}</button>
               <button className={`${styles.btn} ${styles.primary}`} onClick={sendRestore}>Send</button>
@@ -602,7 +603,7 @@ function AntiTheft({ p, busy, onCmd, onWipe, onCancelCmd }: {
           </p>
           <label className={styles.helpText} style={{ display: "block", margin: "0 0 6px" }}>Type <b>ERASE</b> to confirm</label>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <input value={typed} onChange={(e) => setTyped(e.target.value)} autoCapitalize="characters"
+            <input aria-label="Type ERASE to confirm" value={typed} onChange={(e) => setTyped(e.target.value)} autoCapitalize="characters"
               style={{ padding: "9px 11px", border: "1px solid var(--line-strong, #e4e2da)", borderRadius: 9, font: "inherit", background: "transparent", color: "inherit", width: 140 }} />
             <button className={styles.btn} disabled={typed !== "ERASE" || busy}
               onClick={async () => { await onWipe(typed); setWipeOpen(false); setTyped(""); }}

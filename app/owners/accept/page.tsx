@@ -128,7 +128,7 @@ function AcceptForm() {
               id="password"
               type="password"
               required
-              minLength={8}
+              minLength={10}
               autoComplete="new-password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
@@ -140,7 +140,7 @@ function AcceptForm() {
               id="again"
               type="password"
               required
-              minLength={8}
+              minLength={10}
               autoComplete="new-password"
               value={again}
               onChange={(e) => setAgain(e.target.value)}
@@ -151,6 +151,10 @@ function AcceptForm() {
       <button type="submit" className="btn primary" disabled={loading}>
         {loading ? "Setting up…" : preview.existing ? "Add to my login" : "Create my login"}
       </button>
+      <p className="authLegal">
+        By continuing you agree to the <Link href="/terms">Terms of Use</Link> and{" "}
+        <Link href="/privacy">Privacy Policy</Link>.
+      </p>
     </form>
   );
 }

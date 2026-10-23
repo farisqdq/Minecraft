@@ -16,8 +16,8 @@ export function buildCsp(nonce: string, dev = false): string {
   return [
     "default-src 'self'",
     `script-src 'self' 'nonce-${nonce}' 'strict-dynamic'${dev ? " 'unsafe-eval'" : ""}`,
-    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
-    "font-src 'self' data: https://fonts.gstatic.com",
+    "style-src 'self' 'unsafe-inline'",
+    "font-src 'self' data:",
     // App files come from this site (see /api/files) — plus data: for the
     // two-factor QR code. Phone-backup photos are streamed from the backup
     // server on the VPS (a /api/phones link redirects there), so its host is

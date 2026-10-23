@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { breachedPasswordProblem } from "@/lib/pwned";
 import { passwordProblem } from "@/lib/portal";
 import { MAX_PER_IP, clientIp, ipKey, isThrottled, pauseMessage, recordFailure } from "@/lib/throttle";
 import { acceptOwnerInvite, previewInvite } from "@/lib/owners-db";
@@ -32,7 +33,7 @@ export async function POST(req: Request) {
   const name = typeof body?.name === "string" ? body.name.trim().slice(0, 120) : "";
   const password = typeof body?.password === "string" ? body.password : "";
 
-  const problem = passwordProblem(password);
+  const problem = passwordProblem(password) ?? (await breachedPasswordProblem(password));
   if (problem) return NextResponse.json({ error: problem }, { status: 400 });
 
   const addressKey = ipKey(clientIp(req.headers));

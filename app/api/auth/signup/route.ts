@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { breachedPasswordProblem } from "@/lib/pwned";
 import bcrypt from "bcryptjs";
 import { timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
@@ -65,9 +66,11 @@ export async function POST(req: Request) {
   if (!email || !email.includes("@")) {
     return NextResponse.json({ error: "Enter a valid email address." }, { status: 400 });
   }
-  if (!password || password.length < 8) {
-    return NextResponse.json({ error: "Password must be at least 8 characters." }, { status: 400 });
+  if (!password || password.length < 10) {
+    return NextResponse.json({ error: "Password must be at least 10 characters." }, { status: 400 });
   }
+  const breached = await breachedPasswordProblem(password);
+  if (breached) return NextResponse.json({ error: breached }, { status: 400 });
   if (email.length > 200 || password.length > 200) {
     return NextResponse.json({ error: "That's too long." }, { status: 400 });
   }

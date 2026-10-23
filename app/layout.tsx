@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Instrument_Sans, Manrope } from "next/font/google";
+import { Geist, Inter, Instrument_Sans, Manrope } from "next/font/google";
 import Providers from "./providers";
+import LegalFooter from "./components/LegalFooter";
 import { getRequestAppearance, getRequestViewOnly } from "@/lib/appearance-server";
 import { htmlAttributes, themeColors } from "@/lib/appearance";
 import "./globals.css";
@@ -14,13 +15,34 @@ export const dynamic = "force-dynamic";
 // 'self' covers them, no third-party request at runtime). Each is only a CSS
 // variable here; globals.css picks one per layout, and a face is downloaded
 // only when a page actually uses it — Classic never does.
+// Inter, the default typeface, is self-hosted the same way: visitors' browsers
+// never contact Google for it.
+const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700"], variable: "--font-inter", display: "swap" });
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist", display: "swap", preload: false });
 const instrument = Instrument_Sans({ subsets: ["latin"], variable: "--font-instrument", display: "swap", preload: false });
 const manrope = Manrope({ subsets: ["latin"], variable: "--font-manrope", display: "swap", preload: false });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://eqal.rentals"),
   title: "Rent Roll",
   description: "Track rent payments and repair costs across your rental properties.",
+  // Google Search Console: set GOOGLE_SITE_VERIFICATION to the code Search
+  // Console gives you. Nothing is added while it is unset.
+  ...(process.env.GOOGLE_SITE_VERIFICATION
+    ? { verification: { google: process.env.GOOGLE_SITE_VERIFICATION } }
+    : {}),
+  openGraph: {
+    type: "website",
+    siteName: "Rent Roll",
+    url: "https://eqal.rentals",
+    title: "Rent Roll",
+    description: "Track rent payments and repair costs across your rental properties.",
+  },
+  twitter: {
+    card: "summary",
+    title: "Rent Roll",
+    description: "Track rent payments and repair costs across your rental properties.",
+  },
   applicationName: "Rent Roll",
   // Lets iOS run it full-screen from the home screen, with the status bar
   // tinted to match the page rather than a white strip above it.
@@ -52,19 +74,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html
       lang="en"
-      className={`${geist.variable} ${instrument.variable} ${manrope.variable}`}
+      className={`${inter.variable} ${geist.variable} ${instrument.variable} ${manrope.variable}`}
       {...htmlAttributes(appearance)}
     >
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
-        <link
-          rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
-        />
-      </head>
       <body>
         <Providers viewOnly={viewOnly}>{children}</Providers>
+        <LegalFooter />
       </body>
     </html>
   );

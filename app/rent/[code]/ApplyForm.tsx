@@ -70,7 +70,8 @@ export default function ApplyForm({ code, company, today, rent }: { code: string
   return (
     <section id="apply" className={styles.apply}>
       <h2>Apply</h2>
-      <p className={styles.applyLede}>Takes about two minutes. No account, no fee, and nothing about you is shared.</p>
+      <p className={styles.applyLede}>Takes about two minutes. No account and no fee. Your answers go to {company}, and are handled as described in our{" "}
+        <a href="/privacy">Privacy Policy</a>.</p>
       <form onSubmit={submit} className={styles.form}>
         {/* Hidden from people; bots fill it in. */}
         <div className={styles.trap} aria-hidden="true">
@@ -109,6 +110,7 @@ export default function ApplyForm({ code, company, today, rent }: { code: string
           <label className={styles.wide}>
             Pets
             <input placeholder="e.g. one cat, or none" value={f.pets} onChange={set("pets")} />
+            <span className={styles.hint}>Service and assistance animals aren&apos;t pets. You don&apos;t need to list them here.</span>
           </label>
         </fieldset>
 
@@ -153,7 +155,9 @@ export default function ApplyForm({ code, company, today, rent }: { code: string
         <label className={styles.consent}>
           <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} />
           <span>
-            What I&apos;ve written is true, and {company} may contact my employer and landlord to check it.
+            What I&apos;ve written is true, and {company} may contact my employer and landlord to check it. I&apos;ve
+            read the <a href="/privacy" target="_blank" rel="noreferrer">Privacy Policy</a> and agree to the{" "}
+            <a href="/terms" target="_blank" rel="noreferrer">Terms of Use</a>.
           </span>
         </label>
 

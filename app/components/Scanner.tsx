@@ -332,6 +332,7 @@ export default function Scanner({
 
           <input
             ref={cameraRef}
+            aria-label="Take a photo of the document"
             type="file"
             accept="image/*"
             capture="environment"
@@ -343,6 +344,7 @@ export default function Scanner({
           />
           <input
             ref={filesRef}
+            aria-label="Choose photos of the document"
             type="file"
             accept="image/*"
             multiple

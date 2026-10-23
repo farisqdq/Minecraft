@@ -12,7 +12,7 @@
 import { createHash, randomBytes } from "crypto";
 
 export const RESET_TTL_MS = 60 * 60 * 1000;
-export const MIN_PASSWORD = 8;
+export const MIN_PASSWORD = 10;
 
 /** A fresh token and what to store for it. The token goes in the link, the hash in the database. */
 export function newResetToken(now = new Date()): { token: string; tokenHash: string; expiresAt: Date } {

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { breachedPasswordProblem } from "@/lib/pwned";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { normalizeJoinCode } from "@/lib/codes";
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
   const emailError = emailProblem(email);
   if (emailError) return NextResponse.json({ error: emailError }, { status: 400 });
 
-  const passwordError = passwordProblem(password);
+  const passwordError = passwordProblem(password) ?? (await breachedPasswordProblem(password));
   if (passwordError) return NextResponse.json({ error: passwordError }, { status: 400 });
 
   const addressKey = ipKey(clientIp(req.headers));
