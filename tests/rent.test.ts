@@ -66,3 +66,15 @@ test("a month key maps to the first of that month in UTC and back", () => {
   assert.equal(monthStart("2026-09").toISOString(), "2026-09-01T00:00:00.000Z");
   assert.equal(monthKeyOf(monthStart("2026-09")), "2026-09");
 });
+
+test("a typo correction rewrites only the periods recorded at the wrong amount", async () => {
+  const { rowsAtAmount } = await import("../lib/rent.ts");
+  const rows = [
+    { id: "a", amount: 0 }, // no rent expected before the lease
+    { id: "b", amount: 4570 }, // the typo, from the lease start
+    { id: "c", amount: 4570.0000001 }, // the same figure, float noise
+    { id: "d", amount: 4400 }, // a real earlier rent
+  ];
+  assert.deepEqual(rowsAtAmount(rows, 4570).map((r) => r.id), ["b", "c"]);
+  assert.deepEqual(rowsAtAmount(rows, 5470), []);
+});

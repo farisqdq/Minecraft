@@ -228,6 +228,8 @@ export default function PropertyManageClient({
     monthlyRent: "",
     vacant: false,
     vacantSince: "",
+    // The old rent was mistyped: fix every month it applied to (lib/rent correctRent).
+    correctAll: false,
   });
   const [transactions, setTransactions] = useState<LedgerEntry[]>(initialTransactions);
   const [units, setUnits] = useState<Unit[]>(initialUnits);
@@ -279,6 +281,7 @@ export default function PropertyManageClient({
   const [editingUnitId, setEditingUnitId] = useState("");
   const [editUnitName, setEditUnitName] = useState("");
   const [editUnitRent, setEditUnitRent] = useState("");
+  const [editUnitCorrect, setEditUnitCorrect] = useState(false);
   const [editUnitVacant, setEditUnitVacant] = useState(false);
   const [editUnitSince, setEditUnitSince] = useState("");
 
@@ -317,6 +320,7 @@ export default function PropertyManageClient({
     setEditingUnitId(u.id);
     setEditUnitName(u.name);
     setEditUnitRent(u.monthlyRent ? String(u.monthlyRent) : "");
+    setEditUnitCorrect(false);
     setEditUnitVacant(u.vacant);
     setEditUnitSince(u.vacantSince ?? "");
   }
@@ -333,6 +337,7 @@ export default function PropertyManageClient({
       body: JSON.stringify({
         name,
         monthlyRent: parseFloat(editUnitRent) || 0,
+        correctAll: editUnitCorrect,
         vacant: editUnitVacant,
         ...(editUnitVacant && editUnitSince ? { vacantSince: editUnitSince } : {}),
       }),
@@ -342,8 +347,14 @@ export default function PropertyManageClient({
       setError(data?.error || "Couldn't save that unit.");
       return;
     }
-    setUnits((prev) => prev.map((u) => (u.id === editingUnitId ? data : u)));
+    const { rentChanges: history, ...unitFields } = data as Unit & { rentChanges?: RentChangeDTO[] };
+    setUnits((prev) => prev.map((u) => (u.id === editingUnitId ? { ...u, ...unitFields } : u)));
+    // The unit's rent trail comes back with it, so past months are re-judged now.
+    if (history) {
+      setRentChanges((prev) => [...prev.filter((c) => c.unitId !== editingUnitId), ...history]);
+    }
     setEditingUnitId("");
+    if (editUnitCorrect) push(`${name}: every month now uses ${money(parseFloat(editUnitRent) || 0)}.`);
   }
 
   function removeUnit(unit: Unit) {
@@ -406,6 +417,7 @@ export default function PropertyManageClient({
       monthlyRent: property.monthlyRent ? String(property.monthlyRent) : "",
       vacant: property.vacant,
       vacantSince: property.vacantSince ?? "",
+      correctAll: false,
     });
     setError("");
     setPropertyOpen(true);
@@ -424,6 +436,7 @@ export default function PropertyManageClient({
         name,
         address: propertyForm.address.trim(),
         monthlyRent: parseFloat(propertyForm.monthlyRent) || 0,
+        correctAll: propertyForm.correctAll,
         vacant: propertyForm.vacant,
         ...(propertyForm.vacant && propertyForm.vacantSince ? { vacantSince: propertyForm.vacantSince } : {}),
       }),
@@ -445,7 +458,7 @@ export default function PropertyManageClient({
       ]);
     }
     setPropertyOpen(false);
-    push("Property updated.");
+    push(propertyForm.correctAll ? `Rent corrected to ${money(parseFloat(propertyForm.monthlyRent) || 0)} for every month.` : "Property updated.");
     router.refresh();
   }
 
@@ -1980,6 +1993,16 @@ export default function PropertyManageClient({
                           value={editUnitRent}
                           onChange={(e) => setEditUnitRent(e.target.value)}
                         />
+                        {u.monthlyRent > 0 && (parseFloat(editUnitRent) || 0) !== u.monthlyRent && (
+                          <label className={styles.checkboxField}>
+                            <input
+                              type="checkbox"
+                              checked={editUnitCorrect}
+                              onChange={(e) => setEditUnitCorrect(e.target.checked)}
+                            />
+                            {money(u.monthlyRent)} was a typo — fix past months too
+                          </label>
+                        )}
                         <label className={styles.checkboxField}>
                           <input
                             type="checkbox"
@@ -3025,10 +3048,25 @@ export default function PropertyManageClient({
                   onChange={(e) => setPropertyForm((f) => ({ ...f, monthlyRent: e.target.value }))}
                 />
                 <span className={styles.helpText}>
-                  A new amount applies from this month on; past months keep what they were.
+                  {propertyForm.correctAll
+                    ? "Every month that used the old amount will use this one instead."
+                    : "A new amount applies from this month on; past months keep what they were."}
                 </span>
               </div>
             )}
+            {units.length === 0 &&
+              property.monthlyRent > 0 &&
+              (parseFloat(propertyForm.monthlyRent) || 0) !== property.monthlyRent && (
+                <label className={styles.checkboxField} style={{ gridColumn: "1 / -1" }}>
+                  <input
+                    type="checkbox"
+                    checked={propertyForm.correctAll}
+                    onChange={(e) => setPropertyForm((f) => ({ ...f, correctAll: e.target.checked }))}
+                  />
+                  {money(property.monthlyRent)} was a typo — use {money(parseFloat(propertyForm.monthlyRent) || 0)} for
+                  every past month too
+                </label>
+              )}
             {units.length === 0 && (
               <label className={styles.checkboxField} style={{ gridColumn: "1 / -1" }}>
                 <input

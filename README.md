@@ -627,6 +627,11 @@ measured against whatever the rent was *that* month.
 
 Nothing is asked of you: edit the rent as usual and the change is recorded
 from the current month (two edits in one month leave one entry, the later).
+If the old amount was simply **typed wrong** (a $5,470 lease entered as
+$4,570), tick **"… was a typo — fix past months too"** under the new rent
+when you save it. Every month that used the wrong figure then uses the right
+one, so months already paid in full stop reading as overpaid; earlier rents
+that really were different are left alone.
 A raise agreed ahead of time goes in through **Renew lease**, from the month
 it starts — see *Renewing a lease*. The property page shows the trail beside the rent
 ("since Sep 2026 · $1,450 at first") so you can see what the app is using.

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireProperty } from "@/lib/access";
-import { monthKeyOf, recordRentChange, startRentFrom } from "@/lib/rent";
+import { correctRent, monthKeyOf, recordRentChange, startRentFrom } from "@/lib/rent";
 import { validRent } from "@/lib/money";
 import { sinceDay, vacantSinceFor } from "@/lib/vacancy-db";
 
@@ -55,14 +55,20 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   // The rent change and the property update land together, so the books can
   // never show a new rent with no record of when it started.
   const property = await prisma.$transaction(async (tx) => {
-    await recordRentChange(tx, {
-      propertyId: id,
-      unitId: null,
-      from: existing.monthlyRent,
-      to: monthlyRent,
-      month: monthKeyOf(new Date()),
-      userId,
-    });
+    // A typo fixed (correctAll) is the right rent for every month the wrong
+    // one was in force; otherwise a new rent starts this month.
+    if (body?.correctAll === true) {
+      await correctRent(tx, { propertyId: id, unitId: null, from: existing.monthlyRent, to: monthlyRent });
+    } else {
+      await recordRentChange(tx, {
+        propertyId: id,
+        unitId: null,
+        from: existing.monthlyRent,
+        to: monthlyRent,
+        month: monthKeyOf(new Date()),
+        userId,
+      });
+    }
     if (rentFrom) {
       await startRentFrom(tx, { propertyId: id, unitId: null, month: rentFrom, current: monthlyRent, userId });
     }

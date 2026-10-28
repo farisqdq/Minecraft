@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUserId } from "@/lib/session";
 import { requireUnit } from "@/lib/access";
-import { monthKeyOf, recordRentChange } from "@/lib/rent";
+import { monthKeyOf, recordRentChange, correctRent } from "@/lib/rent";
 import { validRent } from "@/lib/money";
 import { sinceDay, vacantSinceFor } from "@/lib/vacancy-db";
 
@@ -39,7 +39,10 @@ export async function PATCH(req: Request, { params }: { params: Promise<{ id: st
   }
 
   const unit = await prisma.$transaction(async (tx) => {
-    if (data.monthlyRent !== undefined) {
+    if (data.monthlyRent !== undefined && body?.correctAll === true) {
+      // A typo fixed: the right rent for every month the wrong one was in force.
+      await correctRent(tx, { propertyId: existing.propertyId, unitId: id, from: existing.monthlyRent, to: data.monthlyRent });
+    } else if (data.monthlyRent !== undefined) {
       await recordRentChange(tx, {
         propertyId: existing.propertyId,
         unitId: id,

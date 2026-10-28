@@ -156,6 +156,35 @@ export async function startRentFrom(
   }
 }
 
+/**
+ * Which history rows a typo correction rewrites: every period recorded at
+ * the mistyped amount, compared to the cent. Earlier rents that really were
+ * different, and "no rent expected" periods, are left as they were.
+ */
+export function rowsAtAmount<T extends { amount: number }>(rows: T[], amount: number): T[] {
+  const cents = Math.round(amount * 100);
+  return rows.filter((r) => Math.round(r.amount * 100) === cents);
+}
+
+/**
+ * "The old amount was a typo." Unlike recordRentChange, which starts the new
+ * rent from this month, this puts the right amount everywhere the wrong one
+ * was in force, so past months are judged against what was really agreed.
+ * With no history at all there's nothing to rewrite: every month already
+ * reads the place's current rent, which the caller sets.
+ */
+export async function correctRent(
+  tx: Prisma.TransactionClient,
+  { propertyId, unitId, from, to }: { propertyId: string; unitId: string | null; from: number; to: number }
+) {
+  if (Math.round(from * 100) === Math.round(to * 100)) return 0;
+  const rows = await tx.rentChange.findMany({ where: { propertyId, unitId } });
+  const wrong = rowsAtAmount(rows, from);
+  if (wrong.length === 0) return 0;
+  const { count } = await tx.rentChange.updateMany({ where: { id: { in: wrong.map((r) => r.id) } }, data: { amount: to } });
+  return count;
+}
+
 /** A rent history row as the pages keep it. */
 export function serializeRentChange(c: {
   id: string;
