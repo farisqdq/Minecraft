@@ -53,7 +53,10 @@ main{max-width:1680px;margin:0 auto;padding:16px}
 .gsearch:focus-within{box-shadow:0 1px 6px rgba(32,33,36,.28)}
 .gsearch input{border:0;background:none;flex:1;padding:11px 0;outline:none;min-width:0}
 .gsearch svg{flex:none;color:var(--muted)}
-.ginfo{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
+.ginfo{display:flex;gap:12px;flex-wrap:wrap;align-items:center;font-size:13px;margin-bottom:12px}
+.linkb{border:0;background:none;padding:0;color:var(--accent);font-weight:600;cursor:pointer;font-size:13px}
+.linkb:hover{text-decoration:underline}
+.linkb[hidden]{display:none}
 .side{flex:none;width:min(44%,560px);position:sticky;top:74px;max-height:calc(100vh - 92px);display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)}
 .side .top{display:flex;align-items:center;gap:4px;padding:8px 8px 8px 16px;border-bottom:1px solid var(--line)}
 .side .top .nm{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -254,7 +257,7 @@ async function gallery(main){
   main.innerHTML =
     '<label class="gsearch">'+SEARCH_SVG+'<input id="gq" type="search" placeholder="Search photos by name" autocomplete="off" value="'+esc(S.q)+'"></label>'+
     '<div class="chips" id="chips">'+CHIPS.map(function(c){ return c ? '<button class="chip" data-k="'+c[0]+'" data-v="'+c[1]+'">'+c[2]+'</button>' : '<span class="chip sep"></span>'; }).join("")+'</div>'+
-    '<div class="ginfo muted"><span id="gs">'+items.length+' photos &amp; videos</span><span id="scan"></span></div>'+
+    '<div class="ginfo muted"><span id="gs">'+items.length+' photos &amp; videos</span><span id="scan"></span><button class="linkb" id="unall" hidden>Uncensor all</button></div>'+
     '<div class="gwrap"><div class="gl"><div class="grid" id="g"></div><div id="sent"></div></div><aside class="side" id="side" hidden></aside></div>';
   var g = document.getElementById("g"), side = document.getElementById("side"), chips = document.getElementById("chips"), gq = document.getElementById("gq");
   var view = [], shown = 0, sel = -1;
@@ -339,7 +342,7 @@ async function gallery(main){
     side.querySelector("#sfs").onclick = full;
     if (!vid) side.querySelector("#stg").onclick = full;
     var ok = side.querySelector("#sok");
-    if (ok) ok.onclick = function(){ clearFlag(phone, e.path); var tt = tileAt(sel); if (tt) tt.classList.remove("sens"); showSide(sel); };
+    if (ok) ok.onclick = function(){ clearFlag(phone, e.path); var tt = tileAt(sel); if (tt) tt.classList.remove("sens"); paintUnall(); showSide(sel); };
     if (t) t.scrollIntoView({block:"nearest"});
   }
   function key(ev){
@@ -353,7 +356,25 @@ async function gallery(main){
   wide.addEventListener("change", function(){ if (!wide.matches) closeSide(); });
   rebuild();
   new IntersectionObserver(function(es){ if (es[0].isIntersecting && shown < view.length) more(); }, {rootMargin:"800px"}).observe(document.getElementById("sent"));
+  // One click to clear every flag on this phone, for when the detector has
+  // flagged ordinary photos. Like "Not sensitive" on one photo, they're
+  // remembered as yours and never flagged again; photos the check hasn't
+  // reached yet are still checked.
+  var unall = document.getElementById("unall");
+  function paintUnall(){ var n = items.filter(function(e){ return v(e)===1; }).length; unall.hidden = !n; unall.textContent = "Uncensor all "+n; }
+  unall.onclick = function(){
+    var flagged = items.filter(function(e){ return v(e)===1; });
+    if (!flagged.length || !confirm("Uncensor all "+flagged.length+" flagged photos? They won't be blurred or flagged again.")) return;
+    var m = nsLoad();
+    flagged.forEach(function(e){ m[phone+"|"+e.path] = 2; });
+    nsSave(); scanState.flagged = 0;
+    g.querySelectorAll(".tile.sens").forEach(function(t){ t.classList.remove("sens"); });
+    var sc = document.getElementById("scan"); if (sc && !scanState.left) sc.textContent = "· 0 sensitive found";
+    paintUnall(); if (S.flt!=="all" || S.srt==="sens") rebuild();
+  };
+  paintUnall();
   startScan(phone, items, function(path, sensitive, done){
+    if (sensitive) paintUnall();
     if (sensitive) { var t = g.querySelector('[data-p="'+CSS.escape(path)+'"]'); if (t) t.classList.add("sens"); }
     var sc = document.getElementById("scan");
     if (sc) sc.textContent = scanState.left ? "· Checking for sensitive photos… "+scanState.done+" of "+scanState.total+" · "+scanState.flagged+" flagged"+scanEta()
