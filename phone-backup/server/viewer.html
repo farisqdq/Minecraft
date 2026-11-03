@@ -6,29 +6,69 @@
 <meta name="robots" content="noindex, nofollow">
 <title>Phone Backups</title>
 <style>
-:root{--bg:#f5f6f8;--surface:#fff;--ink:#0f172a;--muted:#64748b;--line:rgba(15,23,42,.1);--accent:#0f7a55;--on-accent:#fff;--bad:#b42318;--soft:rgba(15,122,85,.09)}
+:root{--bg:#fff;--surface:#fff;--ink:#0f172a;--muted:#64748b;--line:rgba(15,23,42,.1);--accent:#0f7a55;--on-accent:#fff;--bad:#b42318;--soft:rgba(15,122,85,.09)}
 @media (prefers-color-scheme:dark){:root{--bg:#0b0f14;--surface:#121821;--ink:#e6ebf2;--muted:#8b97a8;--line:rgba(230,235,242,.12);--accent:#3fbf8f;--on-accent:#06130d;--bad:#f0817a;--soft:rgba(63,191,143,.12)}}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
 button,input,select{font:inherit;color:inherit}
 a{color:var(--accent)}
 header{position:sticky;top:0;z-index:5;background:var(--surface);border-bottom:1px solid var(--line);padding:10px 16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-header h1{font-size:16px;margin:0 8px 0 0}
+header h1{font-size:16px;margin:0 8px 0 0;white-space:nowrap}
 nav{display:flex;gap:4px;flex-wrap:wrap;flex:1}
-.tab{border:0;background:none;padding:7px 12px;border-radius:8px;cursor:pointer;color:var(--muted);font-weight:600}
-.tab.on{background:var(--accent);color:var(--on-accent)}
+.tab{white-space:nowrap;border:0;background:none;padding:8px 12px;cursor:pointer;color:var(--muted);font-weight:500;border-bottom:3px solid transparent;border-radius:0}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent)}
 select,input{background:var(--surface);border:1px solid var(--line);border-radius:9px;padding:8px 10px}
 .btn{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:8px 12px;cursor:pointer;font-weight:600}
 .btn.primary{background:var(--accent);color:var(--on-accent);border-color:transparent}
-main{max-width:1200px;margin:0 auto;padding:16px}
+main{max-width:1680px;margin:0 auto;padding:16px}
 .card{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:16px;margin-bottom:14px}
 .muted{color:var(--muted)}
 .err{color:var(--bad)}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:4px}
-.tile{position:relative;aspect-ratio:1/1;background:var(--line);border:0;padding:0;cursor:pointer;overflow:hidden;border-radius:4px}
+/* Gallery, laid out like Google Images: rows of photos at their own shapes,
+   each row stretched to fill the width, a caption under each, and the photo
+   you click opening in a panel on the right (full screen on a phone). */
+.gwrap{display:flex;gap:20px;align-items:flex-start}
+.gl{flex:1;min-width:0}
+.grid{--rowh:190px;display:flex;flex-wrap:wrap;gap:16px 10px}
+.grid::after{content:"";flex-grow:999999}
+.tile{--r:1;position:relative;flex-grow:var(--r);width:calc(var(--r) * var(--rowh));min-width:0;background:none;border:0;padding:0;cursor:pointer;text-align:left;color:inherit;border-radius:12px}
+.tile .im{position:relative;height:var(--rowh);border-radius:12px;overflow:hidden;background:var(--line);transition:box-shadow .15s}
+.tile:hover .im,.tile:focus-visible .im{box-shadow:0 1px 3px rgba(0,0,0,.18),0 4px 14px rgba(0,0,0,.14)}
+.tile:focus{outline:none}
+.tile.sel .im{outline:3px solid var(--accent);outline-offset:2px}
 .tile img{width:100%;height:100%;object-fit:cover;display:block}
 .tile .ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
-.play{position:absolute;right:5px;bottom:5px;background:rgba(0,0,0,.6);color:#fff;border-radius:20px;width:22px;height:22px;display:flex;align-items:center;justify-content:center;font-size:11px}
+.tile .capt{display:block;font-size:12px;line-height:1.3;margin-top:6px;padding:0 2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.tile .capt b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis}
+.tile .capt span{color:var(--muted)}
+.play{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.6);color:#fff;border-radius:20px;padding:2px 9px;display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700}
+.chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;cursor:pointer;font-size:14px;font-weight:500;white-space:nowrap}
+.chip:hover{background:var(--soft)}
+.chip.on{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chip.sep{border:0;background:none;padding:0;width:1px;align-self:stretch;background:var(--line)}
+.gsearch{display:flex;align-items:center;gap:10px;max-width:640px;border:1px solid var(--line);border-radius:999px;padding:0 16px;background:var(--surface);box-shadow:0 1px 6px rgba(32,33,36,.12);margin:4px 0 14px}
+.gsearch:focus-within{box-shadow:0 1px 6px rgba(32,33,36,.28)}
+.gsearch input{border:0;background:none;flex:1;padding:11px 0;outline:none;min-width:0}
+.gsearch svg{flex:none;color:var(--muted)}
+.ginfo{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin-bottom:12px}
+.side{flex:none;width:min(44%,560px);position:sticky;top:74px;max-height:calc(100vh - 92px);display:flex;flex-direction:column;background:var(--surface);border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,.08)}
+.side .top{display:flex;align-items:center;gap:4px;padding:8px 8px 8px 16px;border-bottom:1px solid var(--line)}
+.side .top .nm{flex:1;min-width:0;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ib{border:0;background:none;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.ib:hover{background:var(--soft)}
+.side .stage{flex:1;min-height:220px;display:flex;align-items:center;justify-content:center;background:#000;cursor:zoom-in}
+.side .stage img,.side .stage video{max-width:100%;max-height:calc(100vh - 290px);display:block}
+.side .meta{padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.side .acts{display:flex;gap:8px;flex-wrap:wrap}
+.side .acts .btn{border-radius:999px;text-decoration:none;color:inherit}
+.side .acts .btn.primary{color:var(--on-accent)}
+.side[hidden]{display:none}
+@media (max-width:999px){.side{display:none}}
+@media (max-width:700px){header{padding-bottom:0}header h1{flex:1}nav{order:9;flex:0 0 100%;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:0 10px}nav::-webkit-scrollbar{display:none}}
+@media (max-width:700px){.grid{--rowh:118px;gap:12px 6px}.tile .capt{font-size:11px}}
 .row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:9px 4px;border-bottom:1px solid var(--line)}
 .row button{background:none;border:0;cursor:pointer;text-align:left;padding:0;font-weight:600}
 .crumbs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
@@ -185,8 +225,10 @@ function phones(main){
 
 // ---------- gallery ----------
 var galleryCache = {};
+var SEARCH_SVG = '<svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M15.5 14h-.79l-.28-.27A6.47 6.47 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/></svg>';
+function shortDate(iso){ var d = new Date(iso); return isNaN(d) ? "" : d.toLocaleDateString(undefined,{month:"short",day:"numeric",year:"numeric"}); }
 async function gallery(main){
-  main.innerHTML = '<p class="muted" id="gs">Finding photos…</p><div class="grid" id="g"></div>';
+  main.innerHTML = '<p class="muted" id="gs">Finding photos…</p>';
   var items = galleryCache[S.phone];
   if (!items) {
     items = []; var queue = ["Photos"], folders = 0;
@@ -204,49 +246,118 @@ async function gallery(main){
     items.sort(function(a,b){ return a.mtime < b.mtime ? 1 : -1; });
     galleryCache[S.phone] = items;
   }
-  var gs3 = document.getElementById("gs"); if (!gs3) return;
-  gs3.outerHTML = '<div class="tools"><span class="muted" id="gs">'+items.length+' photos &amp; videos</span>'+
-    '<select id="typ"><option value="all">Photos &amp; videos</option><option value="photo">Photos only</option><option value="video">Videos only</option></select>'+
-    '<select id="flt"><option value="all">All</option><option value="sens">Sensitive only</option><option value="hide">Hide sensitive</option></select>'+
-    '<select id="srt"><option value="new">Newest first</option><option value="sens">Sensitive first</option></select>'+
-    '<span class="muted" id="scan" style="font-size:13px"></span></div>';
-  var flt = document.getElementById("flt"), srt = document.getElementById("srt"), typ = document.getElementById("typ");
-  flt.value = S.flt || "all"; srt.value = S.srt || "new"; typ.value = S.typ || "all";
-  var g = document.getElementById("g"), view = [], shown = 0;
+  if (!document.getElementById("gs")) return; // left the tab while it loaded
+  S.typ = S.typ || "all"; S.flt = S.flt || "all"; S.srt = S.srt || "new"; S.q = S.q || "";
+  var CHIPS = [["typ","all","All"],["typ","photo","Photos"],["typ","video","Videos"],null,
+               ["flt","sens","Sensitive only"],["flt","hide","Hide sensitive"],null,
+               ["srt","new","Newest"],["srt","sens","Sensitive first"]];
+  main.innerHTML =
+    '<label class="gsearch">'+SEARCH_SVG+'<input id="gq" type="search" placeholder="Search photos by name" autocomplete="off" value="'+esc(S.q)+'"></label>'+
+    '<div class="chips" id="chips">'+CHIPS.map(function(c){ return c ? '<button class="chip" data-k="'+c[0]+'" data-v="'+c[1]+'">'+c[2]+'</button>' : '<span class="chip sep"></span>'; }).join("")+'</div>'+
+    '<div class="ginfo muted"><span id="gs">'+items.length+' photos &amp; videos</span><span id="scan"></span></div>'+
+    '<div class="gwrap"><div class="gl"><div class="grid" id="g"></div><div id="sent"></div></div><aside class="side" id="side" hidden></aside></div>';
+  var g = document.getElementById("g"), side = document.getElementById("side"), chips = document.getElementById("chips"), gq = document.getElementById("gq");
+  var view = [], shown = 0, sel = -1;
   var phone = S.phone;
+  var wide = window.matchMedia("(min-width:1000px)");
   function v(e){ return verdictOf(phone, e.path); }
+  function paintChips(){
+    chips.querySelectorAll(".chip[data-k]").forEach(function(c){
+      var k = c.dataset.k, on = S[k] === c.dataset.v;
+      c.classList.toggle("on", on); c.setAttribute("aria-pressed", on);
+    });
+  }
+  chips.onclick = function(ev){
+    var c = ev.target.closest(".chip[data-k]"); if (!c) return;
+    var k = c.dataset.k, val = c.dataset.v;
+    // The sensitive chips toggle off back to showing everything.
+    S[k] = (k==="flt" && S.flt===val) ? "all" : val;
+    rebuild();
+  };
+  var qT = null;
+  gq.oninput = function(){ clearTimeout(qT); qT = setTimeout(function(){ S.q = gq.value.trim(); rebuild(); }, 150); };
   function rebuild(){
-    S.flt = flt.value; S.srt = srt.value; S.typ = typ.value;
+    paintChips();
+    var q = S.q.toLowerCase();
     view = items.filter(function(e){
       var isVid = VID.test(e.name);
       if (S.typ==="photo" && isVid) return false;
       if (S.typ==="video" && !isVid) return false;
+      if (q && e.name.toLowerCase().indexOf(q) < 0) return false;
       var x=v(e); return S.flt==="sens" ? x===1 : S.flt==="hide" ? x!==1 : true; });
     if (S.srt==="sens") view = view.slice().sort(function(a,b){ return (v(b)===1)-(v(a)===1) || (a.mtime<b.mtime?1:-1); });
-    g.innerHTML = ""; shown = 0; more();
-    if (!view.length) g.innerHTML = '<p class="muted">'+(S.flt==="sens" ? "Nothing flagged as sensitive"+(scanState.left? " yet — still checking." : ".") : "Nothing to show.")+'</p>';
+    var gs = document.getElementById("gs");
+    if (gs) gs.textContent = view.length===items.length ? items.length+" photos & videos" : view.length+" of "+items.length+" photos & videos";
+    g.innerHTML = ""; shown = 0; closeSide(); more();
+    if (!view.length) g.innerHTML = '<p class="muted">'+(S.flt==="sens" ? "Nothing flagged as sensitive"+(scanState.left? " yet — still checking." : ".") : S.q ? "No photos named like “"+esc(S.q)+"”." : "Nothing to show.")+'</p>';
   }
   function more(){
     var frag = document.createDocumentFragment();
     view.slice(shown, shown+240).forEach(function(e, k){
-      var i = shown + k;
-      var b = document.createElement("button"); b.className="tile"+(v(e)===1?" sens":""); b.title=e.name; b.dataset.p=e.path;
-      if (VID.test(e.name)) b.innerHTML = '<div class="ph">▶ video</div><span class="play">▶</span>';
-      else b.innerHTML = '<img loading="lazy" alt="" src="'+fileUrl(e.path,"&thumb=1")+'"><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div>';
-      b.onclick = function(){ if (b.classList.contains("sens")) { b.classList.remove("sens"); return; } lightbox(view, i); };
+      var i = shown + k, vid = VID.test(e.name);
+      var b = document.createElement("button"); b.className="tile"+(v(e)===1?" sens":""); b.title=e.name; b.dataset.p=e.path; b.dataset.i=i;
+      var cap = '<span class="capt"><b>'+esc(e.name)+'</b><span>'+esc(shortDate(e.mtime))+(e.size?' · '+human(e.size):'')+'</span></span>';
+      if (vid) { b.style.setProperty("--r", "0.75"); b.innerHTML = '<div class="im"><div class="ph">Video</div><span class="play">▶ Video</span></div>'+cap; }
+      else {
+        b.innerHTML = '<div class="im"><img loading="lazy" alt="" src="'+fileUrl(e.path,"&thumb=1")+'"><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div></div>'+cap;
+        // Thumbnails keep the photo's shape; once one arrives its tile takes
+        // that shape and the row re-balances, as Google Images does.
+        var im = b.querySelector("img");
+        im.onload = function(){ var r = im.naturalWidth / im.naturalHeight; if (r > 0) b.style.setProperty("--r", Math.max(0.5, Math.min(2.4, r)).toFixed(3)); };
+      }
+      b.onclick = function(){ if (b.classList.contains("sens")) { b.classList.remove("sens"); return; } open(i); };
       frag.appendChild(b);
     });
     shown += 240; g.appendChild(frag);
   }
-  flt.onchange = rebuild; srt.onchange = rebuild; typ.onchange = rebuild;
+  function open(i){ if (wide.matches) showSide(i); else lightbox(view, i); }
+  function tileAt(i){ return g.querySelector('.tile[data-i="'+i+'"]'); }
+  function closeSide(){
+    side.hidden = true; side.innerHTML = "";
+    var t = tileAt(sel); if (t) t.classList.remove("sel"); sel = -1;
+  }
+  function showSide(i){
+    if (i < 0 || i >= view.length) return;
+    while (i >= shown) more();
+    var old = tileAt(sel); if (old) old.classList.remove("sel");
+    sel = i; var e = view[i], t = tileAt(i); if (t) t.classList.add("sel");
+    var vid = VID.test(e.name), flagged = v(e)===1;
+    var media = vid ? '<video src="'+fileUrl(e.path)+'" controls playsinline></video>'
+      : '<img alt="" src="'+fileUrl(e.path, HEIC.test(e.name) ? "&thumb=1&w=1600" : "")+'">';
+    side.innerHTML = '<div class="top"><span class="nm" title="'+esc(e.name)+'">'+esc(e.name)+'</span>'+
+      '<button class="ib" data-d="-1" aria-label="Previous" title="Previous (←)">‹</button><button class="ib" data-d="1" aria-label="Next" title="Next (→)">›</button>'+
+      '<button class="ib" id="sx" aria-label="Close" title="Close (Esc)">×</button></div>'+
+      '<div class="stage" id="stg" title="Open full screen">'+media+'</div>'+
+      '<div class="meta"><div class="muted" style="font-size:13px">'+esc(when(Date.parse(e.mtime)))+(e.size?' · '+human(e.size):'')+' · '+(i+1)+' of '+view.length+'</div>'+
+      '<div class="muted" style="font-size:12px;word-break:break-all">'+esc(e.path)+'</div>'+
+      '<div class="acts"><a class="btn primary" href="'+fileUrl(e.path,"&a=1")+'">Download</a><button class="btn" id="sfs">Full screen</button>'+
+      (flagged ? '<button class="btn" id="sok">Not sensitive</button>' : '')+'</div></div>';
+    side.hidden = false;
+    side.querySelector("#sx").onclick = closeSide;
+    side.querySelectorAll(".ib[data-d]").forEach(function(n){ n.onclick = function(){ showSide((sel + Number(n.dataset.d) + view.length) % view.length); }; });
+    var full = function(){ lightbox(view, sel); };
+    side.querySelector("#sfs").onclick = full;
+    if (!vid) side.querySelector("#stg").onclick = full;
+    var ok = side.querySelector("#sok");
+    if (ok) ok.onclick = function(){ clearFlag(phone, e.path); var tt = tileAt(sel); if (tt) tt.classList.remove("sens"); showSide(sel); };
+    if (t) t.scrollIntoView({block:"nearest"});
+  }
+  function key(ev){
+    if (!document.body.contains(side)) { document.removeEventListener("keydown", key); return; }
+    if (side.hidden || document.querySelector(".box") || ev.target.tagName==="INPUT") return;
+    if (ev.key==="Escape") closeSide();
+    else if (ev.key==="ArrowLeft") showSide((sel-1+view.length)%view.length);
+    else if (ev.key==="ArrowRight") showSide((sel+1)%view.length);
+  }
+  document.addEventListener("keydown", key);
+  wide.addEventListener("change", function(){ if (!wide.matches) closeSide(); });
   rebuild();
-  var sentinel = document.createElement("div"); main.appendChild(sentinel);
-  new IntersectionObserver(function(es){ if (es[0].isIntersecting && shown < view.length) more(); }, {rootMargin:"800px"}).observe(sentinel);
+  new IntersectionObserver(function(es){ if (es[0].isIntersecting && shown < view.length) more(); }, {rootMargin:"800px"}).observe(document.getElementById("sent"));
   startScan(phone, items, function(path, sensitive, done){
     if (sensitive) { var t = g.querySelector('[data-p="'+CSS.escape(path)+'"]'); if (t) t.classList.add("sens"); }
     var sc = document.getElementById("scan");
-    if (sc) sc.textContent = scanState.left ? "Checking for sensitive photos… "+scanState.done+" of "+scanState.total+" · "+scanState.flagged+" flagged"
-                                            : scanState.flagged+" sensitive found";
+    if (sc) sc.textContent = scanState.left ? "· Checking for sensitive photos… "+scanState.done+" of "+scanState.total+" · "+scanState.flagged+" flagged"+scanEta()
+                                            : "· "+scanState.flagged+" sensitive found";
     if (done && S.flt!=="all") rebuild();
   });
 }
@@ -259,7 +370,21 @@ function nsSave(){ if (nsSaveT) return; nsSaveT = setTimeout(function(){ nsSaveT
 // 1 = flagged, 0 = fine, 2 = you marked it "not sensitive" (never re-flagged).
 function verdictOf(phone, path){ var x = nsLoad()[phone+"|"+path]; return x===1?1:(x===0||x===2)?0:-1; }
 function clearFlag(phone, path){ nsLoad()[phone+"|"+path] = 2; nsSave(); scanState.flagged = Math.max(0, scanState.flagged-1); }
-var scanState = { run: 0, done: 0, total: 0, left: 0, flagged: 0 };
+var scanState = { run: 0, done: 0, total: 0, left: 0, flagged: 0, t0: 0, n0: 0 };
+// Time left, from the pace of this run so far (photos already checked on an
+// earlier visit don't count, or the pace would look impossibly fast). Shown
+// once a few have been timed, so the first guess isn't wild.
+function scanEta(){
+  if (!scanState.t0 || !scanState.left) return "";
+  var checked = scanState.done - scanState.n0, secs = (performance.now() - scanState.t0) / 1000;
+  if (checked < 8 || secs < 3) return " · working out time left…";
+  var left = Math.round(scanState.left * secs / checked);
+  if (left < 60) return " · under a minute left";
+  var mins = Math.round(left / 60);
+  if (mins < 60) return " · about " + mins + " min left";
+  var h = Math.floor(mins / 60), mm = mins % 60;
+  return " · about " + h + " hr" + (mm ? " " + mm + " min" : "") + " left";
+}
 var modelP = null;
 function getModel(){
   if (!modelP) modelP = new Promise(function(res, rej){
@@ -273,6 +398,7 @@ function getModel(){
 function loadImg(src){ return new Promise(function(res, rej){ var im = new Image(); im.onload=function(){res(im);}; im.onerror=rej; im.src=src; }); }
 async function startScan(phone, items, onUpdate){
   var run = ++scanState.run;
+  scanState.t0 = 0;
   var m = nsLoad();
   var todo = items.filter(function(e){ return !VID.test(e.name) && m[phone+"|"+e.path]==null; });
   scanState.total = items.filter(function(e){ return !VID.test(e.name); }).length;
@@ -282,6 +408,7 @@ async function startScan(phone, items, onUpdate){
   if (!todo.length) return;
   var model;
   try { model = await getModel(); } catch(e){ var sc=document.getElementById("scan"); if(sc) sc.textContent="Couldn't start the sensitive-photo check."; return; }
+  scanState.t0 = performance.now(); scanState.n0 = scanState.done; // the clock starts once the detector is ready
   var c = document.createElement("canvas"); c.width = c.height = 224; var ctx = c.getContext("2d");
   var i = 0, pending = [];
   function fetchNext(){ while (pending.length < 3 && i < todo.length) { var e = todo[i++]; pending.push({e:e, p: loadImg(fileUrl(e.path,"&thumb=1")).catch(function(){ return null; })}); } }
