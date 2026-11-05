@@ -1261,7 +1261,9 @@ export default function PropertyManageClient({
   }
 
   function unitLabel(unitId: string | null) {
-    if (!unitId) return "Whole property";
+    // Entries on the property as a whole show where it is, not a generic
+    // "Whole property" on every row.
+    if (!unitId) return property.address.trim() || property.name;
     return units.find((u) => u.id === unitId)?.name ?? "—";
   }
 
