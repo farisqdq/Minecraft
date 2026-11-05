@@ -7,7 +7,7 @@ import { runAssistantTool } from "@/lib/assistant-db";
 // A question can take a few lookups, each a round trip to Claude.
 export const maxDuration = 120;
 
-const MODEL = "claude-opus-5-5";
+const MODEL = "claude-sonnet-5-5";
 /** Lookups per question before it gives up — a loop guard, far above a real question's two or three. */
 const MAX_STEPS = 8;
 
