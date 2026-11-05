@@ -379,7 +379,7 @@ async function gallery(main){
     if (sensitive) paintUnall();
     if (sensitive) { var t = g.querySelector('[data-p="'+CSS.escape(path)+'"]'); if (t) t.classList.add("sens"); }
     var sc = document.getElementById("scan");
-    if (sc) sc.textContent = scanState.left ? "· Checking for sensitive photos… "+scanState.done+" of "+scanState.total+" · "+scanState.flagged+" flagged"+scanEta()
+    if (sc) sc.textContent = scanState.left ? "· "+(scanState.server ? "Server is checking" : "Checking")+" for sensitive photos… "+scanState.done+" of "+scanState.total+" · "+scanState.flagged+" flagged"+scanEta()
                                             : "· "+scanState.flagged+" sensitive found";
     if (done && S.flt!=="all") rebuild();
   });
@@ -424,13 +424,16 @@ window.addEventListener("pagehide", function(){ if (Object.keys(nsPending).lengt
 // browser knew that the server didn't (checked before verdicts were shared)
 // goes up, so the first browser to have checked a photo saves everyone else
 // the work.
-async function nsSync(phone){
+var nsScan = {}; // phone -> the server's own scan status (scan.go), if it has one
+async function nsSync(phone, onFlag){
   var res;
-  try { res = await api("/viewer/api/devices/"+encodeURIComponent(phone)+"/flags"); } catch(e){ return; }
+  try { res = await api("/viewer/api/devices/"+encodeURIComponent(phone)+"/flags"); } catch(e){ return null; }
+  nsScan[phone] = res.scan || null;
   var server = res.flags || {}, m = nsLoad(), prefix = phone+"|";
   Object.keys(server).forEach(function(p){
     var k = prefix+p, v = server[p], mine = m[k];
     if (mine === 2 && v !== 2) return; // ours wins; it goes up below
+    if (onFlag && v === 1 && mine !== 1) onFlag(p);
     m[k] = v;
   });
   var up = {};
@@ -441,16 +444,20 @@ async function nsSync(phone){
   });
   nsSave();
   if (Object.keys(up).length) { nsPending[phone] = Object.assign(nsPending[phone] || {}, up); nsPush(); }
+  return res;
 }
 var scanState = { run: 0, done: 0, total: 0, left: 0, flagged: 0, t0: 0, n0: 0 };
 // Time left, from the pace of this run so far (photos already checked on an
 // earlier visit don't count, or the pace would look impossibly fast). Shown
 // once a few have been timed, so the first guess isn't wild.
 function scanEta(){
+  if (scanState.rate) return etaText(Math.round(scanState.left / scanState.rate * 60));
   if (!scanState.t0 || !scanState.left) return "";
   var checked = scanState.done - scanState.n0, secs = (performance.now() - scanState.t0) / 1000;
   if (checked < 8 || secs < 3) return " · working out time left…";
-  var left = Math.round(scanState.left * secs / checked);
+  return etaText(Math.round(scanState.left * secs / checked));
+}
+function etaText(left){
   if (left < 60) return " · under a minute left";
   var mins = Math.round(left / 60);
   if (mins < 60) return " · about " + mins + " min left";
@@ -467,10 +474,40 @@ function getModel(){
   });
   return modelP;
 }
+// The server checks photos itself (scan.go): show its progress and pull in
+// its verdicts every few seconds instead of running the model here.
+async function watchServerScan(phone, items, onUpdate, run){
+  scanState.server = true;
+  var photos = items.filter(function(e){ return !VID.test(e.name); });
+  function count(){
+    var m = nsLoad(), left = 0, flagged = 0;
+    photos.forEach(function(e){ var x = m[phone+"|"+e.path]; if (x == null) left++; else if (x === 1) flagged++; });
+    scanState.total = photos.length; scanState.left = left; scanState.done = photos.length - left; scanState.flagged = flagged;
+  }
+  for (;;) {
+    count();
+    var st = nsScan[phone] || {};
+    scanState.rate = st.running && st.perMinute > 0 ? st.perMinute : 0;
+    // Finished when nothing's left — or the server has gone quiet with some
+    // left over, which are photos it couldn't open; don't wait on those.
+    var idle = !st.running && !st.pending;
+    if (!scanState.left || idle) { scanState.left = idle ? 0 : scanState.left; onUpdate(null, false, true); return; }
+    onUpdate(null, false, false);
+    await new Promise(function(r){ setTimeout(r, 6000); });
+    if (run !== scanState.run || S.phone !== phone) return;
+    var res = await nsSync(phone, function(p){ onUpdate(p, true, false); });
+    if (!res || !res.scan || !res.scan.enabled) { // server stopped scanning: do it here instead
+      if (run !== scanState.run) return;
+      nsScan[phone] = null; scanState.server = false; scanState.rate = 0;
+      return startScan(phone, items, onUpdate);
+    }
+  }
+}
 function loadImg(src){ return new Promise(function(res, rej){ var im = new Image(); im.onload=function(){res(im);}; im.onerror=rej; im.src=src; }); }
 async function startScan(phone, items, onUpdate){
   var run = ++scanState.run;
-  scanState.t0 = 0;
+  scanState.t0 = 0; scanState.rate = 0; scanState.server = false;
+  if (nsScan[phone] && nsScan[phone].enabled) return watchServerScan(phone, items, onUpdate, run);
   var m = nsLoad();
   var todo = items.filter(function(e){ return !VID.test(e.name) && m[phone+"|"+e.path]==null; });
   scanState.total = items.filter(function(e){ return !VID.test(e.name); }).length;

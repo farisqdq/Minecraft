@@ -122,6 +122,7 @@ type Server struct {
 	sizes   map[string]*usage // per device
 	locks   sync.Map          // path -> *sync.Mutex
 	logger  *log.Logger
+	scan    *scanner // background sensitive-photo checks (scan.go)
 }
 
 type usage struct {
@@ -212,6 +213,7 @@ func newServer(cfg Config) (*Server, error) {
 		s.sizes[d.ID] = &usage{}
 	}
 	go s.measureAll()
+	s.startScanner()
 	return s, nil
 }
 

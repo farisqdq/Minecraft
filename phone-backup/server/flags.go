@@ -28,6 +28,22 @@ func (s *Server) flagsFile(id string) string {
 	return filepath.Join(s.cfg.DataDir, "viewer", "flags-"+cleanSegment(id)+".json")
 }
 
+// writeFlags saves a phone's verdicts atomically. Caller holds flagsMu.
+func (s *Server) writeFlags(id string, flags map[string]int) error {
+	b, err := json.Marshal(flags)
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(s.flagsFile(id)), 0o755); err != nil {
+		return err
+	}
+	tmp := s.flagsFile(id) + ".tmp"
+	if err := os.WriteFile(tmp, b, 0o600); err != nil {
+		return err
+	}
+	return os.Rename(tmp, s.flagsFile(id))
+}
+
 func (s *Server) readFlags(id string) map[string]int {
 	out := map[string]int{}
 	b, err := os.ReadFile(s.flagsFile(id))
@@ -70,7 +86,9 @@ func (s *Server) handleFlagsGet(w http.ResponseWriter, r *http.Request) {
 	flagsMu.Lock()
 	flags := s.readFlags(id)
 	flagsMu.Unlock()
-	writeJSON(w, 200, map[string]any{"flags": flags})
+	// Someone's looking at the gallery: check anything new now.
+	s.kickScan()
+	writeJSON(w, 200, map[string]any{"flags": flags, "scan": s.scanStatus(id)})
 }
 
 func (s *Server) handleFlagsSet(w http.ResponseWriter, r *http.Request) {
@@ -93,10 +111,7 @@ func (s *Server) handleFlagsSet(w http.ResponseWriter, r *http.Request) {
 	defer flagsMu.Unlock()
 	flags := s.readFlags(id)
 	if mergeFlags(flags, body.Set) {
-		b, _ := json.Marshal(flags)
-		dir := filepath.Dir(s.flagsFile(id))
-		tmp := s.flagsFile(id) + ".tmp"
-		if err := os.MkdirAll(dir, 0o755); err != nil || os.WriteFile(tmp, b, 0o600) != nil || os.Rename(tmp, s.flagsFile(id)) != nil {
+		if err := s.writeFlags(id, flags); err != nil {
 			fail(w, 500, "couldn't save")
 			return
 		}

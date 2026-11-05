@@ -66,9 +66,7 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	if q.Get("w") == "1600" {
 		size = previewSize
 	}
-	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", rel, info.Size(), info.ModTime().UnixNano(), size)))
-	cache := filepath.Join(s.cfg.DataDir, "thumbs", dev, hex.EncodeToString(h[:12])+".jpg")
-
+	cache := s.thumbPath(dev, rel, info, size)
 	if _, err := os.Stat(cache); err != nil {
 		thumbSlots <- struct{}{}
 		err = makeThumb(full, cache, size)
@@ -90,6 +88,14 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "private, max-age=86400")
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	http.ServeContent(w, r, "thumb.jpg", st.ModTime(), f)
+}
+
+// thumbPath is where a photo's thumbnail is cached: keyed by the file's
+// path, size and time, so a changed photo gets a new one. The sensitive-photo
+// scanner (scan.go) makes the same files, so the gallery finds them ready.
+func (s *Server) thumbPath(dev, rel string, info os.FileInfo, size int) string {
+	h := sha256.Sum256([]byte(fmt.Sprintf("%s|%d|%d|%d", rel, info.Size(), info.ModTime().UnixNano(), size)))
+	return filepath.Join(s.cfg.DataDir, "thumbs", dev, hex.EncodeToString(h[:12])+".jpg")
 }
 
 func makeThumb(src, dst string, size int) error {
