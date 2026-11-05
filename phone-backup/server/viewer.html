@@ -108,6 +108,10 @@ main{max-width:1680px;margin:0 auto;padding:16px}
 .tile.sens img{filter:blur(22px);transform:scale(1.15)}
 .tile .cover{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:center;gap:2px;background:rgba(0,0,0,.45);color:#fff;font-size:11px;font-weight:700;text-align:center}
 .tile.sens .cover{display:flex}
+/* Blur switched off: flagged photos show normally, with a small tag. */
+.noblur .tile.sens img{filter:none;transform:none}
+.noblur .tile.sens .cover{inset:auto auto 8px 8px;padding:2px 8px;border-radius:999px;background:rgba(180,35,24,.85);flex-direction:row}
+.noblur .tile.sens .cover span{display:none}
 </style>
 </head>
 <body>
@@ -260,7 +264,7 @@ async function gallery(main){
   main.innerHTML =
     '<label class="gsearch">'+SEARCH_SVG+'<input id="gq" type="search" placeholder="Search photos by name" autocomplete="off" value="'+esc(S.q)+'"></label>'+
     '<div class="chips" id="chips">'+CHIPS.map(function(c){ return c ? '<button class="chip" data-k="'+c[0]+'" data-v="'+c[1]+'">'+c[2]+'</button>' : '<span class="chip sep"></span>'; }).join("")+'</div>'+
-    '<div class="ginfo muted"><span id="gs">'+items.length+' photos &amp; videos</span><span id="scan"></span><button class="linkb" id="unall" hidden>Uncensor all</button></div>'+
+    '<div class="ginfo muted"><span id="gs">'+items.length+' photos &amp; videos</span><span id="scan"></span><button class="linkb" id="unall" hidden></button></div>'+
     '<div class="gwrap"><div class="gl"><div class="grid" id="g"></div><div id="sent"></div></div><aside class="side" id="side" hidden></aside></div>';
   var g = document.getElementById("g"), side = document.getElementById("side"), chips = document.getElementById("chips"), gq = document.getElementById("gq");
   var view = [], shown = 0, sel = -1;
@@ -311,7 +315,7 @@ async function gallery(main){
         var im = b.querySelector("img");
         im.onload = function(){ var r = im.naturalWidth / im.naturalHeight; if (r > 0) b.style.setProperty("--r", Math.max(0.5, Math.min(2.4, r)).toFixed(3)); };
       }
-      b.onclick = function(){ if (b.classList.contains("sens")) { b.classList.remove("sens"); return; } open(i); };
+      b.onclick = function(){ if (b.classList.contains("sens") && !blurOff()) { b.classList.remove("sens"); return; } open(i); };
       frag.appendChild(b);
     });
     shown += 240; g.appendChild(frag);
@@ -359,20 +363,21 @@ async function gallery(main){
   wide.addEventListener("change", function(){ if (!wide.matches) closeSide(); });
   rebuild();
   new IntersectionObserver(function(es){ if (es[0].isIntersecting && shown < view.length) more(); }, {rootMargin:"800px"}).observe(document.getElementById("sent"));
-  // One click to clear every flag on this phone, for when the detector has
-  // flagged ordinary photos. Like "Not sensitive" on one photo, they're
-  // remembered as yours and never flagged again; photos the check hasn't
-  // reached yet are still checked.
+  // Blur on or off for every flagged photo at once. It only changes what's
+  // shown: the photos stay flagged, so "Sensitive only" still finds them.
+  // Remembered in this browser.
   var unall = document.getElementById("unall");
-  function paintUnall(){ var n = items.filter(function(e){ return v(e)===1; }).length; unall.hidden = !n; unall.textContent = "Uncensor all "+n; }
+  function paintUnall(){
+    var n = items.filter(function(e){ return v(e)===1; }).length;
+    unall.hidden = !n;
+    unall.textContent = blurOff() ? "Blur sensitive photos" : "Unblur all "+n;
+    g.classList.toggle("noblur", blurOff());
+  }
   unall.onclick = function(){
-    var flagged = items.filter(function(e){ return v(e)===1; });
-    if (!flagged.length || !confirm("Uncensor all "+flagged.length+" flagged photos? They won't be blurred or flagged again.")) return;
-    flagged.forEach(function(e){ nsSet(phone, e.path, 2); });
-    scanState.flagged = 0;
-    g.querySelectorAll(".tile.sens").forEach(function(t){ t.classList.remove("sens"); });
-    var sc = document.getElementById("scan"); if (sc && !scanState.left) sc.textContent = "· 0 sensitive found";
-    paintUnall(); if (S.flt!=="all" || S.srt==="sens") rebuild();
+    try { localStorage.setItem(BLUR_KEY, blurOff() ? "on" : "off"); } catch(e){}
+    // Photos revealed one by one go back under the blur too.
+    view.forEach(function(e, i){ if (v(e)===1) { var t = tileAt(i); if (t) t.classList.add("sens"); } });
+    paintUnall();
   };
   paintUnall();
   startScan(phone, items, function(path, sensitive, done){
@@ -387,6 +392,12 @@ async function gallery(main){
 
 // ---------- sensitive-photo check (runs in this browser, on thumbnails) ----------
 var NS_KEY = "rrv-nsfw-v2", nsMap = null;
+var BLUR_KEY = "rrv-blur";
+function blurOff(){ try { return localStorage.getItem(BLUR_KEY) === "off"; } catch(e){ return false; } }
+// The server's epoch per phone (flags.go): when it moves on, this browser's
+// copy of the verdicts is out of date and is dropped, not sent back.
+var EPOCH_KEY = "rrv-nsfw-epoch";
+function nsEpochs(){ try { return JSON.parse(localStorage.getItem(EPOCH_KEY)||"{}"); } catch(e){ return {}; } }
 function nsLoad(){ if (nsMap) return nsMap; try { nsMap = JSON.parse(localStorage.getItem(NS_KEY)||"{}"); } catch(e){ nsMap = {}; } return nsMap; }
 var nsSaveT = null;
 function nsSave(){ if (nsSaveT) return; nsSaveT = setTimeout(function(){ nsSaveT=null; try { localStorage.setItem(NS_KEY, JSON.stringify(nsMap)); } catch(e){} }, 1500); }
@@ -410,8 +421,8 @@ function nsPush(keepalive){
   Object.keys(nsPending).forEach(function(phone){
     var set = nsPending[phone]; delete nsPending[phone];
     fetch("/viewer/api/devices/"+encodeURIComponent(phone)+"/flags", {method:"POST", credentials:"same-origin", keepalive: !!keepalive,
-      headers:{"Content-Type":"application/json"}, body: JSON.stringify({set: set})})
-      .then(function(r){ if (!r.ok) throw 0; })
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({set: set, epoch: nsEpochs()[phone] || 0})})
+      .then(function(r){ if (r.status === 409) return; /* stale: the server reset; drop it */ if (!r.ok) throw 0; })
       .catch(function(){ // try again later rather than lose a "not sensitive"
         var q = nsPending[phone] = nsPending[phone] || {};
         Object.keys(set).forEach(function(p){ if (!(p in q)) q[p] = set[p]; });
@@ -430,6 +441,13 @@ async function nsSync(phone, onFlag){
   try { res = await api("/viewer/api/devices/"+encodeURIComponent(phone)+"/flags"); } catch(e){ return null; }
   nsScan[phone] = res.scan || null;
   var server = res.flags || {}, m = nsLoad(), prefix = phone+"|";
+  var ep = nsEpochs();
+  if ((res.epoch || 0) !== (ep[phone] || 0)) {
+    Object.keys(m).forEach(function(k){ if (k.indexOf(prefix) === 0) delete m[k]; });
+    delete nsPending[phone];
+    ep[phone] = res.epoch || 0;
+    try { localStorage.setItem(EPOCH_KEY, JSON.stringify(ep)); } catch(e){}
+  }
   Object.keys(server).forEach(function(p){
     var k = prefix+p, v = server[p], mine = m[k];
     if (mine === 2 && v !== 2) return; // ours wins; it goes up below

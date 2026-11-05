@@ -17,6 +17,8 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -42,6 +44,16 @@ func (s *Server) writeFlags(id string, flags map[string]int) error {
 		return err
 	}
 	return os.Rename(tmp, s.flagsFile(id))
+}
+
+// The flags' epoch goes up when stored verdicts are thrown away on purpose
+// (handleFlagsRecheck). Browsers keep a copy and send what the server lacks;
+// a browser on an older epoch must drop its copy instead, or it would put
+// back exactly what was cleared.
+func (s *Server) flagsEpoch(id string) int {
+	b, _ := os.ReadFile(strings.TrimSuffix(s.flagsFile(id), ".json") + ".epoch")
+	n, _ := strconv.Atoi(strings.TrimSpace(string(b)))
+	return n
 }
 
 func (s *Server) readFlags(id string) map[string]int {
@@ -85,10 +97,11 @@ func (s *Server) handleFlagsGet(w http.ResponseWriter, r *http.Request) {
 	}
 	flagsMu.Lock()
 	flags := s.readFlags(id)
-	flagsMu.Unlock()
 	// Someone's looking at the gallery: check anything new now.
 	s.kickScan()
-	writeJSON(w, 200, map[string]any{"flags": flags, "scan": s.scanStatus(id)})
+	epoch := s.flagsEpoch(id)
+	flagsMu.Unlock()
+	writeJSON(w, 200, map[string]any{"flags": flags, "epoch": epoch, "scan": s.scanStatus(id)})
 }
 
 func (s *Server) handleFlagsSet(w http.ResponseWriter, r *http.Request) {
@@ -101,7 +114,8 @@ func (s *Server) handleFlagsSet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Set map[string]int `json:"set"`
+		Set   map[string]int `json:"set"`
+		Epoch *int           `json:"epoch"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 8<<20)).Decode(&body); err != nil {
 		fail(w, 400, "bad request")
@@ -109,6 +123,10 @@ func (s *Server) handleFlagsSet(w http.ResponseWriter, r *http.Request) {
 	}
 	flagsMu.Lock()
 	defer flagsMu.Unlock()
+	if body.Epoch != nil && *body.Epoch < s.flagsEpoch(id) {
+		fail(w, 409, "out of date: reload the gallery")
+		return
+	}
 	flags := s.readFlags(id)
 	if mergeFlags(flags, body.Set) {
 		if err := s.writeFlags(id, flags); err != nil {
@@ -117,4 +135,41 @@ func (s *Server) handleFlagsSet(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, 200, map[string]any{"ok": true, "count": len(flags)})
+}
+
+// handleFlagsRecheck forgets every "not sensitive" mark on a phone so the
+// scanner checks those photos again: the detector gives the same answer each
+// time, so the ones it flagged before come back flagged. For undoing a mass
+// clear; the epoch tells every browser to drop its copy.
+func (s *Server) handleFlagsRecheck(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	s.mu.Lock()
+	d := s.findDevice(id)
+	s.mu.Unlock()
+	if d == nil {
+		fail(w, 404, "no such phone")
+		return
+	}
+	flagsMu.Lock()
+	flags := s.readFlags(id)
+	n := 0
+	for p, v := range flags {
+		if v == 2 {
+			delete(flags, p)
+			n++
+		}
+	}
+	epoch := s.flagsEpoch(id) + 1
+	err := s.writeFlags(id, flags)
+	if err == nil {
+		err = os.WriteFile(strings.TrimSuffix(s.flagsFile(id), ".json")+".epoch", []byte(strconv.Itoa(epoch)), 0o600)
+	}
+	flagsMu.Unlock()
+	if err != nil {
+		fail(w, 500, "couldn't save")
+		return
+	}
+	s.logger.Printf("flags: %s: %d cleared photos sent back for re-checking", id, n)
+	s.kickScan()
+	writeJSON(w, 200, map[string]any{"ok": true, "rechecking": n, "epoch": epoch})
 }

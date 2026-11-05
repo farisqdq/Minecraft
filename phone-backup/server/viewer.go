@@ -40,6 +40,7 @@ func (s *Server) viewerRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /viewer/f/{id}", s.viewer(s.handleViewerFile))
 	mux.HandleFunc("GET /viewer/api/devices/{id}/flags", s.viewer(s.handleFlagsGet))
 	mux.HandleFunc("POST /viewer/api/devices/{id}/flags", s.viewer(s.handleFlagsSet))
+	mux.HandleFunc("POST /viewer/api/devices/{id}/flags/recheck", s.viewer(s.handleFlagsRecheck))
 	mux.HandleFunc("GET /viewer/nsfw.js", s.viewer(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/javascript; charset=utf-8")
 		w.Header().Set("Content-Encoding", "gzip")
