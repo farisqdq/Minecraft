@@ -40,6 +40,7 @@ const LANDLORD_AREA = [
   "/api/inspections",
   "/api/invites",
   "/api/applications",
+  "/api/assistant",
   "/api/listings",
   "/api/loans",
   "/api/late-fee-waivers",

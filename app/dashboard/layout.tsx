@@ -4,6 +4,7 @@ import { DEFAULT_APPEARANCE } from "@/lib/appearance";
 import { getRequestAppearance } from "@/lib/appearance-server";
 import { ShellProvider } from "../components/ShellContext";
 import { AppearanceProvider } from "../components/appearance/AppearanceContext";
+import AssistantPanel from "../components/AssistantPanel";
 
 /**
  * Tells the shell whether the person is a site admin, so the Admin tab can
@@ -19,6 +20,7 @@ export default async function DashboardLayout({ children }: { children: ReactNod
     <ShellProvider admin={Boolean(me?.isAdmin)}>
       <AppearanceProvider initial={appearance} endpoint="/api/account/appearance">
         {children}
+        {me && <AssistantPanel />}
       </AppearanceProvider>
     </ShellProvider>
   );
