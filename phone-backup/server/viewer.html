@@ -250,6 +250,9 @@ async function gallery(main){
     galleryCache[S.phone] = items;
   }
   if (!document.getElementById("gs")) return; // left the tab while it loaded
+  var gsx = document.getElementById("gs"); if (gsx) gsx.textContent = "Loading…";
+  await nsSync(S.phone); // what other browsers already checked or cleared
+  if (!document.getElementById("gs")) return;
   S.typ = S.typ || "all"; S.flt = S.flt || "all"; S.srt = S.srt || "new"; S.q = S.q || "";
   var CHIPS = [["typ","all","All"],["typ","photo","Photos"],["typ","video","Videos"],null,
                ["flt","sens","Sensitive only"],["flt","hide","Hide sensitive"],null,
@@ -365,9 +368,8 @@ async function gallery(main){
   unall.onclick = function(){
     var flagged = items.filter(function(e){ return v(e)===1; });
     if (!flagged.length || !confirm("Uncensor all "+flagged.length+" flagged photos? They won't be blurred or flagged again.")) return;
-    var m = nsLoad();
-    flagged.forEach(function(e){ m[phone+"|"+e.path] = 2; });
-    nsSave(); scanState.flagged = 0;
+    flagged.forEach(function(e){ nsSet(phone, e.path, 2); });
+    scanState.flagged = 0;
     g.querySelectorAll(".tile.sens").forEach(function(t){ t.classList.remove("sens"); });
     var sc = document.getElementById("scan"); if (sc && !scanState.left) sc.textContent = "· 0 sensitive found";
     paintUnall(); if (S.flt!=="all" || S.srt==="sens") rebuild();
@@ -390,7 +392,56 @@ var nsSaveT = null;
 function nsSave(){ if (nsSaveT) return; nsSaveT = setTimeout(function(){ nsSaveT=null; try { localStorage.setItem(NS_KEY, JSON.stringify(nsMap)); } catch(e){} }, 1500); }
 // 1 = flagged, 0 = fine, 2 = you marked it "not sensitive" (never re-flagged).
 function verdictOf(phone, path){ var x = nsLoad()[phone+"|"+path]; return x===1?1:(x===0||x===2)?0:-1; }
-function clearFlag(phone, path){ nsLoad()[phone+"|"+path] = 2; nsSave(); scanState.flagged = Math.max(0, scanState.flagged-1); }
+function clearFlag(phone, path){ nsSet(phone, path, 2); scanState.flagged = Math.max(0, scanState.flagged-1); }
+// Verdicts are shared through the server (flags.go), so every browser sees
+// the same blur and nothing is checked twice. This browser's copy is a cache
+// that also works offline; changes queue here and go up a few seconds later.
+// A 2 ("not sensitive") is final, here as on the server.
+var nsPending = {}, nsPushT = null;
+function nsSet(phone, path, v){
+  var m = nsLoad(), k = phone+"|"+path;
+  if (m[k] === v || (m[k] === 2 && v !== 2)) return;
+  m[k] = v; nsSave();
+  (nsPending[phone] = nsPending[phone] || {})[path] = v;
+  if (!nsPushT) nsPushT = setTimeout(nsPush, 3000);
+}
+function nsPush(keepalive){
+  nsPushT = null;
+  Object.keys(nsPending).forEach(function(phone){
+    var set = nsPending[phone]; delete nsPending[phone];
+    fetch("/viewer/api/devices/"+encodeURIComponent(phone)+"/flags", {method:"POST", credentials:"same-origin", keepalive: !!keepalive,
+      headers:{"Content-Type":"application/json"}, body: JSON.stringify({set: set})})
+      .then(function(r){ if (!r.ok) throw 0; })
+      .catch(function(){ // try again later rather than lose a "not sensitive"
+        var q = nsPending[phone] = nsPending[phone] || {};
+        Object.keys(set).forEach(function(p){ if (!(p in q)) q[p] = set[p]; });
+        if (!nsPushT) nsPushT = setTimeout(nsPush, 30000);
+      });
+  });
+}
+window.addEventListener("pagehide", function(){ if (Object.keys(nsPending).length) nsPush(true); });
+// Fetch the shared verdicts for a phone and fold them in. Anything this
+// browser knew that the server didn't (checked before verdicts were shared)
+// goes up, so the first browser to have checked a photo saves everyone else
+// the work.
+async function nsSync(phone){
+  var res;
+  try { res = await api("/viewer/api/devices/"+encodeURIComponent(phone)+"/flags"); } catch(e){ return; }
+  var server = res.flags || {}, m = nsLoad(), prefix = phone+"|";
+  Object.keys(server).forEach(function(p){
+    var k = prefix+p, v = server[p], mine = m[k];
+    if (mine === 2 && v !== 2) return; // ours wins; it goes up below
+    m[k] = v;
+  });
+  var up = {};
+  Object.keys(m).forEach(function(k){
+    if (k.indexOf(prefix) !== 0) return;
+    var p = k.slice(prefix.length);
+    if (server[p] !== m[k] && !(server[p] === 2)) up[p] = m[k];
+  });
+  nsSave();
+  if (Object.keys(up).length) { nsPending[phone] = Object.assign(nsPending[phone] || {}, up); nsPush(); }
+}
 var scanState = { run: 0, done: 0, total: 0, left: 0, flagged: 0, t0: 0, n0: 0 };
 // Time left, from the pace of this run so far (photos already checked on an
 // earlier visit don't count, or the pace would look impossibly fast). Shown
@@ -447,7 +498,7 @@ async function startScan(phone, items, onUpdate){
         sens = Math.max(pr("Porn"), pr("Hentai")) >= 0.8 || pr("Porn") + pr("Hentai") >= 0.9;
       } catch(e){}
     }
-    if (sens !== null) { m[phone+"|"+job.e.path] = sens?1:0; nsSave(); if (sens) scanState.flagged++; }
+    if (sens !== null) { nsSet(phone, job.e.path, sens?1:0); if (sens) scanState.flagged++; }
     scanState.done++; scanState.left--;
     onUpdate(job.e.path, sens===true, scanState.left===0);
   }
