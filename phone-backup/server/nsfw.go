@@ -432,21 +432,15 @@ func classifyImage(img image.Image) ([5]float32, error) {
 	return classifyInput(nsfwInputFrom(img))
 }
 
-// classifyInput is the two-step check: the fast small model (nsfw_small.go)
-// clears most photos on its own; only what it would flag is judged again by
-// this file's larger model, whose scores decide.
+// classifyInput runs the small model (nsfw_small.go) alone. A two-step
+// check, with this file's larger model confirming the small one's flags,
+// cut false alarms but also missed real ones, and the owner would rather
+// clear a few car seats than miss anything. The larger model stays here,
+// unused, in case that changes.
 func classifyInput(in *tensor) ([5]float32, error) {
 	sm, err := smallModel()
 	if err != nil {
 		return [5]float32{}, err
 	}
-	p, err := sm.predict(in)
-	if err != nil || !nsfwVerdict(p) {
-		return p, err
-	}
-	m, err := nsfwModel()
-	if err != nil {
-		return [5]float32{}, err
-	}
-	return m.predict(in)
+	return sm.predict(in)
 }

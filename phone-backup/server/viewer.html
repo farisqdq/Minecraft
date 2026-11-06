@@ -571,7 +571,12 @@ window.addEventListener("pagehide", function(){ if (Object.keys(nsPending).lengt
 var nsScan = {}; // phone -> the server's own scan status (scan.go), if it has one
 async function nsSync(phone, onFlag){
   var res;
-  try { res = await api("/viewer/api/devices/"+encodeURIComponent(phone)+"/flags"); } catch(e){ return null; }
+  // A few tries: right after a server update it can take a moment to answer,
+  // and giving up here would wrongly start the check in this browser.
+  for (var attempt = 0; ; attempt++) {
+    try { res = await api("/viewer/api/devices/"+encodeURIComponent(phone)+"/flags"); break; }
+    catch(e){ if (e.message === "signed out" || attempt >= 4) return null; await new Promise(function(r){ setTimeout(r, 3000); }); }
+  }
   nsScan[phone] = res.scan || null;
   var server = res.flags || {}, m = nsLoad(), prefix = phone+"|";
   var ep = nsEpochs();
@@ -667,7 +672,7 @@ async function startScan(phone, items, onUpdate){
   onUpdate(null, false, !todo.length);
   if (!todo.length) return;
   var model;
-  try { model = await getModel(); } catch(e){ var sc=document.getElementById("scan"); if(sc) sc.textContent="Couldn't start the sensitive-photo check."; return; }
+  try { model = await getModel(); } catch(e){ var sc=document.getElementById("scan"); if(sc) sc.textContent="The sensitive-photo check isn't available right now. Reload the page in a minute."; return; }
   scanState.t0 = performance.now(); scanState.n0 = scanState.done; // the clock starts once the detector is ready
   var c = document.createElement("canvas"); c.width = c.height = 224; var ctx = c.getContext("2d");
   var i = 0, pending = [];
