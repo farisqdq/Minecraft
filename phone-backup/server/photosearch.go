@@ -261,7 +261,12 @@ func (s *Server) indexDevice(m *clipModel, id string, limit int) bool {
 		return false
 	}
 
+	// A quarter of the cores while the sensitive check is running, half once
+	// it's idle (checked again every batch).
 	workers := max(1, runtime.NumCPU()/4)
+	if !s.scanBusy() {
+		workers = max(1, runtime.NumCPU()/2)
+	}
 	jobs := make(chan string)
 	var wg sync.WaitGroup
 	start, done := time.Now(), 0
@@ -391,4 +396,19 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 		out = append(out, h)
 	}
 	writeJSON(w, 200, map[string]any{"results": out, "status": status})
+}
+
+// scanBusy says whether the sensitive-photo scanner is in a pass for any phone.
+func (s *Server) scanBusy() bool {
+	if s.scan == nil {
+		return false
+	}
+	s.scan.mu.Lock()
+	defer s.scan.mu.Unlock()
+	for _, p := range s.scan.progress {
+		if p.Running {
+			return true
+		}
+	}
+	return false
 }
