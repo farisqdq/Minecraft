@@ -50,6 +50,7 @@ type scanner struct {
 }
 
 func (s *Server) startScanner() {
+	s.startIndexer()
 	s.scan = &scanner{progress: map[string]*scanProgress{}, failed: map[string]bool{}, kick: make(chan struct{}, 1)}
 	go func() {
 		// Let the server settle after a start or an update, unless someone
@@ -60,12 +61,6 @@ func (s *Server) startScanner() {
 		}
 		for {
 			s.scanAll()
-			// Then a batch of photo-search indexing (photosearch.go). While
-			// there's a backlog, go straight round again: the sensitive check
-			// gets its turn between batches, so new photos aren't held up.
-			if s.indexAll(clipBatch) {
-				continue
-			}
 			select {
 			case <-time.After(scanEvery):
 			case <-s.scan.kick:

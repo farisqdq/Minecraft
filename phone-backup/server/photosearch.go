@@ -176,6 +176,21 @@ func (s *Server) addVector(id, path string, vec []float32) error {
 
 // ---------- indexing ----------
 
+// startIndexer runs photo-search indexing in its own loop, alongside the
+// sensitive check rather than after it (a full re-check would otherwise
+// hold search back for an hour or more), on a quarter of the cores.
+func (s *Server) startIndexer() {
+	go func() {
+		time.Sleep(45 * time.Second) // let the server settle after a start or an update
+		for {
+			if s.indexAll(clipBatch) {
+				continue // more waiting: straight on with the next batch
+			}
+			time.Sleep(scanEvery)
+		}
+	}()
+}
+
 // indexAll indexes up to `limit` new photos across the phones and says
 // whether there are more waiting.
 func (s *Server) indexAll(limit int) bool {
@@ -246,7 +261,7 @@ func (s *Server) indexDevice(m *clipModel, id string, limit int) bool {
 		return false
 	}
 
-	workers := max(1, runtime.NumCPU()/2)
+	workers := max(1, runtime.NumCPU()/4)
 	jobs := make(chan string)
 	var wg sync.WaitGroup
 	start, done := time.Now(), 0
