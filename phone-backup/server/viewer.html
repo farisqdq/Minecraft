@@ -287,18 +287,18 @@ async function gallery(main){
   var wide = window.matchMedia("(min-width:1000px)");
   // While scrolling, a label says which month and year the photos at the
   // top of the screen are from, and fades out once scrolling stops.
-  var when = document.createElement("div"); when.className = "when"; when.setAttribute("aria-hidden", "true");
-  main.appendChild(when);
+  var whenEl = document.createElement("div"); whenEl.className = "when"; whenEl.setAttribute("aria-hidden", "true");
+  main.appendChild(whenEl);
   var whenT = null, whenRAF = 0;
   function onScrollWhen(){
-    if (!document.body.contains(when)) { window.removeEventListener("scroll", onScrollWhen); return; }
+    if (!document.body.contains(whenEl)) { window.removeEventListener("scroll", onScrollWhen); return; }
     if (whenRAF) return;
     whenRAF = requestAnimationFrame(function(){
       whenRAF = 0;
       var gr = g.getBoundingClientRect(), top = headerBottom();
-      when.style.top = (top + 10) + "px";
+      whenEl.style.top = (top + 10) + "px";
       var probeY = Math.max(gr.top + 10, top + 24);
-      if (gr.bottom < probeY) { when.classList.remove("on"); return; }
+      if (gr.bottom < probeY) { whenEl.classList.remove("on"); return; }
       // The last photo in the top row: rows run newest to oldest, so where a
       // row holds two months this names the one you're scrolling into.
       var el = document.elementFromPoint(gr.right - 20, probeY);
@@ -308,15 +308,15 @@ async function gallery(main){
       if (!e) return;
       var d = new Date(e.mtime);
       if (isNaN(d)) return;
-      when.textContent = d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
-      when.classList.add("on");
-      clearTimeout(whenT); whenT = setTimeout(function(){ when.classList.remove("on"); }, 1200);
+      whenEl.textContent = d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      whenEl.classList.add("on");
+      clearTimeout(whenT); whenT = setTimeout(function(){ whenEl.classList.remove("on"); }, 1200);
     });
   }
   window.addEventListener("scroll", onScrollWhen, { passive: true });
-  when.onmouseenter = function(){ clearTimeout(whenT); };
-  when.onmouseleave = function(){ whenT = setTimeout(function(){ when.classList.remove("on"); }, 1200); };
-  when.onclick = function(){ openJump(); };
+  whenEl.onmouseenter = function(){ clearTimeout(whenT); };
+  whenEl.onmouseleave = function(){ whenT = setTimeout(function(){ whenEl.classList.remove("on"); }, 1200); };
+  whenEl.onclick = function(){ openJump(); };
   document.getElementById("jumpb").onclick = function(){ openJump(); };
   var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   // Every year and month in what's shown, with how many photos; picking one
@@ -432,10 +432,13 @@ async function gallery(main){
     view.slice(shown, shown+240).forEach(function(e, k){
       var i = shown + k, vid = VID.test(e.name);
       var b = document.createElement("button"); b.className="tile"+(v(e)===1?" sens":""); b.title=e.name; b.dataset.p=e.path; b.dataset.i=i;
+      // The server sends the photo's shape when it has a thumbnail, so the
+      // tile is the right size before the image arrives and rows don't shift.
+      var known = e.r > 0 ? Math.max(0.5, Math.min(2.4, e.r)) : 0;
       var cap = '<span class="capt"><b>'+esc(e.name)+'</b><span>'+esc(shortDate(e.mtime))+(e.size?' · '+human(e.size):'')+'</span></span>';
       if (vid) {
         // A frame from the video (thumb.go); the placeholder stays if there isn't one.
-        b.style.setProperty("--r", "0.75");
+        b.style.setProperty("--r", known ? known.toFixed(3) : "0.75");
         b.innerHTML = '<div class="im"><div class="ph">Video</div><img loading="lazy" alt="" style="position:absolute;inset:0" src="'+fileUrl(e.path,"&thumb=1")+'"><span class="play">▶ Video</span><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div></div>'+cap;
         var vim = b.querySelector("img");
         vim.onload = function(){ var r = vim.naturalWidth / vim.naturalHeight; if (r > 0) b.style.setProperty("--r", Math.max(0.5, Math.min(2.4, r)).toFixed(3)); };
@@ -445,6 +448,7 @@ async function gallery(main){
         b.innerHTML = '<div class="im"><img loading="lazy" alt="" src="'+fileUrl(e.path,"&thumb=1")+'"><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div></div>'+cap;
         // Thumbnails keep the photo's shape; once one arrives its tile takes
         // that shape and the row re-balances, as Google Images does.
+        if (known) b.style.setProperty("--r", known.toFixed(3));
         var im = b.querySelector("img");
         im.onload = function(){ var r = im.naturalWidth / im.naturalHeight; if (r > 0) b.style.setProperty("--r", Math.max(0.5, Math.min(2.4, r)).toFixed(3)); };
       }

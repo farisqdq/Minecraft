@@ -1046,6 +1046,9 @@ type entry struct {
 	Size  int64     `json:"size"`
 	Mtime time.Time `json:"mtime"`
 	Count int       `json:"count,omitempty"`
+	// Width over height of a photo or video, from its thumbnail when there
+	// is one, so the gallery can size its tile before the image arrives.
+	R float64 `json:"r,omitempty"`
 }
 
 func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
@@ -1098,6 +1101,8 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 			if sub, err := os.ReadDir(filepath.Join(full, it.Name())); err == nil {
 				e.Count = len(sub)
 			}
+		} else if scanPhoto.MatchString(e.Name) || scanVideo.MatchString(e.Name) {
+			e.R = thumbRatio(s.thumbPath(id, p, info, thumbSize))
 		}
 		out = append(out, e)
 	}

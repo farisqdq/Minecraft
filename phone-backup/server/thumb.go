@@ -17,11 +17,13 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"math"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/jdeng/goheif"
@@ -289,4 +291,27 @@ func orientImage(src *image.RGBA, o int) image.Image {
 		}
 	}
 	return dst
+}
+
+// thumbRatios caches width/height per thumbnail file (whose name already
+// changes when the photo does), read from the JPEG header only.
+var thumbRatios sync.Map
+
+// thumbRatio is a cached thumbnail's width over height, or 0 if it has none yet.
+func thumbRatio(thumb string) float64 {
+	if v, ok := thumbRatios.Load(thumb); ok {
+		return v.(float64)
+	}
+	f, err := os.Open(thumb)
+	if err != nil {
+		return 0 // not made yet: the gallery sizes the tile when it loads
+	}
+	cfg, err := jpeg.DecodeConfig(f)
+	f.Close()
+	if err != nil || cfg.Height == 0 {
+		return 0
+	}
+	r := math.Round(float64(cfg.Width)/float64(cfg.Height)*1000) / 1000
+	thumbRatios.Store(thumb, r)
+	return r
 }
