@@ -96,6 +96,18 @@ class BackupWorker(ctx: Context, params: WorkerParameters) : CoroutineWorker(ctx
                 for (it in group) res.need[it.remote]?.let { have -> needed.add(it to have) }
             }
 
+            // Photos and videos go newest first, together. They used to go all
+            // photos, then all videos, so with a big camera roll every run ended
+            // before reaching a single video — and a video taken today waited
+            // behind thousands of old photos. Texts, contacts and the rest keep
+            // their place: the small exports first, picked folders last.
+            val camera = setOf("photos", "videos")
+            val firstPart = needed.filter { it.first.kind !in camera && it.first.kind != "files" }
+            val media = needed.filter { it.first.kind in camera }.sortedByDescending { it.first.mtime }
+            val lastPart = needed.filter { it.first.kind == "files" }
+            needed.clear()
+            needed.addAll(firstPart + media + lastPart)
+
             val totalBytes = needed.sumOf { it.first.size - it.second }
             var doneBytes = 0L
             uploadStart = System.currentTimeMillis()
