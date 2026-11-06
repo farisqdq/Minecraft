@@ -139,10 +139,6 @@ func (s *Server) checkVideo(id, rel string) (bool, [5]float32, int, error) {
 	if err != nil {
 		return false, worst, 0, err
 	}
-	m, err := nsfwModel()
-	if err != nil {
-		return false, worst, 0, err
-	}
 	full := filepath.Join(s.deviceDir(id), filepath.FromSlash(rel))
 	cmd := exec.Command(ff, "-v", "error", "-nostdin", "-i", full,
 		"-an", "-sn", "-dn",
@@ -168,7 +164,7 @@ func (s *Server) checkVideo(id, rel string) (bool, [5]float32, int, error) {
 		for i, b := range frame {
 			in.d[i] = float32(b) / 255
 		}
-		p, err := m.predict(in)
+		p, err := classifyInput(in) // small model first, large only if it flags
 		if err != nil {
 			cmd.Process.Kill()
 			cmd.Wait()
@@ -194,4 +190,32 @@ func (s *Server) checkVideo(id, rel string) (bool, [5]float32, int, error) {
 		return false, worst, 0, fmt.Errorf("couldn't read the video: %w", werr)
 	}
 	return false, worst, frames, nil
+}
+
+// makeVideoThumb saves a frame from a video as its gallery thumbnail, the
+// longest side `size` px like a photo's: one second in, past a fade from
+// black, or the first frame of a clip shorter than that. ffmpeg turns it
+// the right way up.
+func (s *Server) makeVideoThumb(src, dst string, size int) error {
+	ff, err := s.ffmpegPath()
+	if err != nil {
+		return err
+	}
+	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+		return err
+	}
+	tmp := dst + ".tmp.jpg"
+	defer os.Remove(tmp)
+	scale := fmt.Sprintf(`scale=if(gt(iw\,ih)\,%d\,-2):if(gt(iw\,ih)\,-2\,%d)`, size, size)
+	for _, at := range []string{"1", "0"} {
+		cmd := exec.Command(ff, "-v", "error", "-nostdin", "-ss", at, "-i", src,
+			"-frames:v", "1", "-vf", scale, "-q:v", "4", "-y", tmp)
+		hideWindow(cmd)
+		if cmd.Run() == nil {
+			if st, err := os.Stat(tmp); err == nil && st.Size() > 0 {
+				return os.Rename(tmp, dst)
+			}
+		}
+	}
+	return errors.New("couldn't take a frame from the video")
 }

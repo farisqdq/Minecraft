@@ -93,3 +93,20 @@ func TestNSFWDump(t *testing.T) {
 	b, _ := json.Marshal(out)
 	os.WriteFile(filepath.Join(dir, "go.json"), b, 0o644)
 }
+
+func TestSmallModelLoads(t *testing.T) {
+	m, err := smallModel()
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := newTensor(nsfwInput, nsfwInput, 3)
+	for i := range in.d {
+		in.d[i] = 0.5
+	}
+	start := time.Now()
+	p, err := m.predict(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("small model, one photo: %v, %v", time.Since(start), p)
+}

@@ -429,9 +429,24 @@ func nsfwVerdict(p [5]float32) bool {
 
 // classifyImage gives the five probabilities for one decoded image.
 func classifyImage(img image.Image) ([5]float32, error) {
+	return classifyInput(nsfwInputFrom(img))
+}
+
+// classifyInput is the two-step check: the fast small model (nsfw_small.go)
+// clears most photos on its own; only what it would flag is judged again by
+// this file's larger model, whose scores decide.
+func classifyInput(in *tensor) ([5]float32, error) {
+	sm, err := smallModel()
+	if err != nil {
+		return [5]float32{}, err
+	}
+	p, err := sm.predict(in)
+	if err != nil || !nsfwVerdict(p) {
+		return p, err
+	}
 	m, err := nsfwModel()
 	if err != nil {
 		return [5]float32{}, err
 	}
-	return m.predict(nsfwInputFrom(img))
+	return m.predict(in)
 }

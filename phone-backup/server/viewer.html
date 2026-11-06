@@ -307,7 +307,14 @@ async function gallery(main){
       var i = shown + k, vid = VID.test(e.name);
       var b = document.createElement("button"); b.className="tile"+(v(e)===1?" sens":""); b.title=e.name; b.dataset.p=e.path; b.dataset.i=i;
       var cap = '<span class="capt"><b>'+esc(e.name)+'</b><span>'+esc(shortDate(e.mtime))+(e.size?' · '+human(e.size):'')+'</span></span>';
-      if (vid) { b.style.setProperty("--r", "0.75"); b.innerHTML = '<div class="im"><div class="ph">Video</div><span class="play">▶ Video</span><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div></div>'+cap; }
+      if (vid) {
+        // A frame from the video (thumb.go); the placeholder stays if there isn't one.
+        b.style.setProperty("--r", "0.75");
+        b.innerHTML = '<div class="im"><div class="ph">Video</div><img loading="lazy" alt="" style="position:absolute;inset:0" src="'+fileUrl(e.path,"&thumb=1")+'"><span class="play">▶ Video</span><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div></div>'+cap;
+        var vim = b.querySelector("img");
+        vim.onload = function(){ var r = vim.naturalWidth / vim.naturalHeight; if (r > 0) b.style.setProperty("--r", Math.max(0.5, Math.min(2.4, r)).toFixed(3)); };
+        vim.onerror = function(){ vim.remove(); };
+      }
       else {
         b.innerHTML = '<div class="im"><img loading="lazy" alt="" src="'+fileUrl(e.path,"&thumb=1")+'"><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div></div>'+cap;
         // Thumbnails keep the photo's shape; once one arrives its tile takes

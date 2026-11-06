@@ -69,8 +69,17 @@ func (s *Server) handleThumb(w http.ResponseWriter, r *http.Request) {
 	cache := s.thumbPath(dev, rel, info, size)
 	if _, err := os.Stat(cache); err != nil {
 		thumbSlots <- struct{}{}
-		err = makeThumb(full, cache, size)
+		if scanVideo.MatchString(rel) {
+			err = s.makeVideoThumb(full, cache, size)
+		} else {
+			err = makeThumb(full, cache, size)
+		}
 		<-thumbSlots
+		if err != nil && scanVideo.MatchString(rel) {
+			// Never fall back to sending a whole video as a "thumbnail".
+			http.Error(w, "no thumbnail for this video", 404)
+			return
+		}
 		if err != nil {
 			// Can't decode (HEIC, odd format): send the original instead.
 			http.Redirect(w, r, "/dl?"+r.URL.RawQuery, http.StatusFound)
