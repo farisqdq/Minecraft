@@ -469,8 +469,8 @@ async function gallery(main){
     var old = tileAt(sel); if (old) old.classList.remove("sel");
     sel = i; var e = view[i], t = tileAt(i); if (t) t.classList.add("sel");
     var vid = VID.test(e.name), flagged = v(e)===1;
-    var media = vid ? '<video src="'+fileUrl(e.path)+'" controls playsinline></video>'
-      : '<img alt="" src="'+fileUrl(e.path, HEIC.test(e.name) ? "&thumb=1&w=1600" : "")+'">';
+    var media = vid ? '<video src="'+fileUrl(e.path)+'" poster="'+fileUrl(e.path,"&thumb=1")+'" controls playsinline></video>'
+      : previewImg(e);
     side.innerHTML = '<div class="top"><span class="nm" title="'+esc(e.name)+'">'+esc(e.name)+'</span>'+
       '<button class="ib" data-d="-1" aria-label="Previous" title="Previous (←)">‹</button><button class="ib" data-d="1" aria-label="Next" title="Next (→)">›</button>'+
       '<button class="ib" id="sx" aria-label="Close" title="Close (Esc)">×</button></div>'+
@@ -480,6 +480,7 @@ async function gallery(main){
       '<div class="acts"><a class="btn primary" href="'+fileUrl(e.path,"&a=1")+'">Download</a><button class="btn" id="sfs">Full screen</button>'+
       (flagged ? '<button class="btn" id="sok">Not sensitive</button>' : '')+'</div></div>';
     side.hidden = false;
+    upgradeImages(side);
     side.querySelector("#sx").onclick = closeSide;
     side.querySelectorAll(".ib[data-d]").forEach(function(n){ n.onclick = function(){ showSide((sel + Number(n.dataset.d) + view.length) % view.length); }; });
     var full = function(){ lightbox(view, sel); };
@@ -701,17 +702,47 @@ async function startScan(phone, items, onUpdate){
   }
 }
 
+// The small thumbnail at once (the gallery has usually loaded it already),
+// swapped for the full image when that has arrived, so opening a photo
+// never shows an empty black box while a few MB come in.
+function previewImg(e){
+  var full = fileUrl(e.path, HEIC.test(e.name) ? "&thumb=1&w=1600" : "");
+  return '<img alt="" src="'+fileUrl(e.path,"&thumb=1")+'" data-full="'+full+'" style="min-width:min(100%,360px)">';
+}
+function upgradeImages(root){
+  root.querySelectorAll("img[data-full]").forEach(function(im){
+    var url = im.getAttribute("data-full");
+    im.removeAttribute("data-full");
+    // Fetched once and handed over as-is: the file link redirects to a
+    // fresh signed link every time, so setting it as the src would
+    // download the photo again and blank the picture meanwhile.
+    fetch(url, { credentials: "same-origin" }).then(function(r){ if (!r.ok) throw 0; return r.blob(); }).then(function(blob){
+      if (!document.body.contains(im)) return;
+      var obj = URL.createObjectURL(blob);
+      var pre = new Image();
+      pre.onload = function(){
+        if (!document.body.contains(im)) { URL.revokeObjectURL(obj); return; }
+        im.src = obj; im.style.minWidth = "";
+        // Let the browser go once this picture is gone.
+        var watch = setInterval(function(){ if (!document.body.contains(im)) { URL.revokeObjectURL(obj); clearInterval(watch); } }, 5000);
+      };
+      pre.onerror = function(){ URL.revokeObjectURL(obj); };
+      pre.src = obj;
+    }).catch(function(){ /* keep showing the thumbnail */ });
+  });
+}
+
 function lightbox(items, i){
   var box = document.createElement("div"); box.className="box";
   function draw(){
     var e = items[i];
-    var media = VID.test(e.name) ? '<video src="'+fileUrl(e.path)+'" controls autoplay playsinline></video>'
-      : HEIC.test(e.name) ? '<img src="'+fileUrl(e.path,"&thumb=1&w=1600")+'" alt="">'
-      : '<img src="'+fileUrl(e.path)+'" alt="">';
+    var media = VID.test(e.name) ? '<video src="'+fileUrl(e.path)+'" poster="'+fileUrl(e.path,"&thumb=1")+'" controls autoplay playsinline></video>'
+      : previewImg(e);
     box.innerHTML = '<button class="x" aria-label="Close">×</button>'+
       '<button class="nav" style="left:10px" data-d="-1">‹</button><button class="nav" style="right:10px" data-d="1">›</button>'+
       media+'<div class="cap">'+(i+1)+' of '+items.length+' · '+esc(e.name)+' · <a href="'+fileUrl(e.path,"&a=1")+'">Download</a>'+
       (verdictOf(S.phone, e.path)===1 ? ' · <a href="#" id="nsok">Not sensitive</a>' : '')+'</div>';
+    upgradeImages(box);
     box.querySelector(".x").onclick = close;
     var ok = box.querySelector("#nsok");
     if (ok) ok.onclick = function(ev){ ev.preventDefault(); clearFlag(S.phone, e.path);
