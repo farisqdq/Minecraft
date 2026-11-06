@@ -131,16 +131,17 @@ func fetchFFmpeg(dst string) error {
 	return errors.New("ffmpeg.exe not found in the download")
 }
 
-// checkVideo reports whether any 0.1 s frame of a video is flagged, and how
-// many frames it looked at.
-func (s *Server) checkVideo(id, rel string) (bool, int, error) {
+// checkVideo reports whether any 0.1 s frame of a video is flagged, the
+// scores of its most explicit-looking frame, and how many frames it read.
+func (s *Server) checkVideo(id, rel string) (bool, [5]float32, int, error) {
+	var worst [5]float32
 	ff, err := s.ffmpegPath()
 	if err != nil {
-		return false, 0, err
+		return false, worst, 0, err
 	}
 	m, err := nsfwModel()
 	if err != nil {
-		return false, 0, err
+		return false, worst, 0, err
 	}
 	full := filepath.Join(s.deviceDir(id), filepath.FromSlash(rel))
 	cmd := exec.Command(ff, "-v", "error", "-nostdin", "-i", full,
@@ -150,10 +151,10 @@ func (s *Server) checkVideo(id, rel string) (bool, int, error) {
 	hideWindow(cmd)
 	out, err := cmd.StdoutPipe()
 	if err != nil {
-		return false, 0, err
+		return false, worst, 0, err
 	}
 	if err := cmd.Start(); err != nil {
-		return false, 0, err
+		return false, worst, 0, err
 	}
 	frame := make([]byte, nsfwInput*nsfwInput*3)
 	in := newTensor(nsfwInput, nsfwInput, 3)
@@ -171,7 +172,10 @@ func (s *Server) checkVideo(id, rel string) (bool, int, error) {
 		if err != nil {
 			cmd.Process.Kill()
 			cmd.Wait()
-			return false, frames, err
+			return false, worst, frames, err
+		}
+		if p[1]+p[3] >= worst[1]+worst[3] {
+			worst = p
 		}
 		if nsfwVerdict(p) {
 			flagged = true
@@ -181,13 +185,13 @@ func (s *Server) checkVideo(id, rel string) (bool, int, error) {
 	}
 	werr := cmd.Wait()
 	if flagged {
-		return true, frames, nil
+		return true, worst, frames, nil
 	}
 	if frames == 0 {
 		if werr == nil {
 			werr = errors.New("no frames")
 		}
-		return false, 0, fmt.Errorf("couldn't read the video: %w", werr)
+		return false, worst, 0, fmt.Errorf("couldn't read the video: %w", werr)
 	}
-	return false, frames, nil
+	return false, worst, frames, nil
 }

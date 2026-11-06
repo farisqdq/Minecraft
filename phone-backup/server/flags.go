@@ -150,11 +150,24 @@ func (s *Server) handleFlagsRecheck(w http.ResponseWriter, r *http.Request) {
 		fail(w, 404, "no such phone")
 		return
 	}
+	// Which verdicts to throw away: "not sensitive" marks (2) by default, or
+	// e.g. [1] to re-check every flagged photo after the cut-off changes.
+	var body struct {
+		Values []int `json:"values"`
+	}
+	json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<10)).Decode(&body)
+	if len(body.Values) == 0 {
+		body.Values = []int{2}
+	}
+	drop := map[int]bool{}
+	for _, v := range body.Values {
+		drop[v] = true
+	}
 	flagsMu.Lock()
 	flags := s.readFlags(id)
 	n := 0
 	for p, v := range flags {
-		if v == 2 {
+		if drop[v] {
 			delete(flags, p)
 			n++
 		}
@@ -169,7 +182,7 @@ func (s *Server) handleFlagsRecheck(w http.ResponseWriter, r *http.Request) {
 		fail(w, 500, "couldn't save")
 		return
 	}
-	s.logger.Printf("flags: %s: %d cleared photos sent back for re-checking", id, n)
+	s.logger.Printf("flags: %s: %d photos marked %v sent back for re-checking", id, n, body.Values)
 	s.kickScan()
 	writeJSON(w, 200, map[string]any{"ok": true, "rechecking": n, "epoch": epoch})
 }

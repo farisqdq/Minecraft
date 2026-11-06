@@ -163,21 +163,25 @@ func (s *Server) scanDevice(id string) {
 	var (
 		resMu   sync.Mutex
 		pending = map[string]int{}
-		wg      sync.WaitGroup
-		start   = time.Now()
-		checked int
+		// The detector's five scores per photo (scores.go), so the cut-off
+		// can be judged and changed from numbers alone.
+		pendingScores = map[string][5]float32{}
+		wg            sync.WaitGroup
+		start         = time.Now()
+		checked       int
 	)
 	flush := func() {
 		if len(pending) == 0 {
 			return
 		}
-		batch := pending
-		pending = map[string]int{}
+		batch, scores := pending, pendingScores
+		pending, pendingScores = map[string]int{}, map[string][5]float32{}
 		flagsMu.Lock()
 		flags := s.readFlags(id)
 		if mergeFlags(flags, batch) {
 			s.writeFlags(id, flags)
 		}
+		s.saveScores(id, scores)
 		flagsMu.Unlock()
 	}
 	for w := 0; w < workers; w++ {
@@ -186,14 +190,15 @@ func (s *Server) scanDevice(id string) {
 			defer wg.Done()
 			for rel := range jobs {
 				var sensitive bool
+				var probs [5]float32
 				var err error
 				if scanVideo.MatchString(rel) {
 					var frames int
 					t0 := time.Now()
-					sensitive, frames, err = s.checkVideo(id, rel)
+					sensitive, probs, frames, err = s.checkVideo(id, rel)
 					s.logger.Printf("video check: %s: %d frames in %s, flagged %v, err %v", rel, frames, time.Since(t0).Round(time.Second), sensitive, err)
 				} else {
-					sensitive, err = s.checkPhoto(id, rel)
+					sensitive, probs, err = s.checkPhoto(id, rel)
 				}
 				resMu.Lock()
 				s.scan.mu.Lock()
@@ -202,6 +207,7 @@ func (s *Server) scanDevice(id string) {
 					prog.Failed++
 				} else {
 					pending[rel] = map[bool]int{true: 1, false: 0}[sensitive]
+					pendingScores[rel] = probs
 					prog.Done++
 					checked++
 				}
@@ -231,30 +237,31 @@ func (s *Server) scanDevice(id string) {
 }
 
 // checkPhoto makes (or reuses) the gallery thumbnail and runs the detector on it.
-func (s *Server) checkPhoto(id, rel string) (bool, error) {
+func (s *Server) checkPhoto(id, rel string) (bool, [5]float32, error) {
+	var none [5]float32
 	full := filepath.Join(s.deviceDir(id), filepath.FromSlash(rel))
 	info, err := os.Stat(full)
 	if err != nil {
-		return false, err
+		return false, none, err
 	}
 	thumb := s.thumbPath(id, rel, info, thumbSize)
 	if _, err := os.Stat(thumb); err != nil {
 		if err := makeThumb(full, thumb, thumbSize); err != nil {
-			return false, err
+			return false, none, err
 		}
 	}
 	f, err := os.Open(thumb)
 	if err != nil {
-		return false, err
+		return false, none, err
 	}
 	img, _, err := image.Decode(f)
 	f.Close()
 	if err != nil {
-		return false, err
+		return false, none, err
 	}
 	p, err := classifyImage(img)
 	if err != nil {
-		return false, err
+		return false, none, err
 	}
-	return nsfwVerdict(p), nil
+	return nsfwVerdict(p), p, nil
 }
