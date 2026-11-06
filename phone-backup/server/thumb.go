@@ -17,6 +17,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"io"
+	"io/fs"
 	"math"
 	"net/http"
 	"os"
@@ -296,6 +297,34 @@ func orientImage(src *image.RGBA, o int) image.Image {
 // thumbRatios caches width/height per thumbnail file (whose name already
 // changes when the photo does), read from the JPEG header only.
 var thumbRatios sync.Map
+
+// knownRatio is a thumbnail's width over height if it's been read already, else 0.
+func knownRatio(thumb string) float64 {
+	if v, ok := thumbRatios.Load(thumb); ok {
+		return v.(float64)
+	}
+	return 0
+}
+
+// warmRatios reads the shapes of a phone's thumbnails into the cache, in
+// the background, so the gallery's list can include them without opening
+// thousands of files while someone waits.
+func (s *Server) warmRatios(id string) {
+	base := s.deviceDir(id)
+	filepath.WalkDir(filepath.Join(base, "Photos"), func(p string, e fs.DirEntry, err error) error {
+		if err != nil || e.IsDir() || !(scanPhoto.MatchString(e.Name()) || scanVideo.MatchString(e.Name())) {
+			return nil
+		}
+		rel, err := filepath.Rel(base, p)
+		if err != nil {
+			return nil
+		}
+		if info, err := e.Info(); err == nil {
+			thumbRatio(s.thumbPath(id, filepath.ToSlash(rel), info, thumbSize))
+		}
+		return nil
+	})
+}
 
 // thumbRatio is a cached thumbnail's width over height, or 0 if it has none yet.
 func thumbRatio(thumb string) float64 {

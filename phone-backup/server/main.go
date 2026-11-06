@@ -1102,7 +1102,7 @@ func (s *Server) handleList(w http.ResponseWriter, r *http.Request) {
 				e.Count = len(sub)
 			}
 		} else if scanPhoto.MatchString(e.Name) || scanVideo.MatchString(e.Name) {
-			e.R = thumbRatio(s.thumbPath(id, p, info, thumbSize))
+			e.R = knownRatio(s.thumbPath(id, p, info, thumbSize)) // never reads files: listing must stay fast
 		}
 		out = append(out, e)
 	}
