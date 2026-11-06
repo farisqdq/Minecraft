@@ -18,11 +18,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 )
@@ -207,9 +209,18 @@ func (s *Server) makeVideoThumb(src, dst string, size int) error {
 	tmp := dst + ".tmp.jpg"
 	defer os.Remove(tmp)
 	scale := fmt.Sprintf(`scale=if(gt(iw\,ih)\,%d\,-2):if(gt(iw\,ih)\,-2\,%d)`, size, size)
-	for _, at := range []string{"1", "0"} {
-		cmd := exec.Command(ff, "-v", "error", "-nostdin", "-ss", at, "-i", src,
-			"-frames:v", "1", "-vf", scale, "-q:v", "4", "-y", tmp)
+	// Quickest first: the keyframe nearest one second in (phones put one
+	// about every second), so only that frame is decoded; then the first
+	// keyframe; then an exact decode, for files the fast ways can't read.
+	tries := [][]string{
+		{"-skip_frame", "nokey", "-noaccurate_seek", "-ss", "1"},
+		{"-skip_frame", "nokey"},
+		{"-ss", "0"},
+	}
+	for _, seek := range tries {
+		args := append([]string{"-v", "error", "-nostdin"}, seek...)
+		args = append(args, "-i", src, "-frames:v", "1", "-vf", scale, "-q:v", "4", "-y", tmp)
+		cmd := exec.Command(ff, args...)
 		hideWindow(cmd)
 		if cmd.Run() == nil {
 			if st, err := os.Stat(tmp); err == nil && st.Size() > 0 {
@@ -218,4 +229,42 @@ func (s *Server) makeVideoThumb(src, dst string, size int) error {
 		}
 	}
 	return errors.New("couldn't take a frame from the video")
+}
+
+// pregenVideoThumbs makes the gallery thumbnail of every video that hasn't
+// one yet, one at a time, so scrolling past videos shows a ready image
+// instead of waiting for ffmpeg. Called at the start of each scanner pass.
+func (s *Server) pregenVideoThumbs(id string) {
+	if _, err := s.ffmpegPath(); err != nil {
+		return
+	}
+	base := s.deviceDir(id)
+	made := 0
+	start := time.Now()
+	filepath.WalkDir(filepath.Join(base, "Photos"), func(p string, e fs.DirEntry, err error) error {
+		if err != nil || e.IsDir() || !scanVideo.MatchString(e.Name()) || strings.HasSuffix(e.Name(), ".part") {
+			return nil
+		}
+		rel, err := filepath.Rel(base, p)
+		if err != nil {
+			return nil
+		}
+		info, err := e.Info()
+		if err != nil {
+			return nil
+		}
+		dst := s.thumbPath(id, filepath.ToSlash(rel), info, thumbSize)
+		if _, err := os.Stat(dst); err == nil {
+			return nil
+		}
+		thumbSlots <- struct{}{}
+		if s.makeVideoThumb(p, dst, thumbSize) == nil {
+			made++
+		}
+		<-thumbSlots
+		return nil
+	})
+	if made > 0 {
+		s.logger.Printf("video thumbnails: %s: made %d in %s", id, made, time.Since(start).Round(time.Second))
+	}
 }

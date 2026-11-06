@@ -45,7 +45,18 @@ main{max-width:1680px;margin:0 auto;padding:16px}
 .play{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.6);color:#fff;border-radius:20px;padding:2px 9px;display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700}
 /* Month and year of the photos on screen, shown while scrolling the gallery. */
 .when{position:fixed;left:50%;top:76px;transform:translateX(-50%);z-index:6;background:var(--ink);color:var(--surface);padding:6px 14px;border-radius:999px;font-size:14px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.25);opacity:0;transition:opacity .25s;pointer-events:none}
-.when.on{opacity:.92}
+.when.on{opacity:.92;pointer-events:auto;cursor:pointer}
+/* Jump to a month: years down the side, their months as buttons. */
+.jump{position:fixed;inset:0;z-index:30;background:rgba(0,0,0,.4);display:flex;align-items:flex-start;justify-content:center;padding:70px 16px 16px}
+.jump .pane{background:var(--surface);color:var(--ink);border-radius:16px;width:min(520px,100%);max-height:calc(100vh - 100px);overflow:auto;padding:8px 16px 16px;box-shadow:0 10px 40px rgba(0,0,0,.3)}
+.jump .top{display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface);padding:8px 0;z-index:1}
+.jump h3{margin:14px 0 6px;font-size:15px}
+.jump .months{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.jump .months button{border:1px solid var(--line);background:none;border-radius:10px;padding:8px 4px;cursor:pointer;font:inherit;font-size:13.5px;color:var(--ink)}
+.jump .months button:hover{background:var(--soft)}
+.jump .months button span{display:block;font-size:11.5px;color:var(--muted)}
+.jump .months button[disabled]{opacity:.35;cursor:default}
+.jump .years{display:flex;gap:6px;flex-wrap:wrap;margin:4px 0}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;cursor:pointer;font-size:14px;font-weight:500;white-space:nowrap}
@@ -268,7 +279,7 @@ async function gallery(main){
     '<label class="gsearch">'+SEARCH_SVG+'<input id="gq" type="search" placeholder="Search what\'s in your photos — try “beach” or “dog”" autocomplete="off" value="'+esc(S.q)+'"></label>'+
     '<div class="muted" id="sstat" style="font-size:12.5px;margin:-8px 0 10px 4px"></div>'+
     '<div class="chips" id="chips">'+CHIPS.map(function(c){ return c ? '<button class="chip" data-k="'+c[0]+'" data-v="'+c[1]+'">'+c[2]+'</button>' : '<span class="chip sep"></span>'; }).join("")+'</div>'+
-    '<div class="ginfo muted"><span id="gs">'+items.length+' photos &amp; videos</span><span id="scan"></span><button class="linkb" id="unall" hidden></button></div>'+
+    '<div class="ginfo muted"><span id="gs">'+items.length+' photos &amp; videos</span><span id="scan"></span><button class="linkb" id="unall" hidden></button><button class="linkb" id="jumpb">Jump to date</button></div>'+
     '<div class="gwrap"><div class="gl"><div class="grid" id="g"></div><div id="sent"></div></div><aside class="side" id="side" hidden></aside></div>';
   var g = document.getElementById("g"), side = document.getElementById("side"), chips = document.getElementById("chips"), gq = document.getElementById("gq");
   var view = [], shown = 0, sel = -1;
@@ -284,10 +295,14 @@ async function gallery(main){
     if (whenRAF) return;
     whenRAF = requestAnimationFrame(function(){
       whenRAF = 0;
-      var gr = g.getBoundingClientRect();
-      if (gr.top > 140 || gr.bottom < 140) { when.classList.remove("on"); return; }
-      var probeY = Math.max(gr.top + 10, 130);
-      var el = document.elementFromPoint(gr.left + Math.min(40, gr.width / 2), probeY);
+      var gr = g.getBoundingClientRect(), top = headerBottom();
+      when.style.top = (top + 10) + "px";
+      var probeY = Math.max(gr.top + 10, top + 24);
+      if (gr.bottom < probeY) { when.classList.remove("on"); return; }
+      // The last photo in the top row: rows run newest to oldest, so where a
+      // row holds two months this names the one you're scrolling into.
+      var el = document.elementFromPoint(gr.right - 20, probeY);
+      if (!el || !el.closest || !el.closest(".tile")) el = document.elementFromPoint(gr.left + 20, probeY);
       var t = el && el.closest && el.closest(".tile");
       var e = t && view[Number(t.dataset.i)];
       if (!e) return;
@@ -299,6 +314,51 @@ async function gallery(main){
     });
   }
   window.addEventListener("scroll", onScrollWhen, { passive: true });
+  when.onmouseenter = function(){ clearTimeout(whenT); };
+  when.onmouseleave = function(){ whenT = setTimeout(function(){ when.classList.remove("on"); }, 1200); };
+  when.onclick = function(){ openJump(); };
+  document.getElementById("jumpb").onclick = function(){ openJump(); };
+  var MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  // Every year and month in what's shown, with how many photos; picking one
+  // scrolls to its first photo.
+  function openJump(){
+    var years = {}, order = [];
+    view.forEach(function(e, i){
+      var d = new Date(e.mtime); if (isNaN(d)) return;
+      var y = d.getFullYear(), m = d.getMonth();
+      if (!years[y]) { years[y] = {}; order.push(y); }
+      if (!years[y][m]) years[y][m] = { first: i, n: 0 };
+      years[y][m].n++;
+    });
+    order.sort(function(a, b){ return b - a; });
+    var box = document.createElement("div"); box.className = "jump";
+    box.innerHTML = '<div class="pane" role="dialog" aria-label="Jump to date"><div class="top"><b>Jump to a month</b><button class="ib" aria-label="Close">×</button></div>' +
+      '<div class="years">' + order.map(function(y){ return '<button class="chip" data-y="'+y+'">'+y+'</button>'; }).join("") + '</div>' +
+      order.map(function(y){
+        return '<h3 id="jy'+y+'">'+y+'</h3><div class="months">' + MONTHS.map(function(name, m){
+          var c = years[y][m];
+          return c ? '<button data-i="'+c.first+'">'+name+'<span>'+c.n.toLocaleString()+'</span></button>' : '<button disabled>'+name+'<span>—</span></button>';
+        }).join("") + '</div>';
+      }).join("") + (order.length ? "" : '<p class="muted">No dates to show.</p>') + '</div>';
+    function close(){ box.remove(); document.removeEventListener("keydown", esc); }
+    function esc(ev){ if (ev.key === "Escape") close(); }
+    box.onclick = function(ev){
+      if (ev.target === box || ev.target.closest(".ib")) return close();
+      var yb = ev.target.closest("[data-y]");
+      if (yb) { var h = box.querySelector("#jy"+yb.dataset.y); if (h) h.scrollIntoView({ block: "start" }); return; }
+      var mb = ev.target.closest("button[data-i]");
+      if (mb) { close(); jumpTo(Number(mb.dataset.i)); }
+    };
+    document.addEventListener("keydown", esc);
+    document.body.appendChild(box);
+  }
+  function headerBottom(){ var h = document.querySelector("header"); return h ? Math.max(0, h.getBoundingClientRect().bottom) : 0; }
+  function jumpTo(i){
+    while (shown <= i + 40 && shown < view.length) more();
+    var t = tileAt(i); if (!t) return;
+    window.scrollTo({ top: t.getBoundingClientRect().top + scrollY - headerBottom() - 12 });
+    onScrollWhen();
+  }
   function v(e){ return verdictOf(phone, e.path); }
   function paintChips(){
     chips.querySelectorAll(".chip[data-k]").forEach(function(c){

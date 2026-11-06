@@ -112,6 +112,7 @@ func (s *Server) scanAll() {
 	}
 	s.mu.Unlock()
 	for _, id := range ids {
+		s.pregenVideoThumbs(id) // quick, and makes the gallery feel instant
 		s.scanDevice(id)
 	}
 }
