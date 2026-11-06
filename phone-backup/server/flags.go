@@ -164,6 +164,7 @@ func (s *Server) handleFlagsRecheck(w http.ResponseWriter, r *http.Request) {
 		drop[v] = true
 	}
 	flagsMu.Lock()
+	s.saveList(id, "before-rescan")
 	flags := s.readFlags(id)
 	n := 0
 	for p, v := range flags {

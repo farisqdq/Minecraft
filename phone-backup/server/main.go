@@ -469,6 +469,9 @@ func (s *Server) routes() http.Handler {
 	mux.HandleFunc("POST /api/admin/devices/{id}/request", s.admin(s.handleRequestBackup))
 	mux.HandleFunc("GET /api/admin/devices/{id}/scores", s.admin(s.handleScores))
 	mux.HandleFunc("GET /api/admin/devices/{id}/search", s.admin(s.handleSearch)) // the site's Gallery search
+	mux.HandleFunc("GET /api/admin/devices/{id}/lists", s.admin(s.handleLists))
+	mux.HandleFunc("POST /api/admin/devices/{id}/lists/restore", s.admin(s.handleListRestore))
+	mux.HandleFunc("POST /api/admin/devices/{id}/recheck", s.admin(s.handleFlagsRecheck))
 	mux.HandleFunc("POST /api/admin/devices/{id}/command", s.admin(s.handleCommand))
 	mux.HandleFunc("PATCH /api/admin/devices/{id}", s.admin(s.handleRename))
 	mux.HandleFunc("DELETE /api/admin/devices/{id}", s.admin(s.handleDelete))

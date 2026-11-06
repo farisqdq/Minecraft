@@ -241,6 +241,14 @@ func (s *Server) scanDevice(id string) {
 	prog.Running = false
 	s.scan.mu.Unlock()
 	s.logger.Printf("sensitive-photo scanner: %s done, %d checked in %s", id, checked, time.Since(start).Round(time.Second))
+	// Keep a copy of the finished list (lists.go), at most hourly.
+	if checked > 0 {
+		flagsMu.Lock()
+		if names := s.listNames(id); len(names) == 0 || listAge(names[0]) > time.Hour {
+			s.saveList(id, "after-scan")
+		}
+		flagsMu.Unlock()
+	}
 }
 
 // checkPhoto makes (or reuses) the gallery thumbnail and runs the detector on it.

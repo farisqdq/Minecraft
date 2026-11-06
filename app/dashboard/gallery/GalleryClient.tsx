@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import AppShell from "../../components/AppShell";
 import BackupBrowser, { type BrowserUrls } from "../../components/BackupBrowser";
 import styles from "../dashboard.module.css";
+import SensitivePanel from "./SensitivePanel";
 
 /** Browse any phone's photos and videos. */
 export default function GalleryClient({
@@ -62,6 +63,13 @@ export default function GalleryClient({
               </select>
             </div>
           </section>
+          {phoneId && (
+            <section className={styles.block}>
+              <div className={styles.formCard}>
+                <SensitivePanel key={phoneId} phoneId={phoneId} />
+              </div>
+            </section>
+          )}
           <section className={styles.block}>
             <div className={styles.formCard}>
               {phoneId && <BackupBrowser key={phoneId} urls={urls} startDir="Photos" />}

@@ -88,6 +88,21 @@ export const sendCommand = (id: string, cmd: "lock" | "wipe" | "locate" | "cance
   call(`/api/admin/devices/${encodeURIComponent(id)}/command`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cmd }) });
 export const listFiles = (id: string, dir: string) =>
   call(`/api/admin/devices/${encodeURIComponent(id)}/list?dir=${encodeURIComponent(dir)}`);
+export type SavedList = { name: string; at: string; reason: string; counts: { flagged: number; notSensitive: number; checked: number } };
+export type SensitiveState = {
+  current: { flagged: number; notSensitive: number; checked: number };
+  lists: SavedList[] | null;
+  scan: { enabled: boolean; running?: boolean; pending?: boolean; total?: number; done?: number; perMinute?: number; error?: string };
+};
+/** The sensitive-photo check: the current counts, the saved lists, the scanner's progress. */
+export const sensitiveState = (id: string) => call(`/api/admin/devices/${encodeURIComponent(id)}/lists`) as Promise<SensitiveState>;
+/** Re-check every photo, keeping the ones marked "not sensitive" (the server saves a copy first). */
+export const rescanSensitive = (id: string) =>
+  call(`/api/admin/devices/${encodeURIComponent(id)}/recheck`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ values: [0, 1] }) });
+/** Put a saved list back (the server saves the current one first). */
+export const restoreSensitiveList = (id: string, name: string) =>
+  call(`/api/admin/devices/${encodeURIComponent(id)}/lists/restore`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+
 /**
  * Photos and videos matching a description ("beach", "dog in the snow"),
  * best first, from the backup server's own search index; with no query, how
