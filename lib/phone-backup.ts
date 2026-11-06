@@ -88,6 +88,16 @@ export const sendCommand = (id: string, cmd: "lock" | "wipe" | "locate" | "cance
   call(`/api/admin/devices/${encodeURIComponent(id)}/command`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ cmd }) });
 export const listFiles = (id: string, dir: string) =>
   call(`/api/admin/devices/${encodeURIComponent(id)}/list?dir=${encodeURIComponent(dir)}`);
+/**
+ * Photos and videos matching a description ("beach", "dog in the snow"),
+ * best first, from the backup server's own search index; with no query, how
+ * far indexing has got.
+ */
+export const searchPhotos = (id: string, q: string) =>
+  call(`/api/admin/devices/${encodeURIComponent(id)}/search?q=${encodeURIComponent(q)}`) as Promise<{
+    results?: { p: string; s: number }[];
+    status: { indexed: number; total: number; running: boolean; perMinute?: number; error?: string };
+  }>;
 
 /** Downloads a (small) backed-up file's text, server-side, for parsing. */
 export async function fetchFileText(deviceId: string, path: string, maxBytes = 25 * 1024 * 1024): Promise<string> {

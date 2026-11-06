@@ -29,6 +29,7 @@ export default function GalleryClient({
     listUrl: (dir) => `/api/phones/${phoneId}/files?dir=${encodeURIComponent(dir)}`,
     fileUrl: (path, download) => `/api/phones/${phoneId}/file?p=${encodeURIComponent(path)}${download ? "&download=1" : ""}`,
     thumbUrl: (path) => `/api/phones/${phoneId}/file?p=${encodeURIComponent(path)}&thumb=1`,
+    searchUrl: (q) => `/api/phones/${phoneId}/search?q=${encodeURIComponent(q)}`,
   };
 
   return (
