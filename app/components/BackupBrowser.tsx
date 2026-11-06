@@ -95,7 +95,9 @@ export default function BackupBrowser({ urls, startDir = "" }: { urls: BrowserUr
             const canShow = isVideo || SHOWABLE_IMG.test(m.name) || heic;
             return (
               <button key={m.path} onClick={() => setLightbox(m)} style={mediaTile} title={m.name}>
-                {!isVideo && canShow ? (
+                {isVideo && urls.thumbUrl ? (
+                  <VideoThumb src={urls.thumbUrl(m.path)} name={m.name} />
+                ) : !isVideo && canShow ? (
                   <SensitiveImg src={heic ? `${urls.fileUrl(m.path, false)}&thumb=1&w=1600` : urls.fileUrl(m.path, false)} thumb={urls.thumbUrl?.(m.path)} alt={m.name} fill compact />
                 ) : (
                   <div style={tilePlaceholder}>
@@ -194,3 +196,24 @@ const overlay: React.CSSProperties = {
 const closeBtn: React.CSSProperties = {
   position: "fixed", top: 14, right: 18, background: "none", border: 0, color: "#fff", fontSize: 34, cursor: "pointer", lineHeight: 1,
 };
+
+/**
+ * A frame from the video, which the backup server takes with ffmpeg; the ▶
+ * placeholder stays if it can't (an older server, a damaged file).
+ */
+function VideoThumb({ src, name }: { src: string; name: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return (
+      <div style={tilePlaceholder}>
+        <span style={{ fontSize: 30 }}>▶</span>
+        <span style={{ fontSize: 11, color: "#eee", padding: "0 6px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", width: "100%", textAlign: "center" }}>{name}</span>
+      </div>
+    );
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src={src} alt={name} loading="lazy" onError={() => setFailed(true)}
+      style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover" }} />
+  );
+}
