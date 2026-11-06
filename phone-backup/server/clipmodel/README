@@ -1,0 +1,5 @@
+CLIP ViT-B/32 tokenizer files (vocab.json, merges.txt) from
+https://huggingface.co/openai/clip-vit-base-patch32 (revision 3d74acf9).
+CLIP is released by OpenAI under the MIT License:
+https://github.com/openai/CLIP/blob/main/LICENSE
+The weights are not stored here; the server downloads them (clip.go).

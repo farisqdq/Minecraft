@@ -60,6 +60,12 @@ func (s *Server) startScanner() {
 		}
 		for {
 			s.scanAll()
+			// Then a batch of photo-search indexing (photosearch.go). While
+			// there's a backlog, go straight round again: the sensitive check
+			// gets its turn between batches, so new photos aren't held up.
+			if s.indexAll(clipBatch) {
+				continue
+			}
 			select {
 			case <-time.After(scanEvery):
 			case <-s.scan.kick:

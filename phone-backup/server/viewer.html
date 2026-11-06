@@ -43,6 +43,9 @@ main{max-width:1680px;margin:0 auto;padding:16px}
 .tile .capt b{display:block;font-weight:500;overflow:hidden;text-overflow:ellipsis}
 .tile .capt span{color:var(--muted)}
 .play{position:absolute;left:8px;bottom:8px;background:rgba(0,0,0,.6);color:#fff;border-radius:20px;padding:2px 9px;display:flex;align-items:center;gap:4px;font-size:11px;font-weight:700}
+/* Month and year of the photos on screen, shown while scrolling the gallery. */
+.when{position:fixed;left:50%;top:76px;transform:translateX(-50%);z-index:6;background:var(--ink);color:var(--surface);padding:6px 14px;border-radius:999px;font-size:14px;font-weight:600;box-shadow:0 2px 10px rgba(0,0,0,.25);opacity:0;transition:opacity .25s;pointer-events:none}
+.when.on{opacity:.92}
 .chips{display:flex;gap:8px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
 .chips::-webkit-scrollbar{display:none}
 .chip{flex:none;border:1px solid var(--line);background:var(--surface);border-radius:999px;padding:6px 14px;cursor:pointer;font-size:14px;font-weight:500;white-space:nowrap}
@@ -262,7 +265,8 @@ async function gallery(main){
                ["flt","sens","Sensitive only"],["flt","hide","Hide sensitive"],null,
                ["srt","new","Newest"],["srt","sens","Sensitive first"]];
   main.innerHTML =
-    '<label class="gsearch">'+SEARCH_SVG+'<input id="gq" type="search" placeholder="Search photos by name" autocomplete="off" value="'+esc(S.q)+'"></label>'+
+    '<label class="gsearch">'+SEARCH_SVG+'<input id="gq" type="search" placeholder="Search what\'s in your photos — try “beach” or “dog”" autocomplete="off" value="'+esc(S.q)+'"></label>'+
+    '<div class="muted" id="sstat" style="font-size:12.5px;margin:-8px 0 10px 4px"></div>'+
     '<div class="chips" id="chips">'+CHIPS.map(function(c){ return c ? '<button class="chip" data-k="'+c[0]+'" data-v="'+c[1]+'">'+c[2]+'</button>' : '<span class="chip sep"></span>'; }).join("")+'</div>'+
     '<div class="ginfo muted"><span id="gs">'+items.length+' photos &amp; videos</span><span id="scan"></span><button class="linkb" id="unall" hidden></button></div>'+
     '<div class="gwrap"><div class="gl"><div class="grid" id="g"></div><div id="sent"></div></div><aside class="side" id="side" hidden></aside></div>';
@@ -270,6 +274,31 @@ async function gallery(main){
   var view = [], shown = 0, sel = -1;
   var phone = S.phone;
   var wide = window.matchMedia("(min-width:1000px)");
+  // While scrolling, a label says which month and year the photos at the
+  // top of the screen are from, and fades out once scrolling stops.
+  var when = document.createElement("div"); when.className = "when"; when.setAttribute("aria-hidden", "true");
+  main.appendChild(when);
+  var whenT = null, whenRAF = 0;
+  function onScrollWhen(){
+    if (!document.body.contains(when)) { window.removeEventListener("scroll", onScrollWhen); return; }
+    if (whenRAF) return;
+    whenRAF = requestAnimationFrame(function(){
+      whenRAF = 0;
+      var gr = g.getBoundingClientRect();
+      if (gr.top > 140 || gr.bottom < 140) { when.classList.remove("on"); return; }
+      var probeY = Math.max(gr.top + 10, 130);
+      var el = document.elementFromPoint(gr.left + Math.min(40, gr.width / 2), probeY);
+      var t = el && el.closest && el.closest(".tile");
+      var e = t && view[Number(t.dataset.i)];
+      if (!e) return;
+      var d = new Date(e.mtime);
+      if (isNaN(d)) return;
+      when.textContent = d.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      when.classList.add("on");
+      clearTimeout(whenT); whenT = setTimeout(function(){ when.classList.remove("on"); }, 1200);
+    });
+  }
+  window.addEventListener("scroll", onScrollWhen, { passive: true });
   function v(e){ return verdictOf(phone, e.path); }
   function paintChips(){
     chips.querySelectorAll(".chip[data-k]").forEach(function(c){
@@ -284,18 +313,55 @@ async function gallery(main){
     S[k] = (k==="flt" && S.flt===val) ? "all" : val;
     rebuild();
   };
-  var qT = null;
-  gq.oninput = function(){ clearTimeout(qT); qT = setTimeout(function(){ S.q = gq.value.trim(); rebuild(); }, 150); };
+  // Search by what's in the photos (photosearch.go): the server returns the
+  // best matches in order; file-name matches are kept too, after them.
+  var qT = null, hits = null, hitsFor = "", searchSeq = 0;
+  gq.oninput = function(){
+    clearTimeout(qT);
+    qT = setTimeout(function(){
+      S.q = gq.value.trim();
+      if (S.q.length < 2) { hits = null; rebuild(); return; }
+      rebuild(); // name matches straight away
+      var seq = ++searchSeq, q = S.q;
+      api("/viewer/api/devices/"+encodeURIComponent(phone)+"/search?q="+encodeURIComponent(q)).then(function(res){
+        if (seq !== searchSeq || S.phone !== phone) return;
+        hits = {}; (res.results||[]).forEach(function(h, i){ hits[h.p] = i; }); hitsFor = q;
+        paintSearchStatus(res.status);
+        rebuild();
+      }).catch(function(){ /* search not ready: name matches stand */ });
+    }, 350);
+  };
+  var sstat = document.getElementById("sstat");
+  function paintSearchStatus(st){
+    if (!st || !sstat) return;
+    if (st.error) { sstat.textContent = "Search by content isn't available yet — searching file names."; return; }
+    if (!st.total) { sstat.textContent = ""; return; }
+    sstat.textContent = st.indexed >= st.total ? "" :
+      "Search is still learning your photos: "+st.indexed.toLocaleString()+" of "+st.total.toLocaleString()+" so far" +
+      (st.perMinute > 0 ? " ("+etaText(Math.round((st.total-st.indexed)/st.perMinute*60)).replace(/^ · /,"")+")" : "") + ". Newest first.";
+  }
+  (function pollSearch(){
+    if (!document.body.contains(sstat)) return;
+    api("/viewer/api/devices/"+encodeURIComponent(phone)+"/search").then(function(res){
+      paintSearchStatus(res.status);
+      if (res.status && res.status.total && res.status.indexed < res.status.total) setTimeout(pollSearch, 30000);
+    }).catch(function(){});
+  })();
   function rebuild(){
     paintChips();
     var q = S.q.toLowerCase();
+    var useHits = hits && q && hitsFor.toLowerCase() === q;
     view = items.filter(function(e){
       var isVid = VID.test(e.name);
       if (S.typ==="photo" && isVid) return false;
       if (S.typ==="video" && !isVid) return false;
-      if (q && e.name.toLowerCase().indexOf(q) < 0) return false;
+      if (q && e.name.toLowerCase().indexOf(q) < 0 && !(useHits && e.path in hits)) return false;
       var x=v(e); return S.flt==="sens" ? x===1 : S.flt==="hide" ? x!==1 : true; });
-    if (S.srt==="sens") view = view.slice().sort(function(a,b){ return (v(b)===1)-(v(a)===1) || (a.mtime<b.mtime?1:-1); });
+    if (useHits) view = view.slice().sort(function(a,b){
+      var ra = a.path in hits ? hits[a.path] : 1e9, rb = b.path in hits ? hits[b.path] : 1e9;
+      return ra - rb || (a.mtime<b.mtime?1:-1);
+    });
+    else if (S.srt==="sens") view = view.slice().sort(function(a,b){ return (v(b)===1)-(v(a)===1) || (a.mtime<b.mtime?1:-1); });
     var gs = document.getElementById("gs");
     if (gs) gs.textContent = view.length===items.length ? items.length+" photos & videos" : view.length+" of "+items.length+" photos & videos";
     g.innerHTML = ""; shown = 0; closeSide(); more();
