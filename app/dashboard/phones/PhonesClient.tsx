@@ -22,6 +22,8 @@ type Report = {
   bytesDone?: number;
   bytesTotal?: number;
   etaSec?: number;
+  /** Upload speed in bytes a second, worked out by the backup server. */
+  bps?: number;
   current?: string;
 };
 type Phone = {
@@ -495,6 +497,12 @@ function fmtEta(sec?: number) {
   return `about ${h} hr${mm ? ` ${mm} min` : ""} left`;
 }
 
+/** "3.2 MB/s", or "850 KB/s" when it's slow. */
+function speed(bps: number) {
+  if (bps >= 1024 * 1024) return `${(bps / 1024 / 1024).toFixed(1)} MB/s`;
+  return `${Math.max(1, Math.round(bps / 1024))} KB/s`;
+}
+
 /** The running backup: a bar by bytes (or files) and the phone's ETA. */
 function LiveProgress({ r }: { r: Report }) {
   // Tick every second so the time left counts down between the phone's reports.
@@ -519,6 +527,7 @@ function LiveProgress({ r }: { r: Report }) {
       <div className={styles.helpText} style={{ margin: "6px 0 0" }}>
         {r.total ? `${r.done || 0} of ${r.total} files` : ""}
         {byBytes ? ` · ${human(r.bytesDone)} of ${human(r.bytesTotal)}` : ""}
+        {r.bps && r.bps > 0 ? ` · ${speed(r.bps)}` : ""}
         {r.at ? ` · updated ${ago}` : ""}
       </div>
     </div>

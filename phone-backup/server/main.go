@@ -833,7 +833,7 @@ func (s *Server) handleReport(w http.ResponseWriter, r *http.Request) {
 	}
 	s.mu.Lock()
 	now := time.Now().UTC()
-	d.Report = raw
+	d.Report = withSpeed(d.Report, raw)
 	d.LastSeen = &now
 	err = s.save()
 	s.mu.Unlock()

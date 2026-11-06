@@ -200,7 +200,7 @@ function drawStatus(){
     var eta = r.etaSec!=null ? fmtLeft(r.etaSec - since) : "working out time left…";
     el.innerHTML = '<div class="card status"><div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap"><b>'+esc(p.name)+' — backing up now, '+pct+'%</b><span class="muted">'+esc(eta)+'</span></div>'+
       '<div class="bar"><div style="width:'+pct+'%"></div></div>'+
-      '<div class="muted" style="margin-top:6px;font-size:13px">'+(r.done||0)+' of '+(r.total||0)+' files · '+human(r.bytesDone)+' of '+human(r.bytesTotal)+' · updated '+(since<5?"just now":Math.round(since)+" s ago")+'</div></div>';
+      '<div class="muted" style="margin-top:6px;font-size:13px">'+(r.done||0)+' of '+(r.total||0)+' files · '+human(r.bytesDone)+' of '+human(r.bytesTotal)+(r.bps>0?' · '+human(r.bps)+'/s':'')+' · updated '+(since<5?"just now":Math.round(since)+" s ago")+'</div></div>';
   } else {
     var last = r.error ? '<span class="err">Last backup: '+esc(r.error)+'</span>'
       : r.at ? 'Last backup '+when(r.at)+(r.sentFiles!=null? ' · sent '+r.sentFiles+' new files ('+human(r.sentBytes)+')':'') : 'No backup yet';
