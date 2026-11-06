@@ -2,17 +2,16 @@ package main
 
 // The sensitive-photo detector, run on the server.
 //
-// It is the same model the viewer runs in the browser (NSFWJS's
-// MobileNetV2, MIT licensed, nsfwmodel/), with the same verdict rule, so a
-// photo comes out the same whichever side checks it. Running it here means
-// photos are checked as they arrive, by the server's own CPU, with nobody
-// needing to keep the gallery open — and a phone or old laptop no longer
-// has to do the work.
+// NSFWJS's "MobileNetV2Mid" model (MIT licensed, nsfwmodel/): a wider
+// MobileNetV2 trained on more data than the small model the viewer runs in
+// the browser, so it's fooled less often by ordinary photos (the small one
+// flagged blurry close-ups of car seats). It still gives the same five
+// scores, and the verdict rule is the viewer's.
 //
-// Pure Go: the network is a few layer types (convolutions, batch norm,
-// ReLU6, adds, pooling, three dense layers) evaluated directly, so the
-// server needs no extra runtime or DLL. One photo takes a fraction of a
-// second on one core; the scanner (scan.go) runs a few at once.
+// Pure Go: the network is a short list of fused convolutions, adds, a pool
+// and a dense layer, evaluated directly, so the server needs no extra
+// runtime or DLL. One photo takes about half a second on one core; the
+// scanner (scan.go) runs a few at once.
 
 import (
 	"embed"
@@ -23,7 +22,7 @@ import (
 	"sync"
 )
 
-//go:embed nsfwmodel/model.json nsfwmodel/weights.bin
+//go:embed nsfwmodel/mid.json nsfwmodel/mid.bin
 var nsfwFiles embed.FS
 
 // NSFWJS's classes, in the model's output order.
@@ -31,26 +30,32 @@ var nsfwClasses = [5]string{"Drawing", "Hentai", "Neutral", "Porn", "Sexy"}
 
 const nsfwInput = 224
 
+// nsLayer is one convolution: the shapes and weights conv and depthwise use.
 type nsLayer struct {
-	Class   string          `json:"class_name"`
-	Name    string          `json:"name"`
-	Config  json.RawMessage `json:"config"`
-	Inbound []string        `json:"inbound"`
-
-	// parsed
 	kh, kw, stride int
 	same           bool
-	pad            [4]int // top, bottom, left, right (ZeroPadding2D)
 	kernel, bias   []float32
 	cin, cout      int
-	scale, shift   []float32 // batch norm folded to y = x*scale + shift
-	maxValue       float32
-	act            string
-	pool           int
+}
+
+// One step of the model's graph, with inputs by node id.
+type nsNode struct {
+	ID      int      `json:"id"`
+	Op      string   `json:"op"`
+	In      []int    `json:"in"`
+	Stride  int      `json:"stride"`
+	Padding string   `json:"padding"`
+	Fused   []string `json:"fused"`
+	Ksize   int      `json:"ksize"`
+
+	layer nsLayer
+	relu6 bool
 }
 
 type nsModel struct {
-	layers []*nsLayer
+	input, output int
+	nodes         []*nsNode
+	consts        map[int][]float32
 }
 
 var (
@@ -65,133 +70,85 @@ func nsfwModel() (*nsModel, error) {
 }
 
 func loadNSFW() (*nsModel, error) {
-	raw, err := nsfwFiles.ReadFile("nsfwmodel/model.json")
+	raw, err := nsfwFiles.ReadFile("nsfwmodel/mid.json")
 	if err != nil {
 		return nil, err
 	}
-	bin, err := nsfwFiles.ReadFile("nsfwmodel/weights.bin")
+	bin, err := nsfwFiles.ReadFile("nsfwmodel/mid.bin")
 	if err != nil {
 		return nil, err
 	}
 	var def struct {
-		Layers  []*nsLayer `json:"layers"`
+		Input   int       `json:"input"`
+		Output  int       `json:"output"`
+		Nodes   []*nsNode `json:"nodes"`
 		Weights []struct {
-			Name  string `json:"name"`
-			Shape []int  `json:"shape"`
-			Quant struct {
-				Min   float64 `json:"min"`
-				Scale float64 `json:"scale"`
-				Dtype string  `json:"dtype"`
-			} `json:"quantization"`
+			ID    int     `json:"id"`
+			Shape []int   `json:"shape"`
+			Min   float64 `json:"min"`
+			Scale float64 `json:"scale"`
 		} `json:"weights"`
 	}
 	if err := json.Unmarshal(raw, &def); err != nil {
 		return nil, err
 	}
 	// Weights are stored one after another, each value a byte: q*scale+min.
-	weights := map[string][]float32{}
-	shapes := map[string][]int{}
+	consts := map[int][]float32{}
+	shapes := map[int][]int{}
 	off := 0
 	for _, w := range def.Weights {
-		if w.Quant.Dtype != "uint8" {
-			return nil, fmt.Errorf("weight %s: unsupported %q", w.Name, w.Quant.Dtype)
-		}
 		n := 1
 		for _, d := range w.Shape {
 			n *= d
 		}
 		if off+n > len(bin) {
-			return nil, fmt.Errorf("weights file too short at %s", w.Name)
+			return nil, fmt.Errorf("weights file too short")
 		}
 		vals := make([]float32, n)
 		for i := 0; i < n; i++ {
-			vals[i] = float32(float64(bin[off+i])*w.Quant.Scale + w.Quant.Min)
+			vals[i] = float32(float64(bin[off+i])*w.Scale + w.Min)
 		}
 		off += n
-		weights[w.Name] = vals
-		shapes[w.Name] = w.Shape
+		consts[w.ID] = vals
+		shapes[w.ID] = w.Shape
 	}
-
-	for _, l := range def.Layers {
-		var c struct {
-			KernelSize []int    `json:"kernel_size"`
-			Strides    []int    `json:"strides"`
-			Padding    any      `json:"padding"`
-			Filters    int      `json:"filters"`
-			Units      int      `json:"units"`
-			Activation string   `json:"activation"`
-			MaxValue   *float64 `json:"max_value"`
-			Epsilon    float64  `json:"epsilon"`
-			PoolSize   []int    `json:"pool_size"`
-			UseBias    bool     `json:"use_bias"`
-			DepthMul   int      `json:"depth_multiplier"`
-		}
-		if err := json.Unmarshal(l.Config, &c); err != nil {
-			return nil, fmt.Errorf("layer %s: %w", l.Name, err)
-		}
-		l.act = c.Activation
-		switch l.Class {
-		case "InputLayer", "Add", "Flatten", "Dropout":
-		case "ZeroPadding2D":
-			p, ok := c.Padding.([]any)
-			if !ok || len(p) != 2 {
-				return nil, fmt.Errorf("layer %s: odd padding", l.Name)
+	if off != len(bin) {
+		return nil, fmt.Errorf("weights file has %d bytes left over", len(bin)-off)
+	}
+	for _, n := range def.Nodes {
+		switch n.Op {
+		case "_FusedConv2D", "FusedDepthwiseConv2dNative", "_FusedMatMul":
+			if len(n.In) != 3 {
+				return nil, fmt.Errorf("node %d: %s with %d inputs", n.ID, n.Op, len(n.In))
 			}
-			for i := 0; i < 2; i++ {
-				pair := p[i].([]any)
-				l.pad[i*2] = int(pair[0].(float64))
-				l.pad[i*2+1] = int(pair[1].(float64))
+			k, b, sh := consts[n.In[1]], consts[n.In[2]], shapes[n.In[1]]
+			if k == nil || b == nil {
+				return nil, fmt.Errorf("node %d: missing weights", n.ID)
 			}
-		case "Conv2D", "DepthwiseConv2D":
-			l.kh, l.kw, l.stride = c.KernelSize[0], c.KernelSize[1], c.Strides[0]
-			l.same = c.Padding == "same"
-			name := l.Name + "/kernel"
-			if l.Class == "DepthwiseConv2D" {
-				name = l.Name + "/depthwise_kernel"
-				if c.DepthMul != 1 {
-					return nil, fmt.Errorf("layer %s: depth multiplier %d", l.Name, c.DepthMul)
+			for _, f := range n.Fused {
+				switch f {
+				case "BiasAdd":
+				case "Relu6":
+					n.relu6 = true
+				default:
+					return nil, fmt.Errorf("node %d: unsupported fused op %s", n.ID, f)
 				}
 			}
-			l.kernel = weights[name]
-			sh := shapes[name]
-			if l.kernel == nil || len(sh) != 4 {
-				return nil, fmt.Errorf("layer %s: no kernel", l.Name)
+			n.layer = nsLayer{kernel: k, bias: b, stride: max(n.Stride, 1), same: n.Padding == "SAME"}
+			if n.Op == "_FusedMatMul" {
+				n.layer.cin, n.layer.cout = sh[0], sh[1]
+			} else {
+				n.layer.kh, n.layer.kw, n.layer.cin, n.layer.cout = sh[0], sh[1], sh[2], sh[3]
+				if n.Op == "FusedDepthwiseConv2dNative" && sh[3] != 1 {
+					return nil, fmt.Errorf("node %d: depth multiplier %d", n.ID, sh[3])
+				}
 			}
-			l.cin, l.cout = sh[2], sh[3]
-			if c.UseBias {
-				l.bias = weights[l.Name+"/bias"]
-			}
-		case "BatchNormalization":
-			g, b := weights[l.Name+"/gamma"], weights[l.Name+"/beta"]
-			m, v := weights[l.Name+"/moving_mean"], weights[l.Name+"/moving_variance"]
-			if g == nil || b == nil || m == nil || v == nil {
-				return nil, fmt.Errorf("layer %s: missing weights", l.Name)
-			}
-			l.scale, l.shift = make([]float32, len(g)), make([]float32, len(g))
-			for i := range g {
-				s := float64(g[i]) / math.Sqrt(float64(v[i])+c.Epsilon)
-				l.scale[i] = float32(s)
-				l.shift[i] = float32(float64(b[i]) - float64(m[i])*s)
-			}
-		case "ReLU":
-			l.maxValue = float32(math.Inf(1))
-			if c.MaxValue != nil {
-				l.maxValue = float32(*c.MaxValue)
-			}
-		case "AveragePooling2D":
-			l.pool = c.PoolSize[0]
-		case "Dense":
-			l.kernel, l.bias = weights[l.Name+"/kernel"], weights[l.Name+"/bias"]
-			sh := shapes[l.Name+"/kernel"]
-			if l.kernel == nil || len(sh) != 2 {
-				return nil, fmt.Errorf("layer %s: no kernel", l.Name)
-			}
-			l.cin, l.cout = sh[0], sh[1]
+		case "Mul", "Sub", "AddV2", "AvgPool", "Squeeze", "Softmax", "Placeholder":
 		default:
-			return nil, fmt.Errorf("layer %s: unsupported %s", l.Name, l.Class)
+			return nil, fmt.Errorf("node %d: unsupported op %s", n.ID, n.Op)
 		}
 	}
-	return &nsModel{layers: def.Layers}, nil
+	return &nsModel{input: def.Input, output: def.Output, nodes: def.Nodes, consts: consts}, nil
 }
 
 // tensor is height × width × channels, channels last.
@@ -307,50 +264,65 @@ func (l *nsLayer) depthwise(x *tensor) *tensor {
 // returns the five class probabilities.
 func (m *nsModel) predict(input *tensor) ([5]float32, error) {
 	var probs [5]float32
-	out := map[string]*tensor{}
-	var last *tensor
-	for _, l := range m.layers {
-		var x *tensor
-		if len(l.Inbound) > 0 {
-			x = out[l.Inbound[0]]
-			if x == nil {
-				return probs, fmt.Errorf("layer %s: input %s not ready", l.Name, l.Inbound[0])
-			}
+	vals := map[int]*tensor{m.input: input}
+	get := func(id int) (*tensor, error) {
+		if t := vals[id]; t != nil {
+			return t, nil
+		}
+		if c := m.consts[id]; c != nil {
+			return &tensor{1, 1, len(c), c}, nil
+		}
+		return nil, fmt.Errorf("value %d not ready", id)
+	}
+	for _, n := range m.nodes {
+		if n.Op == "Placeholder" {
+			continue // the input, already in vals
+		}
+		x, err := get(n.In[0])
+		if err != nil {
+			return probs, err
 		}
 		var y *tensor
-		switch l.Class {
-		case "InputLayer":
-			y = input
-		case "ZeroPadding2D":
-			y = newTensor(x.h+l.pad[0]+l.pad[1], x.w+l.pad[2]+l.pad[3], x.c)
-			for r := 0; r < x.h; r++ {
-				copy(y.d[((r+l.pad[0])*y.w+l.pad[2])*x.c:], x.d[r*x.w*x.c:(r+1)*x.w*x.c])
+		switch n.Op {
+		case "Mul", "Sub", "AddV2":
+			b, err := get(n.In[1])
+			if err != nil {
+				return probs, err
 			}
-		case "Conv2D":
-			y = l.conv(x)
-		case "DepthwiseConv2D":
-			y = l.depthwise(x)
-		case "BatchNormalization":
-			y = newTensor(x.h, x.w, x.c)
-			for i, v := range x.d {
-				ch := i % x.c
-				y.d[i] = v*l.scale[ch] + l.shift[ch]
+			// Either side may be a scalar or a per-channel row, broadcast
+			// over the other: the input scaling is const*image.
+			big := x
+			if len(b.d) > len(x.d) {
+				big = b
 			}
-		case "ReLU":
-			y = newTensor(x.h, x.w, x.c)
-			for i, v := range x.d {
-				y.d[i] = min(max(v, 0), l.maxValue)
+			if len(big.d)%len(x.d) != 0 || len(big.d)%len(b.d) != 0 {
+				return probs, fmt.Errorf("node %d: odd broadcast", n.ID)
 			}
-		case "Add":
-			b := out[l.Inbound[1]]
-			y = newTensor(x.h, x.w, x.c)
-			for i := range x.d {
-				y.d[i] = x.d[i] + b.d[i]
+			y = newTensor(big.h, big.w, big.c)
+			for i := range y.d {
+				v, w := x.d[i%len(x.d)], b.d[i%len(b.d)]
+				switch n.Op {
+				case "Mul":
+					y.d[i] = v * w
+				case "Sub":
+					y.d[i] = v - w
+				default:
+					y.d[i] = v + w
+				}
 			}
-		case "AveragePooling2D":
-			// The model's pool covers the whole 7×7 map: a global average.
-			if x.h != l.pool || x.w != l.pool {
-				return probs, fmt.Errorf("pool %d over %dx%d", l.pool, x.h, x.w)
+		case "_FusedConv2D":
+			y = n.layer.conv(x)
+		case "FusedDepthwiseConv2dNative":
+			y = n.layer.depthwise(x)
+			for p := 0; p < y.h*y.w; p++ {
+				for ch := 0; ch < y.c; ch++ {
+					y.d[p*y.c+ch] += n.layer.bias[ch]
+				}
+			}
+		case "AvgPool":
+			// The pool covers the whole 7×7 map: a global average.
+			if x.h != n.Ksize || x.w != n.Ksize {
+				return probs, fmt.Errorf("pool %d over %dx%d", n.Ksize, x.h, x.w)
 			}
 			y = newTensor(1, 1, x.c)
 			for p := 0; p < x.h*x.w; p++ {
@@ -361,9 +333,10 @@ func (m *nsModel) predict(input *tensor) ([5]float32, error) {
 			for ch := range y.d {
 				y.d[ch] /= float32(x.h * x.w)
 			}
-		case "Flatten", "Dropout":
+		case "Squeeze":
 			y = &tensor{1, 1, len(x.d), x.d}
-		case "Dense":
+		case "_FusedMatMul":
+			l := n.layer
 			y = newTensor(1, 1, l.cout)
 			copy(y.d, l.bias)
 			for ci, v := range x.d {
@@ -372,34 +345,34 @@ func (m *nsModel) predict(input *tensor) ([5]float32, error) {
 					y.d[co] += v * k
 				}
 			}
-			switch l.act {
-			case "relu":
-				for i, v := range y.d {
-					y.d[i] = max(v, 0)
-				}
-			case "softmax":
-				mx := y.d[0]
-				for _, v := range y.d {
-					mx = max(mx, v)
-				}
-				var sum float64
-				for i, v := range y.d {
-					e := math.Exp(float64(v - mx))
-					y.d[i] = float32(e)
-					sum += e
-				}
-				for i := range y.d {
-					y.d[i] = float32(float64(y.d[i]) / sum)
-				}
+		case "Softmax":
+			y = newTensor(1, 1, len(x.d))
+			mx := x.d[0]
+			for _, v := range x.d {
+				mx = max(mx, v)
+			}
+			var sum float64
+			for i, v := range x.d {
+				e := math.Exp(float64(v - mx))
+				y.d[i] = float32(e)
+				sum += e
+			}
+			for i := range y.d {
+				y.d[i] = float32(float64(y.d[i]) / sum)
 			}
 		}
-		out[l.Name] = y
-		last = y
+		if n.relu6 {
+			for i, v := range y.d {
+				y.d[i] = min(max(v, 0), 6)
+			}
+		}
+		vals[n.ID] = y
 	}
-	if last == nil || len(last.d) != 5 {
+	out := vals[m.output]
+	if out == nil || len(out.d) != 5 {
 		return probs, fmt.Errorf("unexpected output")
 	}
-	copy(probs[:], last.d)
+	copy(probs[:], out.d)
 	return probs, nil
 }
 
