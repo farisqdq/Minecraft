@@ -307,7 +307,7 @@ async function gallery(main){
       var i = shown + k, vid = VID.test(e.name);
       var b = document.createElement("button"); b.className="tile"+(v(e)===1?" sens":""); b.title=e.name; b.dataset.p=e.path; b.dataset.i=i;
       var cap = '<span class="capt"><b>'+esc(e.name)+'</b><span>'+esc(shortDate(e.mtime))+(e.size?' · '+human(e.size):'')+'</span></span>';
-      if (vid) { b.style.setProperty("--r", "0.75"); b.innerHTML = '<div class="im"><div class="ph">Video</div><span class="play">▶ Video</span></div>'+cap; }
+      if (vid) { b.style.setProperty("--r", "0.75"); b.innerHTML = '<div class="im"><div class="ph">Video</div><span class="play">▶ Video</span><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div></div>'+cap; }
       else {
         b.innerHTML = '<div class="im"><img loading="lazy" alt="" src="'+fileUrl(e.path,"&thumb=1")+'"><div class="cover"><span style="font-size:16px">⚠</span>Sensitive<span style="font-weight:400">tap to view</span></div></div>'+cap;
         // Thumbnails keep the photo's shape; once one arrives its tile takes
@@ -384,7 +384,7 @@ async function gallery(main){
     if (sensitive) paintUnall();
     if (sensitive) { var t = g.querySelector('[data-p="'+CSS.escape(path)+'"]'); if (t) t.classList.add("sens"); }
     var sc = document.getElementById("scan");
-    if (sc) sc.textContent = scanState.left ? "· "+(scanState.server ? "Server is checking" : "Checking")+" for sensitive photos… "+scanState.done+" of "+scanState.total+" · "+scanState.flagged+" flagged"+scanEta()
+    if (sc) sc.textContent = scanState.left ? "· "+(scanState.server ? "Server is checking photos & videos" : "Checking photos")+" for sensitive content… "+scanState.done+" of "+scanState.total+" · "+scanState.flagged+" flagged"+scanEta()
                                             : "· "+scanState.flagged+" sensitive found";
     if (done && S.flt!=="all") rebuild();
   });
@@ -496,7 +496,7 @@ function getModel(){
 // its verdicts every few seconds instead of running the model here.
 async function watchServerScan(phone, items, onUpdate, run){
   scanState.server = true;
-  var photos = items.filter(function(e){ return !VID.test(e.name); });
+  var photos = items; // the server checks videos too, frame by frame
   function count(){
     var m = nsLoad(), left = 0, flagged = 0;
     photos.forEach(function(e){ var x = m[phone+"|"+e.path]; if (x == null) left++; else if (x === 1) flagged++; });

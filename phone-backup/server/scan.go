@@ -28,6 +28,9 @@ import (
 // The photos the viewer shows and checks (viewer.html's IMG and HEIC).
 var scanPhoto = regexp.MustCompile(`(?i)\.(jpe?g|png|gif|webp|bmp|avif|heic|heif)$`)
 
+// And the videos (viewer.html's VID), checked frame by frame (videoscan.go).
+var scanVideo = regexp.MustCompile(`(?i)\.(mp4|mov|m4v|3gp|mkv|webm)$`)
+
 const scanEvery = 5 * time.Minute
 
 type scanProgress struct {
@@ -109,20 +112,30 @@ func (s *Server) scanAll() {
 
 func (s *Server) scanDevice(id string) {
 	base := s.deviceDir(id)
-	var photos []string
+	// Videos only when ffmpeg is there to read them; otherwise they wait
+	// for a pass that has it, rather than counting as unreadable.
+	_, ffErr := s.ffmpegPath()
+	var photos, videos []string
 	filepath.WalkDir(filepath.Join(base, "Photos"), func(p string, e fs.DirEntry, err error) error {
+		if err != nil || e.IsDir() || strings.HasSuffix(e.Name(), ".part") {
+			return nil
+		}
+		rel, err := filepath.Rel(base, p)
 		if err != nil {
 			return nil
 		}
-		if !e.IsDir() && scanPhoto.MatchString(e.Name()) && !strings.HasSuffix(e.Name(), ".part") {
-			if rel, err := filepath.Rel(base, p); err == nil {
-				photos = append(photos, filepath.ToSlash(rel))
-			}
+		if scanPhoto.MatchString(e.Name()) {
+			photos = append(photos, filepath.ToSlash(rel))
+		} else if ffErr == nil && scanVideo.MatchString(e.Name()) {
+			videos = append(videos, filepath.ToSlash(rel))
 		}
 		return nil
 	})
-	// Newest-looking first, so what just came in is checked before the backlog.
+	// Newest-looking first, so what just came in is checked before the
+	// backlog; photos before videos, which take far longer each.
 	sort.Sort(sort.Reverse(sort.StringSlice(photos)))
+	sort.Sort(sort.Reverse(sort.StringSlice(videos)))
+	photos = append(photos, videos...)
 
 	flagsMu.Lock()
 	known := s.readFlags(id)
@@ -135,6 +148,9 @@ func (s *Server) scanDevice(id string) {
 		}
 	}
 	prog := &scanProgress{Running: len(todo) > 0, Total: len(photos), Done: len(photos) - len(todo)}
+	if ffErr != nil {
+		prog.Error = "Videos aren't being checked yet: " + ffErr.Error()
+	}
 	s.scan.progress[id] = prog
 	s.scan.mu.Unlock()
 	if len(todo) == 0 {
@@ -169,7 +185,16 @@ func (s *Server) scanDevice(id string) {
 		go func() {
 			defer wg.Done()
 			for rel := range jobs {
-				sensitive, err := s.checkPhoto(id, rel)
+				var sensitive bool
+				var err error
+				if scanVideo.MatchString(rel) {
+					var frames int
+					t0 := time.Now()
+					sensitive, frames, err = s.checkVideo(id, rel)
+					s.logger.Printf("video check: %s: %d frames in %s, flagged %v, err %v", rel, frames, time.Since(t0).Round(time.Second), sensitive, err)
+				} else {
+					sensitive, err = s.checkPhoto(id, rel)
+				}
 				resMu.Lock()
 				s.scan.mu.Lock()
 				if err != nil {
