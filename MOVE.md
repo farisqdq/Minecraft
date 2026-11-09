@@ -21,14 +21,12 @@ Backups do NOT go through Vercel storage — they go straight to the VPS to avoi
 ## The VPS backup server
 
 - **URL:** https://backup.eqal.rentals  (A record → **207.180.211.137**, the Contabo VPS; added in Vercel DNS).
-- **Shared secret** (server password; also in Vercel env `PHONE_BACKUP_SECRET`):
-  `bb496b49cc3a7b82e7449d4952eb4aa4de671f99ba8a597ef248d95be035fc15`
-  Keep this private. Admin API auth is `Authorization: Bearer <secret>`.
+- **Shared secret** (server password): **not written here — this repo is public.** It's the Vercel env var `PHONE_BACKUP_SECRET` (Production) and the `secret` in `C:\PhoneBackups\config.json` on the VPS. Admin API auth is `Authorization: Bearer <secret>`. To change it without touching the VPS: `POST /api/admin/secret {"secret":"<new, 32+ chars>"}` with the current one (phone-backup/server/secret.go), then set the same value in Vercel and redeploy.
 - **Source:** `phone-backup/server/main.go` (Go, single Windows exe, serves its own HTTPS via Let's Encrypt/autocert). Data stored in `C:\PhoneBackups\devices\<deviceId>\{Photos,Files,Contacts,Calls,Texts,Apps}`.
 - **Build the exe:** `cd phone-backup/server && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../dist/rentroll-backup.exe .`
 - **Deploy/update:** Faris (or a chat with VPS access) runs this in an **Administrator PowerShell on the VPS**:
   ```
-  [Net.ServicePointManager]::SecurityProtocol='Tls12'; iwr 'https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/install-backup-server.ps1' -OutFile "$env:TEMP\rr-install.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\rr-install.ps1" -Secret 'bb496b49cc3a7b82e7449d4952eb4aa4de671f99ba8a597ef248d95be035fc15'
+  [Net.ServicePointManager]::SecurityProtocol='Tls12'; iwr 'https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/install-backup-server.ps1' -OutFile "$env:TEMP\rr-install.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\rr-install.ps1" -Secret '<the secret from Vercel env PHONE_BACKUP_SECRET>'
   ```
   It downloads the newest exe from GitHub, writes config, and restarts the scheduled task. ~30s downtime during restart (that's the "failed to connect" blip).
 - **Check it live:** `curl https://backup.eqal.rentals/health` → `{"ok":true}`.

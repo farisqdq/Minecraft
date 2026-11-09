@@ -117,6 +117,7 @@ func appVersionFromUA(ua string) string {
 
 type Server struct {
 	cfg     Config
+	cfgPath string // config.json, rewritten when the secret is changed (secret.go)
 	mu      sync.Mutex
 	devices []*Device
 	sizes   map[string]*usage // per device
@@ -156,6 +157,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	s.cfgPath = *cfgPath
 	s.logger.Printf("phone backup server %s starting, data in %s", version, cfg.DataDir)
 
 	if cfg.Domain == "" {
@@ -464,6 +466,7 @@ func (s *Server) routes() http.Handler {
 	// Rent Roll side.
 	mux.HandleFunc("GET /api/admin/summary", s.admin(s.handleSummary))
 	mux.HandleFunc("POST /api/admin/update", s.admin(s.handleSelfUpdate))
+	mux.HandleFunc("POST /api/admin/secret", s.admin(s.handleChangeSecret))
 	mux.HandleFunc("POST /api/admin/devices", s.admin(s.handleCreate))
 	mux.HandleFunc("POST /api/admin/devices/{id}/code", s.admin(s.handleNewCode))
 	mux.HandleFunc("POST /api/admin/devices/{id}/request", s.admin(s.handleRequestBackup))
