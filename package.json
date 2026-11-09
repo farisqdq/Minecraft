@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "scripts": {
     "dev": "next dev",
-    "build": "prisma generate && node scripts/copy-pdfjs.js && node prisma/baseline.js && node prisma/migrate.js && next build",
+    "build": "prisma generate && node scripts/copy-pdfjs.js && node scripts/copy-downloads.js && node prisma/baseline.js && node prisma/migrate.js && next build",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate && node scripts/copy-pdfjs.js",

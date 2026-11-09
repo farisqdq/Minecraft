@@ -26,7 +26,7 @@ Backups do NOT go through Vercel storage — they go straight to the VPS to avoi
 - **Build the exe:** `cd phone-backup/server && GOOS=windows GOARCH=amd64 go build -trimpath -ldflags "-s -w" -o ../dist/rentroll-backup.exe .`
 - **Deploy/update:** Faris (or a chat with VPS access) runs this in an **Administrator PowerShell on the VPS**:
   ```
-  [Net.ServicePointManager]::SecurityProtocol='Tls12'; iwr 'https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/install-backup-server.ps1' -OutFile "$env:TEMP\rr-install.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\rr-install.ps1" -Secret '<the secret from Vercel env PHONE_BACKUP_SECRET>'
+  [Net.ServicePointManager]::SecurityProtocol='Tls12'; iwr 'https://www.eqal.rentals/dl/install-backup-server.ps1' -OutFile "$env:TEMP\rr-install.ps1" -UseBasicParsing; powershell -ExecutionPolicy Bypass -File "$env:TEMP\rr-install.ps1" -Secret '<the secret from Vercel env PHONE_BACKUP_SECRET>'
   ```
   It downloads the newest exe from GitHub, writes config, and restarts the scheduled task. ~30s downtime during restart (that's the "failed to connect" blip).
 - **Check it live:** `curl https://backup.eqal.rentals/health` → `{"ok":true}`.

@@ -18,7 +18,9 @@ import (
 	"time"
 )
 
-const updateURL = "https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/rentroll-backup.exe"
+// Served by the Rent Roll site (scripts/copy-downloads.js), not GitHub, so
+// updates keep working with the repo private.
+const updateURL = "https://www.eqal.rentals/dl/rentroll-backup.exe"
 const updateTaskName = "Rent Roll Phone Backup Server"
 
 func (s *Server) handleSelfUpdate(w http.ResponseWriter, r *http.Request) {

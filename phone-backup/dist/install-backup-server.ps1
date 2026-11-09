@@ -6,7 +6,7 @@ param(
   [string]$Domain = "backup.eqal.rentals",
   [string]$DataDir = "C:\PhoneBackups",
   [double]$MinFreeGB = 10,
-  [string]$ExeUrl = "https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/rentroll-backup.exe"
+  [string]$ExeUrl = "https://www.eqal.rentals/dl/rentroll-backup.exe"
 )
 $ErrorActionPreference = "Stop"
 $TaskName = "Rent Roll Phone Backup Server"

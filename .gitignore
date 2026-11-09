@@ -33,4 +33,6 @@ tsconfig.tsbuildinfo
 
 # pdf.js worker and data, copied from node_modules (scripts/copy-pdfjs.js)
 /public/pdfjs/
+# phone-backup downloads, copied from phone-backup/dist (scripts/copy-downloads.js)
+/public/dl/
 phone-backup/server/phone-backup-server

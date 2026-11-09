@@ -18,7 +18,7 @@ import java.io.File
 object Updater {
 
     private const val MANIFEST =
-        "https://raw.githubusercontent.com/farisqdq/minecraft/claude/rental-profit-tracker-p2d5xy/phone-backup/dist/latest.json"
+        "https://www.eqal.rentals/dl/latest.json"
 
     @Volatile private var checkedThisLaunch = false
 
