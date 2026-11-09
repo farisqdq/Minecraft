@@ -1,1 +1,4 @@
-phone-backup/
+# The phone-backup sources aren't part of the site, except phone-backup/dist:
+# scripts/copy-downloads.js serves those files at /dl/.
+phone-backup/*
+!phone-backup/dist/
