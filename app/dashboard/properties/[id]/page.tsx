@@ -102,6 +102,14 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
   const unreadMessages = await unreadByTenantForProperty(property.id);
   // Listings for this property's empty places (a27).
   const listings = await listingsWhere({ propertyId: property.id });
+  // Free months (a35) are statement credits, not ledger entries, so they're
+  // fetched on their own to show up in "Recent activity" alongside the ledger.
+  const freeMonths = await prisma.tenantCharge.findMany({
+    where: { freeRent: true, tenant: { propertyId: property.id } },
+    orderBy: { createdAt: "desc" },
+    take: 12,
+    select: { id: true, month: true, amount: true, label: true, createdAt: true, tenant: { select: { name: true, unitId: true } } },
+  });
   // Each tenant's latest renewal (a25), for the line on their card.
   const renewals = await prisma.leaseRenewal.findMany({
     where: { tenant: { propertyId: property.id } },
@@ -185,6 +193,15 @@ export default async function PropertyManagePage({ params }: { params: Promise<{
       rentChanges={rentChanges.map(serializeRentChange)}
       initialRenewals={Object.fromEntries(renewals.map((r) => [r.tenantId, serializeRenewal(r)]))}
       initialListings={listings}
+      freeMonths={freeMonths.map((f) => ({
+        id: f.id,
+        unitId: f.tenant.unitId,
+        tenantName: f.tenant.name,
+        month: f.month,
+        amount: f.amount,
+        label: f.label,
+        date: f.createdAt.toISOString().slice(0, 10),
+      }))}
       transactions={transactions.map((t) => ({
         id: t.id,
         unitId: t.unitId,

@@ -66,6 +66,19 @@ type Property = {
   /** YYYY-MM-DD rent stopped coming in, when known. */
   vacantSince: string | null;
 };
+/** A free month (a35): a statement credit, shown in "Recent activity" but not in the ledger. */
+type FreeMonthEntry = {
+  id: string;
+  unitId: string | null;
+  tenantName: string;
+  /** YYYY-MM */
+  month: string;
+  amount: number;
+  label: string;
+  /** The day it was given. */
+  date: string;
+};
+
 type LedgerEntry = {
   id: string;
   unitId: string | null;
@@ -156,6 +169,7 @@ export default function PropertyManageClient({
   storageReady,
   rentChanges: initialRentChanges,
   transactions: initialTransactions,
+  freeMonths = [],
   initialPortal,
   initialRequests,
   unreadMessages = {},
@@ -193,6 +207,8 @@ export default function PropertyManageClient({
   storageReady: boolean;
   rentChanges: RentChangeDTO[];
   transactions: LedgerEntry[];
+  /** The latest free months given on this property (a35), newest first. */
+  freeMonths?: FreeMonthEntry[];
   /** Portal access per tenant id, so the cards render it without a round trip. */
   initialPortal: Record<string, PortalAccess>;
   /** What's been reported on this property, urgent first. */
@@ -1321,7 +1337,15 @@ export default function PropertyManageClient({
   const currentTenants = tenants.filter((t) => t.active);
   const pastTenants = tenants.filter((t) => !t.active);
   const depositsHeld = currentTenants.reduce((sum, t) => sum + t.deposit, 0);
-  const recentEntries = transactions.slice(0, 12);
+  // The ledger's latest entries plus any free months given in that time,
+  // newest first. A free month isn't money in, so it's only shown here.
+  const recentEntries: Array<(LedgerEntry & { free?: undefined }) | (FreeMonthEntry & { free: true })> = [
+    ...transactions.slice(0, 12),
+    ...freeMonths.map((f) => ({ ...f, free: true as const })),
+  ]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .slice(0, 12);
+  const ledgerShown = recentEntries.filter((r) => !r.free).length;
 
   return (
     <AppShell
@@ -2428,7 +2452,24 @@ export default function PropertyManageClient({
                 </tr>
               </thead>
               <tbody>
-                {recentEntries.map((t) => (
+                {recentEntries.map((t) => t.free ? (
+                  <tr key={`free-${t.id}`}>
+                    <td>{formatDay(t.date)}</td>
+                    <td>{unitLabel(t.unitId)}</td>
+                    <td>
+                      <span className={`${styles.tag} ${styles.rent}`}>Free month</span>
+                    </td>
+                    <td>
+                      {t.tenantName}
+                      {t.label !== "Free month" && <div className={styles.note}>{t.label.replace(/^Free month — /, "")}</div>}
+                      <div className={styles.note}>Counts toward {monthLabel(t.month)} · not money in</div>
+                    </td>
+                    <td className={`${styles.amt} num`}>{money(t.amount)}</td>
+                    {!viewOnly && <td>
+                      <div className={styles.note}>Undo on their statement</div>
+                    </td>}
+                  </tr>
+                ) : (
                   <tr key={t.id}>
                     <td>{formatDay(t.date)}</td>
                     <td>{unitLabel(t.unitId)}</td>
@@ -2505,7 +2546,7 @@ export default function PropertyManageClient({
             </table>
           </div>
         )}
-        {transactions.length > recentEntries.length && (
+        {transactions.length > ledgerShown && (
           <p className={styles.helpText}>
             Showing the {recentEntries.length} most recent. The full ledger, with filters, is on the
             dashboard.
