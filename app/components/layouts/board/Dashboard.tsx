@@ -148,6 +148,7 @@ export default function BoardDashboard({
     () => transactions.filter((t) => visibleIds.has(t.propertyId)),
     [transactions, visibleIds]
   );
+  const visibleFreeRent = useMemo(() => freeRent?.filter((f) => visibleIds.has(f.propertyId)), [freeRent, visibleIds]);
   const targets = useMemo(() => boardTargets(visibleProperties, units), [visibleProperties, units]);
 
   const months = useMemo(() => monthsThrough(transactions, thisMonth), [transactions, thisMonth]);
@@ -1119,6 +1120,7 @@ export default function BoardDashboard({
 
           <BoardLedger
             transactions={visibleTransactions}
+            freeRent={visibleFreeRent}
             month={month}
             properties={visibleProperties}
             targetLabel={targetLabel}

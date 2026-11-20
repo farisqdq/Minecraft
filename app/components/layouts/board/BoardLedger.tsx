@@ -1,5 +1,6 @@
 "use client";
 
+import { freeRentInLedger, freeRentReason, type FreeRentMonth } from "@/lib/free-rent";
 import { useEffect, useMemo, useState } from "react";
 import { money } from "@/lib/money";
 import { PROOF_ACCEPT } from "@/lib/attachments-ui";
@@ -35,6 +36,7 @@ const PAGE = 40;
  */
 export default function BoardLedger({
   transactions,
+  freeRent,
   month,
   properties,
   targetLabel,
@@ -48,6 +50,8 @@ export default function BoardLedger({
 }: {
   /** Every entry for the LLCs in view, all time. */
   transactions: Txn[];
+  /** Free months (a35) for the LLCs in view: listed, never totalled. */
+  freeRent?: FreeRentMonth[];
   month: string;
   properties: { id: string; name: string }[];
   targetLabel: (t: { propertyId: string; unitId: string | null }) => string;
@@ -105,6 +109,11 @@ export default function BoardLedger({
     return { rent, expense };
   }, [rows]);
 
+  const freeRows = useMemo(
+    () => freeRentInLedger(freeRent, { scope: month, propertyId: property, type, search, place: targetLabel }),
+    [freeRent, month, property, type, search, targetLabel]
+  );
+
   const shown = rows.slice(0, limit);
 
   return (
@@ -154,7 +163,7 @@ export default function BoardLedger({
         </select>
       </div>
 
-      {rows.length === 0 ? (
+      {rows.length === 0 && freeRows.length === 0 ? (
         <div className={styles.empty}>
           {search
             ? `Nothing matches “${query.trim()}”. Search covers the property, description, note, category, date and amount.`
@@ -162,6 +171,19 @@ export default function BoardLedger({
         </div>
       ) : (
         <ul className={styles.ledger}>
+          {freeRows.map((f) => (
+            <li key={`free-${f.id}`} className={styles.ledgerRow}>
+              <span className={styles.ledgerDate}>{fmtDate(f.given)}</span>
+              <div className={styles.ledgerMain}>
+                <div className={styles.ledgerWhere}>{targetLabel(f)}</div>
+                <div className={styles.ledgerDetail}>
+                  <span className={`${styles.kind} ${styles.kindRent}`}>Free month</span>
+                  {[f.tenantName, freeRentReason(f.label), `counts toward ${monthLabel(f.month)}, not money in`].filter(Boolean).join(" · ")}
+                </div>
+              </div>
+              <span className={`${styles.ledgerAmt} num`}>{money(f.amount)}</span>
+            </li>
+          ))}
           {shown.map((t) => (
             <li key={t.id} className={styles.ledgerRow}>
               <span className={styles.ledgerDate}>{fmtDate(t.date)}</span>

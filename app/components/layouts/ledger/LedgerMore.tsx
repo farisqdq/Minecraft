@@ -1,5 +1,6 @@
 "use client";
 
+import { freeRentInLedger, freeRentReason, type FreeRentMonth } from "@/lib/free-rent";
 import { useEffect, useMemo, useState, type Dispatch, type FormEvent, type SetStateAction } from "react";
 import { spreadSummary, spreadForReports } from "@/lib/spread";
 import { monthLabel } from "@/lib/rent-month";
@@ -61,6 +62,8 @@ export default function LedgerMore(props: {
   loans: Loan[];
   deposits: Deposit[];
   transactions: Txn[];
+  /** Free months (a35), listed in Transactions but never totalled. */
+  freeRent?: FreeRentMonth[];
   repairs: RequestDTO[];
   expiringDocs: DocumentDTO[];
   onTransactions: Dispatch<SetStateAction<Txn[]>>;
@@ -235,7 +238,7 @@ function CashTab({ month, transactions: entries, companies, properties }: TabPro
 
 /* ---------- Transactions ---------- */
 
-function LedgerTab({ month, transactions, properties, units, openSheet, confirm, push, onTransactions }: TabProps) {
+function LedgerTab({ month, transactions, freeRent, properties, units, openSheet, confirm, push, onTransactions }: TabProps) {
   const viewOnly = useViewOnly();
   const [query, setQuery] = useState("");
   const [type, setType] = useState<"" | "rent" | "expense">("");
@@ -262,6 +265,11 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
       .slice()
       .sort((a, b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
   }, [transactions, month, search, type, propertyId, properties, units]);
+
+  const freeRows = useMemo(
+    () => freeRentInLedger(freeRent, { scope: month, propertyId, type, search, place: (f) => placeLabel(properties, units, f) }),
+    [freeRent, month, propertyId, type, search, properties, units]
+  );
 
   const unitsOf = (pid: string) => units.filter((u) => u.propertyId === pid);
   const keyOf = (t: Txn) => (t.unitId ? `${t.propertyId}:${t.unitId}` : unitsOf(t.propertyId).length ? `${t.propertyId}:whole` : t.propertyId);
@@ -337,7 +345,7 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
         {search ? ` matching “${query.trim()}” across all time` : ` in ${monthName(month)}`} · {money(totals.rent)} in ·{" "}
         {money(totals.expense)} out
       </div>
-      {rows.length === 0 ? (
+      {rows.length === 0 && freeRows.length === 0 ? (
         <p className={styles.empty}>
           {search ? `Nothing matches “${query.trim()}”.` : `Nothing recorded in ${monthName(month)} yet.`}
         </p>
@@ -357,6 +365,19 @@ function LedgerTab({ month, transactions, properties, units, openSheet, confirm,
             </tr>
           </thead>
           <tbody>
+            {freeRows.map((f) => (
+              <tr key={`free-${f.id}`}>
+                <td className={styles.nowrap} data-label="Date">{dayLabel(f.given)}</td>
+                <td data-label="Property">{placeLabel(properties, units, f)}</td>
+                <td data-label="Details">
+                  <span className={`${styles.tag} ${styles.tagRent}`}>Free month</span> {f.tenantName}
+                  {freeRentReason(f.label) && <span className={styles.subLine}>{freeRentReason(f.label)}</span>}
+                  <span className={styles.subLine}>Counts toward {monthLabel(f.month)} · not money in</span>
+                </td>
+                <td className={styles.numCol} data-label="Amount">{money(f.amount)}</td>
+                {!viewOnly && <td className={styles.actCol} />}
+              </tr>
+            ))}
             {shown.map((t) => (
               <tr key={t.id}>
                 <td className={styles.nowrap} data-label="Date">{dayLabel(t.date)}</td>

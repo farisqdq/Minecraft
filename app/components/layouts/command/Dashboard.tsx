@@ -1,5 +1,6 @@
 "use client";
 
+import { freeRentInLedger, freeRentReason } from "@/lib/free-rent";
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { spreadSummary, spreadForReports } from "@/lib/spread";
 import { monthLabel } from "@/lib/rent-month";
@@ -639,6 +640,13 @@ export default function CommandDashboard(props: DashboardProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [visibleTransactions, month, search, typeFilter, properties]);
   useEffect(() => setLedgerLimit(LEDGER_PAGE), [search, typeFilter, month, llc]);
+  // Free months (a35), listed with the entries but never totalled.
+  const freeRows = useMemo(
+    () => freeRentInLedger(freeRent, { scope: month, propertyIds: visibleIds, type: typeFilter, search, place: targetLabel }),
+    // targetLabel reads properties and units.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [freeRent, month, visibleIds, typeFilter, search, properties, units]
+  );
 
   const series = useMemo(() => {
     const keys = Array.from({ length: 12 }, (_, i) => shiftMonth(month, i - 11));
@@ -1013,7 +1021,7 @@ export default function CommandDashboard(props: DashboardProps) {
                           {search ? `${ledgerRows.length} across all time` : `${ledgerRows.length} in ${monthName(month)}`}
                         </span>
                       </div>
-                      {ledgerRows.length === 0 ? (
+                      {ledgerRows.length === 0 && freeRows.length === 0 ? (
                         <div className={styles.empty}>
                           {search ? `Nothing matches “${query.trim()}”.` : `Nothing recorded in ${monthName(month)} yet.`}
                         </div>
@@ -1030,6 +1038,23 @@ export default function CommandDashboard(props: DashboardProps) {
                               </tr>
                             </thead>
                             <tbody>
+                              {freeRows.map((f) => (
+                                <tr key={`free-${f.id}`}>
+                                  <td data-label="Date" className={styles.nowrap}>
+                                    {shortDay(f.given)}
+                                  </td>
+                                  <td data-label="Property">{targetLabel(f)}</td>
+                                  <td data-label="Details">
+                                    <span className={styles.kind}>Free month</span> <span>{f.tenantName}</span>
+                                    {freeRentReason(f.label) && <div className={styles.sub}>{freeRentReason(f.label)}</div>}
+                                    <div className={styles.sub}>Counts toward {monthLabel(f.month)} · not money in</div>
+                                  </td>
+                                  <td data-label="Amount" className={`${styles.numCol} num`}>
+                                    {money(f.amount)}
+                                  </td>
+                                  {!viewOnly && <td className={styles.actionsCell} />}
+                                </tr>
+                              ))}
                               {ledgerRows.slice(0, ledgerLimit).map((t) => (
                                 <tr key={t.id}>
                                   <td data-label="Date" className={styles.nowrap}>

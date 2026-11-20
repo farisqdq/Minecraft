@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { freeKeys, freeRentLabel, withFreeRent } from "../lib/free-rent.ts";
+import { freeKeys, freeRentInLedger, freeRentLabel, withFreeRent } from "../lib/free-rent.ts";
 import { buildMonth } from "../lib/calendar.ts";
 
 const free = [{ tenantId: "t1", propertyId: "p1", unitId: "u1", month: "2026-10", amount: 1200 }];
@@ -32,4 +32,23 @@ test("the calendar shows a free month as paid, with nothing marked as received",
   const json = JSON.stringify(cal);
   assert.ok(!json.includes('"late"'), "not late");
   assert.equal(cal.days.reduce((s, d) => s + d.received, 0), 0);
+});
+
+test("the ledgers list free months under the month they cover, following their filters", () => {
+  const f = (id: string, propertyId: string, month: string, given: string, tenantName = "Pat Lee") => ({
+    id, tenantId: "t" + id, propertyId, unitId: null, month, amount: 1500, tenantName, given, label: "Free month — moving help",
+  });
+  const free = [f("a", "p1", "2026-11", "2026-11-20"), f("b", "p2", "2026-10", "2026-10-02", "Sam Fox"), f("c", "p1", "2025-11", "2025-11-01")];
+  const ids = (r: { id: string }[]) => r.map((x) => x.id);
+  assert.deepEqual(ids(freeRentInLedger(free, { scope: "2026-11" })), ["a"]);
+  assert.deepEqual(ids(freeRentInLedger(free, { scope: "2026" })), ["a", "b"]);
+  assert.deepEqual(ids(freeRentInLedger(free, { scope: "" })), ["a", "b", "c"]);
+  assert.deepEqual(ids(freeRentInLedger(free, { scope: "", type: "expense" })), []);
+  assert.deepEqual(ids(freeRentInLedger(free, { scope: "", type: "rent", propertyId: "p2" })), ["b"]);
+  assert.deepEqual(ids(freeRentInLedger(free, { scope: "", propertyIds: new Set(["p1"]) })), ["a", "c"]);
+  // A search looks across all time, like the ledgers' own.
+  assert.deepEqual(ids(freeRentInLedger(free, { scope: "2026-11", search: "sam" })), ["b"]);
+  assert.deepEqual(ids(freeRentInLedger(free, { scope: "2026-11", search: "moving" })), ["a", "b", "c"]);
+  // Without the details (the calendar's copy), nothing is listed.
+  assert.deepEqual(freeRentInLedger([{ tenantId: "t", propertyId: "p1", unitId: null, month: "2026-11", amount: 5 }], { scope: "" }), []);
 });

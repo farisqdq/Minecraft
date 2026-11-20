@@ -118,9 +118,28 @@ export default async function DashboardPage() {
   const freeRent = (
     await prisma.tenantCharge.findMany({
       where: { freeRent: true, tenant: { property: { companyId: { in: companyIds } } } },
-      select: { tenantId: true, month: true, amount: true, tenant: { select: { propertyId: true, unitId: true } } },
+      select: {
+        id: true,
+        tenantId: true,
+        month: true,
+        amount: true,
+        label: true,
+        createdAt: true,
+        tenant: { select: { name: true, propertyId: true, unitId: true } },
+      },
     })
-  ).map((c) => ({ tenantId: c.tenantId, propertyId: c.tenant.propertyId, unitId: c.tenant.unitId, month: c.month, amount: c.amount }));
+  ).map((c) => ({
+    tenantId: c.tenantId,
+    propertyId: c.tenant.propertyId,
+    unitId: c.tenant.unitId,
+    month: c.month,
+    amount: c.amount,
+    // So the ledgers can list it too (freeRentInLedger).
+    id: c.id,
+    tenantName: c.tenant.name,
+    given: c.createdAt.toISOString().slice(0, 10),
+    label: c.label,
+  }));
 
   // Proof on ledger entries, by entry, oldest first as before.
   const attachmentRows = await prisma.attachment.findMany({

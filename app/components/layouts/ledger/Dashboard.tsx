@@ -686,6 +686,7 @@ export default function LedgerDashboard(props: DashboardProps) {
           loans={loans}
           deposits={deposits}
           transactions={transactions}
+          freeRent={freeRent}
           repairs={initialRepairs}
           expiringDocs={expiringDocs}
           onTransactions={setTransactions}

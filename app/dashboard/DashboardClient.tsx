@@ -1,6 +1,6 @@
 "use client";
 
-import { freeKeys, withFreeRent, type FreeRentMonth } from "@/lib/free-rent";
+import { freeKeys, freeRentInLedger, freeRentReason, withFreeRent, type FreeRentMonth } from "@/lib/free-rent";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { allocate, spreadForReports, spreadSummary } from "@/lib/spread";
 import { monthLabel } from "@/lib/rent-month";
@@ -955,6 +955,23 @@ export default function DashboardClient({
         return by * first || b.date.localeCompare(a.date) || a.id.localeCompare(b.id);
       });
   }, [scopedTransactions, visibleTransactions, filterProperty, filterType, search, sortKey, sortDir, haystacks]);
+
+  // Free months (a35) aren't ledger entries, but they're listed with them so
+  // giving one shows up here. Never in the totals: no money came in.
+  const freeRows = useMemo(
+    () =>
+      freeRentInLedger(freeRent, {
+        scope: scopeKey,
+        propertyIds: visibleIds,
+        propertyId: filterProperty,
+        type: filterType,
+        search,
+        place: targetLabel,
+      }),
+    // targetLabel reads properties and units.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [freeRent, scopeKey, visibleIds, filterProperty, filterType, search, properties, units]
+  );
 
   const searchTotals = useMemo(() => totalsFor(null, rows), [rows]);
 
@@ -2806,7 +2823,7 @@ export default function DashboardClient({
                 </span>
               </div>
             )}
-            {rows.length === 0 ? (
+            {rows.length === 0 && freeRows.length === 0 ? (
               <div className={styles.ledgerWrap}>
                 <div className={styles.emptyState}>
                   {search
@@ -2841,6 +2858,26 @@ export default function DashboardClient({
                     </tr>
                   </thead>
                   <tbody>
+                    {freeRows.map((f) => (
+                      <tr key={`free-${f.id}`}>
+                        <td>{fmtDate(f.given)}</td>
+                        <td>{targetLabel(f)}</td>
+                        <td>
+                          <span className={`${styles.tag} ${styles.rent}`}>Free month</span>
+                        </td>
+                        <td>
+                          {f.tenantName}
+                          {freeRentReason(f.label) && <div className={styles.note}>{freeRentReason(f.label)}</div>}
+                          <div className={styles.note}>Counts toward {monthLabel(f.month)} · not money in</div>
+                        </td>
+                        <td className={`${styles.amt} num`}>{money(f.amount)}</td>
+                        {!viewOnly && (
+                          <td>
+                            <div className={styles.note}>Undo on their statement</div>
+                          </td>
+                        )}
+                      </tr>
+                    ))}
                     {visibleRows.map((t) => (
                       <tr key={t.id}>
                         <td>{fmtDate(t.date)}</td>
